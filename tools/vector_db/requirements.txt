@@ -1,0 +1,18 @@
+# Vector DB Tool Dependencies
+# Core dependencies for vector database operations
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Vector database libraries
+chromadb>=0.4.0          # For ChromaDB - real vector database
+# pinecone-client>=2.2.0   # For Pinecone (alternative)
+# faiss-cpu>=1.7.4         # For Facebook AI Similarity Search (alternative)
+# weaviate-client>=3.20.0 # For Weaviate (alternative)
+
+# Embedding generation
+sentence-transformers>=2.2.0  # For sentence embeddings
+# openai>=1.0.0                 # For OpenAI embeddings (alternative)
+
+# Async support
+aiohttp>=3.8.0
+asyncio

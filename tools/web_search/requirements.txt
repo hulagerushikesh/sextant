@@ -1,0 +1,23 @@
+# Web Search Tool Dependencies
+# Core dependencies for web search operations
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+
+# Search API clients (choose based on implementation)
+# google-api-python-client>=2.100.0  # For Google Custom Search
+# bing-search-api>=1.0.0             # For Bing Search API
+# duckduckgo-search>=3.9.0           # For DuckDuckGo search
+
+# Web scraping and content extraction
+scrapy>=2.10.0
+selenium>=4.15.0
+playwright>=1.40.0
+
+# Content processing
+nltk>=3.8.0
+spacy>=3.7.0
+
+# Async support
+aiohttp>=3.8.0
+asyncio
