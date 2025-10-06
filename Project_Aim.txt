@@ -1,0 +1,21 @@
+# Project Goal: MCP-Powered Agentic RAG
+
+## Objective
+Build an end-to-end Retrieval-Augmented Generation system using MCP architecture, including:
+
+- User-facing web UI
+- MCP Client for API mediation
+- MCP Server (Agent) for logic/routing
+- Vector DB Tool and Web Search Tool
+- Stepwise, modular, minimal-complexity implementation
+
+## High-Level Workflow
+1. User submits query in web app
+2. MCP Client forwards query to MCP Server
+3. Agent decides whether to use Vector DB, Web Search, or both
+4. Aggregated, context-rich answer returned to user
+
+## Guiding Principles
+- Each module built incrementally, one at a time
+- Simplicity prioritized (avoid Docker, advanced cloud, or exotic frameworks)
+- Every code change explained and summarized
