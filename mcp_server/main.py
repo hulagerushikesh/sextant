@@ -650,7 +650,7 @@ def _analyze_relevance(result: Dict[str, Any], coding_keywords: List[str], algor
 
 def _format_enhanced_response(results, search_process: List[str], source: str, is_technical: bool) -> str:
     """
-    Format clean, user-friendly response without technical details
+    Format clean, user-friendly response with source attribution
     
     Args:
         results: Search results (can be dict or list)
@@ -659,12 +659,20 @@ def _format_enhanced_response(results, search_process: List[str], source: str, i
         is_technical: Whether query is technical
         
     Returns:
-        Formatted response string
+        Formatted response string with source information
     """
     if source == "vector_db":
-        return _format_vector_response(results)
+        response = _format_vector_response(results)
+        source_info = "📚 **Source: Knowledge Base** (Vector Database)"
+    elif source == "web_search":
+        response = _format_web_response(results)
+        source_info = "🌐 **Source: Web Search** (Current Information)"
     else:
-        return _format_web_response(results)
+        response = str(results) if results else "No information available"
+        source_info = f"📄 **Source: {source.replace('_', ' ').title()}**"
+    
+    # Add source attribution at the end
+    return f"{response}\n\n---\n{source_info}"
 
 
 def _generate_general_answer(query: str, search_process: List[str]) -> str:
@@ -676,9 +684,12 @@ def _generate_general_answer(query: str, search_process: List[str]) -> str:
         search_process: List of search process steps (not used in output)
         
     Returns:
-        Clean, direct answer
+        Clean, direct answer with source attribution
     """
-    return _generate_basic_answer(query)
+    response = _generate_basic_answer(query)
+    source_info = "🤖 **Source: AI Language Model** (General Knowledge)"
+    
+    return f"{response}\n\n---\n{source_info}"
 
 
 def _generate_basic_answer(query: str) -> str:
@@ -785,17 +796,20 @@ def _format_web_response(web_result) -> str:
         if best_content:
             return best_content[:500] + "..." if len(best_content) > 500 else best_content
     
-    # For other queries, provide a clean summary
+    # For other queries, provide a clean summary starting with the content
     response_parts = []
     
     for i, result in enumerate(results[:3], 1):  # Limit to top 3 results
         title = result.get("title", "")
         content = result.get("content", result.get("snippet", ""))
+        url = result.get("url", "")
         
-        if title and content:
-            response_parts.append(f"{title}: {content}")
-        elif content:
+        if content:
+            # Start with the actual content, not the title
             response_parts.append(content)
+        elif title:
+            # If no content, use title as fallback
+            response_parts.append(title)
     
     if response_parts:
         return "\n\n".join(response_parts)
