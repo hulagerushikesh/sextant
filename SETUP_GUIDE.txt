@@ -1,0 +1,191 @@
+AGENTIC RAG SYSTEM - SETUP GUIDE
+==================================
+
+This guide will help you set up and run the Agentic RAG system on your local machine.
+
+PREREQUISITES
+-------------
+- Python 3.8 or higher
+- Node.js 16 or higher
+- Git
+- Internet connection (for downloading dependencies)
+
+SYSTEM REQUIREMENTS
+------------------
+- Operating System: Windows, macOS, or Linux
+- RAM: Minimum 4GB (8GB recommended)
+- Storage: At least 2GB free space
+- Ports: 3000, 5001, 8000 must be available
+
+STEP 1: CLONE THE REPOSITORY
+-----------------------------
+1. Open terminal/command prompt
+2. Navigate to your desired directory
+3. Run: git clone https://github.com/SudhanshuR37/AgenticRAG.git
+4. Navigate to the project: cd AgenticRAG
+
+STEP 2: SETUP PYTHON ENVIRONMENT
+---------------------------------
+1. Create virtual environment:
+   - Windows: python -m venv venv
+   - macOS/Linux: python3 -m venv venv
+
+2. Activate virtual environment:
+   - Windows: venv\Scripts\activate
+   - macOS/Linux: source venv/bin/activate
+
+3. Install Python dependencies:
+   pip install -r requirements.txt
+
+STEP 3: SETUP FRONTEND
+----------------------
+1. Navigate to frontend directory:
+   cd frontend
+
+2. Install Node.js dependencies:
+   npm install
+
+3. Return to project root:
+   cd ..
+
+STEP 4: INSTALL TOOL DEPENDENCIES
+---------------------------------
+1. Install Vector DB dependencies:
+   pip install -r tools/vector_db/requirements.txt
+
+2. Install Web Search dependencies:
+   pip install -r tools/web_search/requirements.txt
+
+STEP 5: START THE SYSTEM
+------------------------
+Option A: Automated Startup (Recommended)
+1. Run: python start_servers.py
+2. Wait for all services to start
+3. Access frontend at: http://localhost:3000
+
+Option B: Manual Startup
+1. Terminal 1 - Start MCP Server:
+   cd mcp_server
+   python main.py
+
+2. Terminal 2 - Start MCP Client:
+   cd mcp_client
+   python server.py
+
+3. Terminal 3 - Start Frontend:
+   cd frontend
+   npm run dev
+
+STEP 6: VERIFY INSTALLATION
+---------------------------
+1. Check all services are running:
+   - Frontend: http://localhost:3000
+   - MCP Client: http://localhost:5001/health
+   - MCP Server: http://localhost:8000/health
+
+2. Test the system:
+   - Open http://localhost:3000 in browser
+   - Type a query like "what is machine learning"
+   - Submit and check for response
+
+TROUBLESHOOTING
+---------------
+
+Problem: Port already in use
+Solution: 
+- Kill processes using ports 3000, 5001, 8000
+- Windows: netstat -ano | findstr :3000
+- macOS/Linux: lsof -i :3000
+
+Problem: Python dependencies fail to install
+Solution:
+- Update pip: pip install --upgrade pip
+- Install dependencies one by one
+- Check Python version compatibility
+
+Problem: Node.js dependencies fail
+Solution:
+- Update npm: npm install -g npm@latest
+- Clear cache: npm cache clean --force
+- Delete node_modules and run npm install again
+
+Problem: ChromaDB initialization fails
+Solution:
+- Install ChromaDB: pip install chromadb
+- Check Python version (3.8+ required)
+- Install sentence-transformers: pip install sentence-transformers
+
+Problem: Web search not working
+Solution:
+- Install BeautifulSoup: pip install beautifulsoup4
+- Install requests: pip install requests
+- Check internet connection
+
+Problem: Frontend shows "Connection error"
+Solution:
+- Ensure MCP Client is running on port 5001
+- Check if MCP Server is running on port 8000
+- Verify all services are started in correct order
+
+USAGE INSTRUCTIONS
+------------------
+
+1. QUERY SUBMISSION:
+   - Type your question in the text box
+   - Click "Submit Query" button
+   - Wait for response (usually 2-5 seconds)
+
+2. DOCUMENT MANAGEMENT:
+   - Add documents to knowledge base
+   - Upload text files or paste content
+   - Documents are automatically processed and stored
+
+3. RESPONSE TYPES:
+   - Vector DB results: From your knowledge base
+   - Web Search results: From current web information
+   - Language Model: General knowledge fallback
+
+SYSTEM ARCHITECTURE
+-------------------
+- Frontend (React): User interface on port 3000
+- MCP Client (FastAPI): API gateway on port 5001
+- MCP Server (FastAPI): Core processing on port 8000
+- Vector DB Tool: Semantic search in knowledge base
+- Web Search Tool: Real-time web search
+
+FEATURES
+--------
+- Semantic search in knowledge base
+- Real-time web search
+- Document upload and management
+- Source attribution for responses
+- Intelligent query routing
+- Fallback mechanisms for reliability
+
+DEVELOPMENT
+-----------
+- All services run locally
+- Hot reload enabled for development
+- Debug logging available
+- Easy to modify and extend
+
+STOPPING THE SYSTEM
+-------------------
+- Press Ctrl+C in each terminal
+- Or close terminal windows
+- Services will stop automatically
+
+CLEANUP
+--------
+- Deactivate virtual environment: deactivate
+- Remove virtual environment: rm -rf venv (Linux/macOS) or rmdir /s venv (Windows)
+- Delete project folder if no longer needed
+
+SUPPORT
+--------
+- Check logs in terminal for error messages
+- Verify all dependencies are installed
+- Ensure ports are not blocked by firewall
+- Check internet connection for web search
+
+This system provides a complete RAG (Retrieval-Augmented Generation) solution with vector database search, web search, and intelligent response generation.
