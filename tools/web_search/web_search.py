@@ -97,7 +97,7 @@ class WebSearchTool:
             results = []
             
             if 'web' in data and 'results' in data['web']:
-                for item in data['web']['results'][:num_results]:
+                for item in data['web']['results']:
                     results.append({
                         "title": item.get('title', ''),
                         "url": item.get('url', ''),
@@ -133,7 +133,7 @@ class WebSearchTool:
             results = []
             
             if 'organic_results' in data:
-                for item in data['organic_results'][:num_results]:
+                for item in data['organic_results']:
                     results.append({
                         "title": item.get('title', ''),
                         "url": item.get('link', ''),
@@ -172,7 +172,7 @@ class WebSearchTool:
             results = []
             
             if 'results' in data:
-                for item in data['results'][:num_results]:
+                for item in data['results']:
                     results.append({
                         "title": item.get('title', ''),
                         "url": item.get('url', ''),

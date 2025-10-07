@@ -323,7 +323,7 @@ async def _search_vector_db(query: str) -> Dict[str, Any]:
         await vector_tool.connect()
         
         # Search for relevant documents
-        result = await vector_tool.search(query, limit=5)
+        result = await vector_tool.search(query)
         print(f"DEBUG: MCP Server - Vector search result: {result}")
         return result
     except Exception as e:

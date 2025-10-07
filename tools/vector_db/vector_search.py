@@ -155,7 +155,7 @@ class VectorSearchTool:
         self.is_connected = True
         return True
     
-    async def search(self, query: str, limit: int = 5, similarity_threshold: float = 0.1) -> Dict[str, Any]:
+    async def search(self, query: str, limit: int = 50, similarity_threshold: float = 0.1) -> Dict[str, Any]:
         """
         Search vector database using ChromaDB or fallback to in-memory search
         
@@ -457,7 +457,7 @@ class VectorSearchTool:
 
 
 # Convenience function for direct search
-async def search_vector_db(query: str, limit: int = 5) -> Dict[str, Any]:
+async def search_vector_db(query: str, limit: int = 50) -> Dict[str, Any]:
     """
     Convenience function to search vector database
     
