@@ -437,7 +437,7 @@ def _format_enhanced_response(results, search_process: List[str], source: str, i
     
     # Sort by total relevance score and return top 3
     closest_results.sort(key=lambda x: x.get("total_score", 0), reverse=True)
-    return closest_results[:3]
+    return closest_results
 
 
 def _get_minimal_relevant_snippets(web_result: Dict[str, Any], is_technical_query: bool) -> List[Dict[str, Any]]:
@@ -480,7 +480,7 @@ def _get_minimal_relevant_snippets(web_result: Dict[str, Any], is_technical_quer
     
     # Sort by basic score and return top 3
     minimal_results.sort(key=lambda x: x.get("basic_score", 0), reverse=True)
-    return minimal_results[:3]
+    return minimal_results
 
 
 def _create_summary_from_all_results(web_result: Dict[str, Any], is_technical_query: bool) -> List[Dict[str, Any]]:
@@ -509,7 +509,7 @@ def _create_summary_from_all_results(web_result: Dict[str, Any], is_technical_qu
         url = result.get("url", "")
         
         if content:
-            all_content.append(content[:200])  # Limit content length
+            all_content.append(content)  # Use full content
         if title:
             all_titles.append(title)
         if url:
@@ -521,7 +521,7 @@ def _create_summary_from_all_results(web_result: Dict[str, Any], is_technical_qu
     # Create a summary result
     summary_result = {
         "title": f"Summary of {len(all_titles)} search results",
-        "content": "Based on available web search results: " + " ".join(all_content[:3]),  # Combine first 3 results
+        "content": "Based on available web search results: " + " ".join(all_content),  # Combine all results
         "url": all_urls[0] if all_urls else "",
         "source": "Web Search Summary",
         "date": "",
@@ -606,7 +606,7 @@ def _filter_technical_content(web_result: Dict[str, Any], is_technical_query: bo
     
     # Sort by total relevance score, then by coding score
     filtered_results.sort(key=lambda x: (x.get("total_score", 0), x.get("coding_score", 0)), reverse=True)
-    return filtered_results[:3]  # Return top 3 most relevant
+    return filtered_results  # Return all relevant results
 
 
 def _analyze_relevance(result: Dict[str, Any], coding_keywords: List[str], algorithm_keywords: List[str]) -> str:
@@ -630,9 +630,9 @@ def _analyze_relevance(result: Dict[str, Any], coding_keywords: List[str], algor
     analysis_parts = []
     
     if found_coding:
-        analysis_parts.append(f"Coding concepts: {', '.join(found_coding[:5])}")
+        analysis_parts.append(f"Coding concepts: {', '.join(found_coding)}")
     if found_algorithms:
-        analysis_parts.append(f"Algorithm concepts: {', '.join(found_algorithms[:5])}")
+        analysis_parts.append(f"Algorithm concepts: {', '.join(found_algorithms)}")
     
     if not analysis_parts:
         return "General technical content"
@@ -696,7 +696,7 @@ def _format_vector_response(vector_result: Dict[str, Any]) -> str:
     
     # For other queries, provide a clean summary
     response_parts = []
-    for doc in vector_result["results"][:2]:  # Limit to top 2 results
+    for doc in vector_result["results"]:  # Use all results
         content = doc.get("content", "")
         if content:
             response_parts.append(content)
