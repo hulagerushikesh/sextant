@@ -74,15 +74,23 @@ function App() {
     const content = prompt('Enter document content:')
     const source = prompt('Enter document source (optional):') || 'manual_upload'
     
+    console.log('Adding document:', { title, content, source })
+    console.log('Current documents count:', documents.length)
+    
     if (title && content) {
-      setDocuments([...documents, {
+      const newDocument = {
         id: `doc_${Date.now()}`,
         title: title,
         content: content,
         source: source,
         page: 1,
         category: 'user_upload'
-      }])
+      }
+      console.log('New document:', newDocument)
+      setDocuments([...documents, newDocument])
+      console.log('Documents after add:', [...documents, newDocument])
+    } else {
+      console.log('Document not added - missing title or content')
     }
   }
 
@@ -139,6 +147,9 @@ function App() {
           <h2>Document Management</h2>
           <div className="document-upload">
             <div className="document-list">
+              <div style={{ marginBottom: '10px', fontSize: '12px', color: '#666' }}>
+                Debug: {documents.length} documents in state
+              </div>
               {documents.map((doc, index) => (
                 <div key={index} className="document-item">
                   <div className="document-info">
@@ -153,6 +164,11 @@ function App() {
                   </button>
                 </div>
               ))}
+              {documents.length === 0 && (
+                <div style={{ color: '#999', fontStyle: 'italic' }}>
+                  No documents added yet. Click "Add Document" to get started.
+                </div>
+              )}
             </div>
             
             <div className="document-actions">
@@ -164,6 +180,10 @@ function App() {
                 onClick={handleDocumentUpload}
                 disabled={documents.length === 0 || isUploading}
                 className="upload-button"
+                style={{ 
+                  backgroundColor: documents.length === 0 ? '#ccc' : '#007bff',
+                  cursor: documents.length === 0 ? 'not-allowed' : 'pointer'
+                }}
               >
                 {isUploading ? 'Uploading...' : `Upload ${documents.length} Documents`}
               </button>
