@@ -155,7 +155,7 @@ class VectorSearchTool:
         self.is_connected = True
         return True
     
-    async def search(self, query: str, limit: int = 5, similarity_threshold: float = 0.3) -> Dict[str, Any]:
+    async def search(self, query: str, limit: int = 5, similarity_threshold: float = 0.1) -> Dict[str, Any]:
         """
         Search vector database using ChromaDB or fallback to in-memory search
         
@@ -169,14 +169,20 @@ class VectorSearchTool:
         """
         start_time = time.time()
         
+        print(f"DEBUG: Vector search for query: '{query}'")
+        print(f"DEBUG: Using ChromaDB: {self.use_chromadb}")
+        print(f"DEBUG: Similarity threshold: {similarity_threshold}")
+        
         if self.use_chromadb:
             # Use real vector database search
             search_results = await self._search_chromadb(query, limit, similarity_threshold)
             database_type = "chromadb"
+            print(f"DEBUG: ChromaDB search returned {len(search_results)} results")
         else:
             # Fallback to in-memory search
             search_results = self._perform_similarity_search(query, limit, similarity_threshold)
             database_type = "in-memory_vector_db"
+            print(f"DEBUG: In-memory search returned {len(search_results)} results")
         
         processing_time = time.time() - start_time
         
@@ -205,6 +211,14 @@ class VectorSearchTool:
             List of search results from ChromaDB
         """
         try:
+            # Check if collection has any documents
+            collection_count = self.collection.count()
+            print(f"DEBUG: ChromaDB collection has {collection_count} documents")
+            
+            if collection_count == 0:
+                print("DEBUG: ChromaDB collection is empty, returning no results")
+                return []
+            
             # Generate embedding for the query
             query_embedding = self.embedder.encode([query]).tolist()[0]
             
@@ -377,6 +391,8 @@ class VectorSearchTool:
             }
         
         try:
+            print(f"DEBUG: Adding {len(documents)} documents to ChromaDB")
+            
             # Extract content and metadata
             texts = [doc["content"] for doc in documents]
             metadatas = []
@@ -393,8 +409,11 @@ class VectorSearchTool:
                 metadatas.append(metadata)
                 ids.append(metadata["id"])
             
+            print(f"DEBUG: Generated {len(texts)} texts, {len(metadatas)} metadatas, {len(ids)} ids")
+            
             # Generate embeddings
             embeddings = self.embedder.encode(texts).tolist()
+            print(f"DEBUG: Generated {len(embeddings)} embeddings")
             
             # Add to ChromaDB collection
             self.collection.add(
@@ -403,6 +422,8 @@ class VectorSearchTool:
                 metadatas=metadatas,
                 ids=ids
             )
+            
+            print(f"DEBUG: Successfully added documents to ChromaDB")
             
             return {
                 "success": True,

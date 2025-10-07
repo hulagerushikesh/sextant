@@ -6,6 +6,7 @@ tool usage and orchestrates responses from Vector DB and Web Search tools.
 """
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
 import uvicorn
@@ -13,6 +14,24 @@ from datetime import datetime
 import time
 import sys
 import os
+
+# Load environment variables from .env file
+def load_env():
+    """Load environment variables from .env file"""
+    env_file = os.path.join(os.path.dirname(__file__), '..', '.env')
+    if os.path.exists(env_file):
+        with open(env_file, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ[key] = value
+        print(f"Loaded environment variables from {env_file}")
+    else:
+        print(f"No .env file found at {env_file}")
+
+# Load .env file
+load_env()
 
 # Add tools directory to path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'tools'))
@@ -63,6 +82,15 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
+)
+
+# Add CORS middleware for frontend communication
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:5001"],  # Frontend and MCP Client URLs
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Initialize tools
@@ -235,69 +263,36 @@ async def _process_query_with_tools(query: str) -> Dict[str, Any]:
         search_process.append("Step 2: Searching Web for current information...")
         web_result = await _search_web(query)
         
-        if web_result["success"] and web_result["total_found"] > 0:
-            # Step 1: Try strict filtering for technical content
-            filtered_results = _filter_technical_content(web_result, is_technical_query)
-            search_process.append(f"Web Search Results: Found {len(filtered_results)} highly relevant results")
-            
-            if filtered_results:
-                search_process.append("Content Filtering: Selected highly relevant technical snippets")
+        if web_result["success"]:
+            # Use web search results (even if total_results is 0, the formatted_results might contain useful info)
+            search_process.append(f"Web Search Results: Found {web_result.get('total_results', 0)} results")
+            if web_result.get("formatted_results"):
+                # Use the formatted results from web search (includes API setup messages)
                 return {
                     "success": True,
-                    "response": _format_enhanced_response(filtered_results, search_process, "web_search", is_technical_query),
+                    "response": web_result["formatted_results"],
                     "sources_used": ["web_search"],
                     "error": None
                 }
-            
-            # Step 2: If strict filtering fails, try lenient filtering
-            search_process.append("Content Filtering: No highly relevant results found, trying lenient filtering")
-            lenient_results = _get_closest_relevant_snippets(web_result, is_technical_query)
-            
-            if lenient_results:
-                search_process.append(f"Lenient Filtering: Found {len(lenient_results)} partially relevant snippets")
+            elif web_result.get("total_results", 0) > 0:
+                # Use enhanced response formatting for actual results
                 return {
                     "success": True,
-                    "response": _format_enhanced_response(lenient_results, search_process, "web_search", is_technical_query),
-                    "sources_used": ["web_search"],
-                    "error": None
-                }
-            
-            # Step 3: If lenient filtering also fails, use minimal filtering to ensure we return something
-            search_process.append("Content Filtering: No partially relevant results found, using minimal filtering")
-            minimal_results = _get_minimal_relevant_snippets(web_result, is_technical_query)
-            
-            if minimal_results:
-                search_process.append(f"Minimal Filtering: Found {len(minimal_results)} basic relevant snippets")
-                return {
-                    "success": True,
-                    "response": _format_enhanced_response(minimal_results, search_process, "web_search", is_technical_query),
-                    "sources_used": ["web_search"],
-                    "error": None
-                }
-            
-            # Step 4: Last resort - return any available results with summary
-            search_process.append("Content Filtering: Using all available results with summary")
-            summary_results = _create_summary_from_all_results(web_result, is_technical_query)
-            if summary_results:
-                search_process.append("Summary Generation: Created summary from all available web results")
-                return {
-                    "success": True,
-                    "response": _format_enhanced_response(summary_results, search_process, "web_search", is_technical_query),
+                    "response": _format_enhanced_response(web_result["results"], search_process, "web_search", is_technical_query),
                     "sources_used": ["web_search"],
                     "error": None
                 }
             else:
-                search_process.append("Web Search Results: No processable content found")
+                search_process.append("Web Search Results: No results found")
         else:
             search_process.append("Web Search Results: No results found")
         
-        # Step 4: If both tools return empty, generate a general answer using language model
-        search_process.append("Fallback: No relevant information found from either source")
-        search_process.append("Generating general answer using language model...")
+        # Step 4: If both tools return empty, return no results found
+        search_process.append("No relevant information found from any source")
         return {
             "success": True,
-            "response": _generate_general_answer(query, search_process),
-            "sources_used": ["vector_db", "web_search", "language_model"],
+            "response": "I don't have specific information about this topic in my current knowledge base. For detailed and up-to-date information, I recommend consulting reliable sources, official documentation, or specialized resources related to your topic of interest.",
+            "sources_used": ["vector_db", "web_search"],
             "error": None
         }
         
@@ -322,11 +317,14 @@ async def _search_vector_db(query: str) -> Dict[str, Any]:
         Dict containing vector search results
     """
     try:
+        print(f"DEBUG: MCP Server - Searching vector DB for query: '{query}'")
+        
         # Connect to vector DB (placeholder)
         await vector_tool.connect()
         
         # Search for relevant documents
-        result = await vector_tool.search(query, limit=3)
+        result = await vector_tool.search(query, limit=5)
+        print(f"DEBUG: MCP Server - Vector search result: {result}")
         return result
     except Exception as e:
         return {
@@ -349,11 +347,14 @@ async def _search_web(query: str) -> Dict[str, Any]:
         Dict containing web search results
     """
     try:
+        print(f"DEBUG: MCP Server - Searching web for query: '{query}'")
+        
         # Configure web search tool (placeholder)
         await web_tool.configure()
         
         # Search for current information
         result = await web_tool.search(query, num_results=3)
+        print(f"DEBUG: MCP Server - Web search result: {result}")
         return result
     except Exception as e:
         return {
@@ -367,51 +368,42 @@ async def _search_web(query: str) -> Dict[str, Any]:
 
 def _is_technical_query(query: str) -> bool:
     """
-    Determine if a query is about coding or technical solutions
+    This function is kept for compatibility but no longer filters queries.
+    All queries are treated equally.
     
     Args:
         query: The user's query string
         
     Returns:
-        bool: True if query is technical/coding related
+        bool: Always returns False to allow all queries through
     """
-    technical_keywords = [
-        'code', 'programming', 'function', 'class', 'method', 'algorithm',
-        'debug', 'error', 'bug', 'syntax', 'api', 'database', 'sql',
-        'javascript', 'python', 'java', 'react', 'node', 'html', 'css',
-        'git', 'github', 'deployment', 'server', 'client', 'framework',
-        'library', 'package', 'import', 'export', 'variable', 'loop',
-        'array', 'object', 'string', 'integer', 'boolean', 'null',
-        'undefined', 'exception', 'try', 'catch', 'finally', 'async',
-        'await', 'promise', 'callback', 'closure', 'scope', 'hoisting'
-    ]
-    
-    query_lower = query.lower()
-    technical_score = sum(1 for keyword in technical_keywords if keyword in query_lower)
-    
-    # Consider it technical if it contains 2+ technical keywords or specific patterns
-    return technical_score >= 2 or any(pattern in query_lower for pattern in [
-        'how to', 'how do i', 'how can i', 'what is the', 'how does',
-        'implement', 'create', 'build', 'develop', 'fix', 'solve'
-    ])
+    return False
 
 
-def _get_closest_relevant_snippets(web_result: Dict[str, Any], is_technical_query: bool) -> List[Dict[str, Any]]:
+def _format_enhanced_response(results, search_process: List[str], source: str, is_technical: bool) -> str:
     """
-    Get the closest relevant snippets when no highly relevant results are found
-    Uses more lenient filtering criteria to ensure some results are returned
+    Format clean, user-friendly response with source attribution
     
     Args:
-        web_result: Results from web search
-        is_technical_query: Whether the query is technical
+        results: Search results from vector DB or web search
+        search_process: List of search process steps
+        source: Source of the results (vector_db, web_search, etc.)
+        is_technical: Whether the query is technical (unused now)
         
     Returns:
-        List of closest relevant results with relaxed filtering
+        Formatted response string
     """
-    if not web_result.get("results"):
-        return []
+    if source == "vector_db":
+        response = _format_vector_response(results)
+        source_info = "📚 **Source: Knowledge Base** (Vector Database)"
+    elif source == "web_search":
+        response = _format_web_response(results)
+        source_info = "🌐 **Source: Web Search** (Current Information)"
+    else:
+        response = str(results) if results else "No information available"
+        source_info = f"📄 **Source: {source.replace('_', ' ').title()}**"
     
-    closest_results = []
+    return f"{response}\n\n---\n{source_info}"
     
     # More lenient technical keywords for fallback
     lenient_coding_keywords = [
@@ -573,7 +565,7 @@ def _filter_technical_content(web_result: Dict[str, Any], is_technical_query: bo
         'algorithm', 'solution', 'approach', 'technique', 'pattern', 'strategy',
         'optimization', 'efficiency', 'performance', 'time complexity', 'space complexity',
         'big o', 'o(n)', 'o(log n)', 'o(1)', 'worst case', 'best case', 'average case',
-        'dynamic programming', 'greedy', 'backtracking', 'divide and conquer',
+        'dynamic programming', 'greedy', 'backtring', 'divide and conquer',
         'two pointers', 'sliding window', 'hash map', 'binary search', 'merge sort',
         'quick sort', 'heap', 'priority queue', 'union find', 'trie', 'segment tree'
     ]
@@ -675,56 +667,8 @@ def _format_enhanced_response(results, search_process: List[str], source: str, i
     return f"{response}\n\n---\n{source_info}"
 
 
-def _generate_general_answer(query: str, search_process: List[str]) -> str:
-    """
-    Generate a clean, user-friendly answer when no results are found
-    
-    Args:
-        query: Original query
-        search_process: List of search process steps (not used in output)
-        
-    Returns:
-        Clean, direct answer with source attribution
-    """
-    response = _generate_basic_answer(query)
-    source_info = "🤖 **Source: AI Language Model** (General Knowledge)"
-    
-    return f"{response}\n\n---\n{source_info}"
 
 
-def _generate_basic_answer(query: str) -> str:
-    """
-    Generate a basic, concise answer to any query
-    
-    Args:
-        query: The user's query
-        
-    Returns:
-        A general answer to the query
-    """
-    query_lower = query.lower()
-    
-    # Simple pattern matching for common question types
-    if any(word in query_lower for word in ['what is', 'what are', 'define', 'definition']):
-        return f"Based on general knowledge, {query} refers to a concept that can be understood through various perspectives. While I don't have specific information about this topic in my current knowledge base, I can provide a general understanding based on the question context."
-    
-    elif any(word in query_lower for word in ['how to', 'how do', 'how can', 'how does']):
-        return f"To address '{query}', there are generally several approaches that can be considered. The specific method depends on the context and requirements. I recommend researching current best practices and consulting relevant resources for the most up-to-date information."
-    
-    elif any(word in query_lower for word in ['why', 'why does', 'why is', 'why are']):
-        return f"Regarding '{query}', there are typically multiple factors that contribute to this phenomenon. The reasons can vary depending on the specific context and circumstances involved."
-    
-    elif any(word in query_lower for word in ['when', 'when did', 'when will', 'when is']):
-        return f"To answer '{query}', timing can depend on various factors and circumstances. The specific timeframe may vary based on the context and current conditions."
-    
-    elif any(word in query_lower for word in ['where', 'where is', 'where are', 'where can']):
-        return f"Regarding '{query}', location and availability can depend on various factors. The specific details may vary based on current conditions and context."
-    
-    elif any(word in query_lower for word in ['who', 'who is', 'who are', 'who can']):
-        return f"To address '{query}', the specific individuals or groups involved can vary depending on the context and circumstances."
-    
-    else:
-        return f"I understand you're asking about '{query}'. While I don't have specific information about this topic in my current knowledge base, I can provide a general perspective. This is a topic that can be explored through various resources and may have different aspects depending on the specific context you're interested in."
 
 
 
@@ -784,37 +728,103 @@ def _format_web_response(web_result) -> str:
     if not results:
         return "I couldn't find specific information about your query. Let me provide a general answer based on what I know."
     
-    # For definition queries, provide a direct answer
-    if any(word in str(results[0].get("content", "")).lower() for word in ["definition", "define", "meaning", "is a", "refers to"]):
-        # Extract the most relevant content for definitions
-        best_content = ""
-        for result in results:
-            content = result.get("content", result.get("snippet", ""))
-            if len(content) > len(best_content) and any(word in content.lower() for word in ["definition", "define", "meaning", "is a", "refers to"]):
-                best_content = content
+    # Get the best snippet from the results
+    best_snippet = ""
+    for result in results:
+        snippet = result.get("snippet", "")
+        if snippet and len(snippet) > len(best_snippet):
+            best_snippet = snippet
+    
+    if best_snippet:
+        # Clean up the snippet
+        cleaned = best_snippet.strip()
         
-        if best_content:
-            return best_content[:500] + "..." if len(best_content) > 500 else best_content
-    
-    # For other queries, provide a clean summary starting with the content
-    response_parts = []
-    
-    for i, result in enumerate(results[:3], 1):  # Limit to top 3 results
-        title = result.get("title", "")
-        content = result.get("content", result.get("snippet", ""))
-        url = result.get("url", "")
+        # Remove URLs, dates, and other noise
+        import re
+        cleaned = re.sub(r'https?://\S+', '', cleaned)
+        cleaned = re.sub(r'www\.\S+', '', cleaned)
+        cleaned = re.sub(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+', '', cleaned)
+        cleaned = re.sub(r'\d{4}-\d{2}-\d{2}', '', cleaned)
         
-        if content:
-            # Start with the actual content, not the title
-            response_parts.append(content)
-        elif title:
-            # If no content, use title as fallback
-            response_parts.append(title)
-    
-    if response_parts:
-        return "\n\n".join(response_parts)
+        # Remove common redundant patterns
+        if cleaned.lower().startswith('the '):
+            cleaned = cleaned[4:]
+        
+        # Clean up multiple spaces
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+        
+        # Ensure proper sentence structure
+        if cleaned and not cleaned.endswith(('.', '!', '?')):
+            cleaned += '.'
+        
+        return cleaned
     else:
-        return "I found some information but couldn't extract a clear answer. Let me provide a general response based on your question."
+        return "I couldn't find specific information about your query. Let me provide a general answer based on what I know."
+
+
+def _clean_web_content(content: str) -> str:
+    """
+    Clean web search content to remove redundant questions and improve readability
+    
+    Args:
+        content: Raw content from web search
+        
+    Returns:
+        Cleaned content without redundant questions
+    """
+    if not content:
+        return content
+    
+    # Remove common question patterns from the beginning
+    question_patterns = [
+        r'^What is [^?]+\?',
+        r'^What are [^?]+\?',
+        r'^How does [^?]+\?',
+        r'^How do [^?]+\?',
+        r'^Why is [^?]+\?',
+        r'^Why are [^?]+\?',
+        r'^When is [^?]+\?',
+        r'^When are [^?]+\?',
+        r'^Where is [^?]+\?',
+        r'^Where are [^?]+\?',
+        r'^Who is [^?]+\?',
+        r'^Who are [^?]+\?',
+    ]
+    
+    import re
+    cleaned = content
+    
+    # Remove question patterns from the beginning
+    for pattern in question_patterns:
+        cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE).strip()
+    
+    # Remove leading question marks and clean up
+    cleaned = cleaned.lstrip('?').strip()
+    
+    # If the content starts with the same word repeated, remove it
+    words = cleaned.split()
+    if len(words) > 1 and words[0].lower() == words[1].lower():
+        cleaned = ' '.join(words[1:])
+    
+    # Remove redundant "is" at the beginning
+    if cleaned.lower().startswith('is '):
+        cleaned = cleaned[3:].strip()
+    
+    # Remove "Information about:" patterns
+    if cleaned.lower().startswith('information about:'):
+        cleaned = cleaned[18:].strip()
+    
+    # Remove redundant title patterns
+    if ':' in cleaned and len(cleaned.split(':')) == 2:
+        parts = cleaned.split(':')
+        if len(parts[0]) < 50:  # If the part before colon is short, it's likely a title
+            cleaned = parts[1].strip()
+    
+    # Capitalize the first letter
+    if cleaned:
+        cleaned = cleaned[0].upper() + cleaned[1:]
+    
+    return cleaned
 
 
 # Development server runner
