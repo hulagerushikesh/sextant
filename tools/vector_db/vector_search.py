@@ -1,508 +1,736 @@
 """
-Vector DB Search Tool - In-Memory Implementation
+Knowledge-base storage and retrieval.
 
-This module provides vector database search functionality for the Agentic RAG system.
-Currently uses in-memory text entries with simple string similarity search.
-TODO: Replace with real vector database (ChromaDB, Pinecone, FAISS, etc.)
+A persistent ChromaDB collection of *chunks*, searched by dense vectors and BM25
+together, fused, then reranked. `tools/vector_db/server.py` fronts this over MCP;
+nothing else should import it directly.
+
+Every public method is async, and every one of them hands its real work to a
+thread. That is not decoration: embedding, reranking, the BM25 scan and ChromaDB
+are all synchronous CPU or disk work, and calling them straight from a coroutine
+pins the event loop for the whole duration. Measured before this change, a 10 ms
+heartbeat ticked *zero* times during 558 ms of searching -- meaning the MCP
+server could not have answered another request and the agent server could not
+have streamed a token while any query was in flight.
+
+Two things this file refuses to do, both learned the hard way here.
+
+It has no fallback path. An earlier version dropped to difflib string ratios over
+seven hard-coded fixtures whenever the embedding stack failed to import, so a
+broken install returned plausible-looking results instead of an error.
+
+And it never reports a number without saying what produced it. The scores this
+class used to return were computed as `1 - distance` against an l2 collection and
+labelled "similarity", which they were not. Every hit now carries `scored_by`.
 """
 
-from typing import List, Dict, Any, Optional
+from __future__ import annotations
+
 import asyncio
+import logging
+import os
+import threading
 import time
 from datetime import datetime
-import re
-from difflib import SequenceMatcher
+from pathlib import Path
+from typing import Any, Literal, cast
 
-# Real vector database imports
-try:
-    import chromadb
-    from sentence_transformers import SentenceTransformer
-    CHROMADB_AVAILABLE = True
-except ImportError:
-    CHROMADB_AVAILABLE = False
-    print("ChromaDB not available, falling back to in-memory search")
+from tools.vector_db.chunking import (
+    DEFAULT_OVERLAP_TOKENS,
+    DEFAULT_TARGET_TOKENS,
+    chunk_text,
+)
+from tools.vector_db.embeddings import EmbeddingsUnavailable, get_embedder
+from tools.vector_db.loaders import LoadedDocument, Locator, load_path
+from tools.vector_db.retrieval import (
+    BM25Index,
+    CrossEncoderReranker,
+    Fused,
+    RerankerUnavailable,
+    reciprocal_rank_fusion,
+)
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_COLLECTION = "documents"
+
+# Where the on-disk collection lives: <repo root>/chroma_db, unless overridden.
+# The override exists so the evaluation harness and CI can build a throwaway
+# corpus without touching whatever the user has actually indexed.
+DEFAULT_PERSIST_DIR = Path(__file__).resolve().parents[2] / "chroma_db"
+PERSIST_DIR_ENV = "AGENTICRAG_CHROMA_DIR"
 
 
-class VectorSearchTool:
-    """Vector database search tool with in-memory implementation"""
-    
-    def __init__(self, db_url: str = "in-memory://vector-db", collection_name: str = "documents"):
-        """
-        Initialize Vector Search Tool
-        
-        Args:
-            db_url: Vector database connection URL (placeholder for real DB)
-            collection_name: Name of the document collection (placeholder for real DB)
-        """
-        self.db_url = db_url
+def persist_dir() -> Path:
+    """The collection directory for this process, honouring the override."""
+    override = os.getenv(PERSIST_DIR_ENV)
+    return Path(override).expanduser() if override else DEFAULT_PERSIST_DIR
+
+# Cosine, not Chroma's l2 default. Dense scores are computed as `1 - distance`,
+# which is only a similarity if the distance is cosine: under l2 the distance is
+# unbounded, so `1 - distance` runs negative for anything mildly unrelated and is
+# not comparable across queries.
+DISTANCE_SPACE = "cosine"
+
+# How many chunks each retriever proposes before fusion. Wider than the caller's
+# `limit` on purpose -- fusion and reranking can only reorder what they are given,
+# so the shortlist is where recall is won or lost.
+CANDIDATES = 30
+
+# Which index answers the *dense* half of retrieval. "chroma" is ChromaDB's own
+# vector search -- the default, and what every deployment has always used. The
+# rest swap in one of the hand-written indexes from `tools.vector_db.ann`, so the
+# HNSW-vs-IVF-PQ comparison stops being a benchmark you read and becomes a switch
+# that changes what the live pipeline actually retrieves. Lexical (BM25), fusion
+# and reranking are unchanged either way; only the dense candidate source moves.
+ANN_BACKEND_ENV = "AGENTICRAG_ANN_INDEX"
+ANN_BACKENDS = ("chroma", "flat", "hnsw", "ivfpq", "ivfpq_rerank")
+
+# How many fused candidates the cross-encoder actually scores. It reads every
+# pair, so this is the cost knob.
+RERANK_DEPTH = 25
+
+# Measured against the Phase 5 golden set, not guessed. On 60 questions, a floor
+# of 0.01 blocks 8 of 10 unanswerable queries and costs 2 of 50 answerable ones;
+# 0.1 blocks the same 8 and costs 3; 0.3 costs 8 for no further benefit. So the
+# floor is deliberately small -- it removes the near-zero tail, and nothing more.
+#
+# It cannot do better than 8 of 10, and that is not a tuning failure. The two
+# survivors ask for a fact that is absent from a passage genuinely about that
+# subject ("what does error code TRK-150 mean?" against the error-code
+# reference, 0.9730). No score separates "this passage is on topic" from "this
+# passage contains the answer"; only reading it does, which is the model's job
+# and is what the abstention rule in the agent prompt is for.
+#
+# Re-derive with: agenticrag-eval
+DEFAULT_MIN_SCORE = 0.01
+
+# Retrieval modes. Only "rerank" is meant for production use; the other three
+# exist because `eval/harness.py` has to be able to ablate the pipeline, and a
+# claim that reranking helps is worth nothing without the run that shows it.
+RetrievalMode = Literal["dense", "lexical", "rrf", "rerank"]
+RETRIEVAL_MODES: tuple[RetrievalMode, ...] = ("dense", "lexical", "rrf", "rerank")
+DEFAULT_MODE: RetrievalMode = "rerank"
+
+
+def _locators(doc: dict[str, Any], length: int) -> list[Locator]:
+    """Where in `doc` its pages or sections begin.
+
+    Two callers, two levels of detail. `kb_ingest` from a person pasting text
+    knows at most one page number for the whole thing. The upload endpoint has
+    already parsed the file and knows exactly where every page starts, so it
+    sends the full list -- which is what lets a PDF dropped into the browser
+    cite "p. 14" the way an `agenticrag-ingest` one does.
+
+    Note this takes structured locators, not a path. A `kb_ingest_file` tool
+    would be simpler and would hand every client that mounts this server the
+    ability to read arbitrary files on the machine; parsing stays on the caller's
+    side of the protocol for that reason.
+    """
+    supplied = doc.get("locators")
+    if isinstance(supplied, list) and supplied:
+        found = []
+        for item in supplied:
+            if not isinstance(item, dict):
+                continue
+            kind, label = item.get("kind"), item.get("label")
+            if kind not in ("page", "section") or label is None:
+                continue
+            start = int(item.get("start", 0))
+            end = int(item.get("end", length))
+            # Clamp rather than reject: a locator running past the text it
+            # describes should cost precision, not the whole document.
+            found.append(Locator(kind, label, max(0, start), min(length, end)))
+        return found
+
+    page = doc.get("page")
+    # Without a locator list, a caller-supplied page applies to the whole
+    # document -- the best that can be done without knowing where pages break.
+    return [Locator("page", page, 0, length)] if page else []
+
+
+class KnowledgeBaseUnavailable(RuntimeError):
+    """Raised when the store cannot be opened. Never swallowed."""
+
+
+def configured_ann_backend() -> str:
+    """The dense backend for this process, validated. Defaults to 'chroma'.
+
+    Read once at construction. An unknown value is a configuration mistake, not
+    something to paper over with a silent fallback -- the whole reason to set it
+    is to change what retrieval does, so a typo that quietly kept the default
+    would be the worst outcome.
+    """
+    name = os.getenv(ANN_BACKEND_ENV, "chroma").strip().lower()
+    if name not in ANN_BACKENDS:
+        raise KnowledgeBaseUnavailable(
+            f"{ANN_BACKEND_ENV}={name!r} is not a known dense backend; "
+            f"choose one of: {', '.join(ANN_BACKENDS)}"
+        )
+    return name
+
+
+class KnowledgeBase:
+    """A persistent collection of document chunks with hybrid retrieval."""
+
+    def __init__(self, collection_name: str = DEFAULT_COLLECTION) -> None:
         self.collection_name = collection_name
-        self.is_connected = False
-        self.use_chromadb = CHROMADB_AVAILABLE
-        
-        # Initialize vector database connection
-        if self.use_chromadb:
-            self._initialize_chromadb()
-        else:
-            # Fallback to in-memory implementation
-            self.text_entries = self._initialize_text_entries()
-    
-    def _initialize_chromadb(self):
-        """
-        Initialize ChromaDB client and collection
-        
-        This replaces the in-memory implementation with real vector database
-        """
+
         try:
-            # Initialize ChromaDB client
-            self.client = chromadb.Client()
-            
-            # Get or create collection
+            import chromadb
+        except ImportError as e:
+            raise KnowledgeBaseUnavailable(
+                f"chromadb is not importable ({e}). Run: pip install -e '.[dev]'"
+            ) from e
+
+        try:
+            self.embedder = get_embedder()
+        except EmbeddingsUnavailable as e:
+            raise KnowledgeBaseUnavailable(str(e)) from e
+
+        self.persist_dir = persist_dir()
+        try:
+            self.client = chromadb.PersistentClient(path=str(self.persist_dir))
             self.collection = self.client.get_or_create_collection(
-                name=self.collection_name,
-                metadata={"description": "Agentic RAG document collection"}
+                name=collection_name,
+                # cast: chroma types this as a TypedDict the plain literal does
+                # not match, though it is exactly what the API documents.
+                configuration=cast(Any, {"hnsw": {"space": DISTANCE_SPACE}}),
+                metadata={"description": "Agentic RAG document collection"},
             )
-            
-            # Initialize sentence transformer for embeddings
-            self.embedder = SentenceTransformer('all-MiniLM-L6-v2')
-            
-            print(f"ChromaDB initialized with collection: {self.collection_name}")
-            
         except Exception as e:
-            print(f"ChromaDB initialization failed: {e}")
-            self.use_chromadb = False
-            self.text_entries = self._initialize_text_entries()
-    
-    def _initialize_text_entries(self) -> List[Dict[str, Any]]:
+            raise KnowledgeBaseUnavailable(
+                f"Could not open the ChromaDB collection at {self.persist_dir}: {e}"
+            ) from e
+
+        # get_or_create silently keeps an existing collection's space, so a store
+        # created before the cosine switch would still be l2 and would keep
+        # reporting scores that aren't similarities. Fail loudly instead.
+        space = self._configured_space()
+        if space is not None and space != DISTANCE_SPACE:
+            raise KnowledgeBaseUnavailable(
+                f"The collection at {self.persist_dir} was built with '{space}' distance, but "
+                "this code reports dense scores as cosine similarity. Delete "
+                f"{self.persist_dir} and re-ingest."
+            )
+
+        self.reranker = CrossEncoderReranker()
+        self._bm25: BM25Index | None = None
+        self._corpus: dict[str, tuple[str, dict[str, Any]]] = {}
+
+        # Which index answers the dense half of retrieval. Validated here so a
+        # bad value fails at startup, not on the first query.
+        self._ann_backend = configured_ann_backend()
+        # The hand-written dense index, built lazily from the whole corpus and
+        # cached until a write invalidates it. Stays None on the default path.
+        self._ann_index: Any = None
+        self._ann_lock = threading.Lock()
+
+        # Reads run concurrently across worker threads, so the lexical index
+        # must be built at most once no matter how many arrive together.
+        self._index_lock = threading.Lock()
+        # Writes are serialised: two ingests interleaving would race on the
+        # index invalidation and leave the lexical index missing a document.
+        self._write_lock = asyncio.Lock()
+
+        logger.info(
+            "Knowledge base ready: collection=%s chunks=%d embedder=%s path=%s",
+            collection_name,
+            self.collection.count(),
+            self.embedder.name,
+            self.persist_dir,
+        )
+
+    def _configured_space(self) -> str | None:
+        """Read the collection's actual distance space, or None if unreported."""
+        config = getattr(self.collection, "configuration_json", None)
+        if not isinstance(config, dict):
+            return None
+        hnsw = config.get("hnsw")
+        return hnsw.get("space") if isinstance(hnsw, dict) else None
+
+    # -- lexical index -----------------------------------------------------
+
+    def _ensure_index(self) -> BM25Index:
+        """Build the BM25 index and text cache from the collection, once.
+
+        Held in memory rather than persisted: the chunks already live in Chroma,
+        and a second on-disk index is one more thing that can drift out of step
+        with the first. The cost is that the corpus text is resident -- fine at
+        this scale, and the thing to revisit when it stops being fine.
         """
-        Initialize in-memory text entries for semantic search
-        
-        Returns:
-            List of text entries with metadata
-        """
-        return [
-            {
-                "id": "doc_001",
-                "title": "Introduction to Machine Learning",
-                "content": "Machine learning is a subset of artificial intelligence that focuses on algorithms that can learn from data without being explicitly programmed. It involves training models on datasets to make predictions or decisions.",
-                "category": "AI/ML",
-                "source": "ml_handbook.pdf",
-                "page": 1
-            },
-            {
-                "id": "doc_002",
-                "title": "Deep Learning Fundamentals",
-                "content": "Deep learning uses neural networks with multiple layers to model complex patterns in data. It has revolutionized fields like computer vision, natural language processing, and speech recognition.",
-                "category": "AI/ML",
-                "source": "deep_learning_guide.pdf",
-                "page": 15
-            },
-            {
-                "id": "doc_003",
-                "title": "Natural Language Processing",
-                "content": "NLP combines computational linguistics with machine learning to process and understand human language. It enables applications like chatbots, translation, and sentiment analysis.",
-                "category": "AI/ML",
-                "source": "nlp_textbook.pdf",
-                "page": 42
-            },
-            {
-                "id": "doc_004",
-                "title": "Computer Vision Applications",
-                "content": "Computer vision enables machines to interpret and understand visual information from images and videos. Applications include object detection, facial recognition, and medical imaging.",
-                "category": "AI/ML",
-                "source": "cv_applications.pdf",
-                "page": 8
-            },
-            {
-                "id": "doc_005",
-                "title": "Reinforcement Learning",
-                "content": "Reinforcement learning is an area of machine learning concerned with how agents make decisions in an environment to maximize cumulative reward. It's used in robotics, gaming, and autonomous systems.",
-                "category": "AI/ML",
-                "source": "rl_theory.pdf",
-                "page": 23
-            },
-            {
-                "id": "doc_006",
-                "title": "Data Science Workflow",
-                "content": "Data science involves collecting, cleaning, analyzing, and interpreting data to extract insights. The typical workflow includes data exploration, feature engineering, model building, and validation.",
-                "category": "Data Science",
-                "source": "data_science_guide.pdf",
-                "page": 12
-            },
-            {
-                "id": "doc_007",
-                "title": "Python Programming for AI",
-                "content": "Python is the most popular programming language for artificial intelligence and machine learning. Key libraries include NumPy, Pandas, Scikit-learn, TensorFlow, and PyTorch.",
-                "category": "Programming",
-                "source": "python_ai_guide.pdf",
-                "page": 5
-            }
-        ]
-    
-    async def connect(self) -> bool:
-        """
-        Connect to vector database (in-memory implementation)
-        
-        Returns:
-            bool: Always returns True for in-memory setup
-        """
-        # TODO: Replace with actual vector DB connection
-        # Example for ChromaDB:
-        # import chromadb
-        # self.client = chromadb.Client()
-        # self.collection = self.client.get_or_create_collection(self.collection_name)
-        
-        await asyncio.sleep(0.1)  # Simulate connection delay
-        self.is_connected = True
-        return True
-    
-    async def search(self, query: str, limit: int = 50, similarity_threshold: float = 0.1) -> Dict[str, Any]:
-        """
-        Search vector database using ChromaDB or fallback to in-memory search
-        
-        Args:
-            query: Search query string
-            limit: Maximum number of results to return
-            similarity_threshold: Minimum similarity score (0.0-1.0)
-            
-        Returns:
-            Dict containing search results and metadata
-        """
-        start_time = time.time()
-        
-        print(f"DEBUG: Vector search for query: '{query}'")
-        print(f"DEBUG: Using ChromaDB: {self.use_chromadb}")
-        print(f"DEBUG: Similarity threshold: {similarity_threshold}")
-        
-        if self.use_chromadb:
-            # Use real vector database search
-            search_results = await self._search_chromadb(query, limit, similarity_threshold)
-            database_type = "chromadb"
-            print(f"DEBUG: ChromaDB search returned {len(search_results)} results")
-        else:
-            # Fallback to in-memory search
-            search_results = self._perform_similarity_search(query, limit, similarity_threshold)
-            database_type = "in-memory_vector_db"
-            print(f"DEBUG: In-memory search returned {len(search_results)} results")
-        
-        processing_time = time.time() - start_time
-        
+        # Read into a local at each step: the attribute can change under us
+        # between the two checks, which is the whole point of the double check.
+        index = self._bm25
+        if index is not None:
+            return index
+
+        with self._index_lock:
+            index = self._bm25  # another thread may have built it while we waited
+            return index if index is not None else self._build_index()
+
+    def _build_index(self) -> BM25Index:
+        stored = self.collection.get(include=["documents", "metadatas"])
+        ids = stored.get("ids") or []
+        documents = stored.get("documents") or []
+        metadatas = stored.get("metadatas") or []
+
+        self._corpus = {
+            chunk_id: (text, dict(meta or {}))
+            for chunk_id, text, meta in zip(ids, documents, metadatas, strict=True)
+        }
+        self._bm25 = BM25Index(list(ids), list(documents))
+        logger.info("Lexical index built over %d chunks", len(self._bm25))
+        return self._bm25
+
+    def _invalidate_index(self) -> None:
+        self._bm25 = None
+        self._corpus = {}
+        # The dense ANN cache is built from the corpus too, so a write makes it
+        # stale in the same breath as the lexical index. Rebuilt on next query.
+        self._ann_index = None
+
+    # -- retrieval ---------------------------------------------------------
+
+    async def search(
+        self,
+        query: str,
+        limit: int = 5,
+        min_score: float = DEFAULT_MIN_SCORE,
+        mode: str = DEFAULT_MODE,
+    ) -> dict[str, Any]:
+        """Rank chunks against `query`. See RETRIEVAL_MODES for the ablations."""
+        if mode not in RETRIEVAL_MODES:
+            raise ValueError(f"mode must be one of {RETRIEVAL_MODES}, got {mode!r}")
+        return await asyncio.to_thread(self.search_sync, query, limit, min_score, mode)
+
+    def search_sync(
+        self,
+        query: str,
+        limit: int = 5,
+        min_score: float = DEFAULT_MIN_SCORE,
+        mode: str = DEFAULT_MODE,
+    ) -> dict[str, Any]:
+        """The synchronous body of `search`, for callers already on a thread."""
+        start = time.time()
+        results, scored_by = self._search(query, limit, min_score, mode)
+
         return {
             "success": True,
             "query": query,
-            "results": search_results,
-            "total_found": len(search_results),
-            "processing_time": processing_time,
-            "similarity_threshold": similarity_threshold,
-            "database": database_type,
+            "results": results,
+            "total_found": len(results),
+            "mode": mode,
+            "scored_by": scored_by,
+            "min_score": min_score,
+            "processing_time": time.time() - start,
             "collection": self.collection_name,
-            "timestamp": datetime.now().isoformat()
+            "collection_size": self.collection.count(),
+            "timestamp": datetime.now().isoformat(),
         }
-    
-    async def _search_chromadb(self, query: str, limit: int, similarity_threshold: float) -> List[Dict[str, Any]]:
-        """
-        Search using ChromaDB vector database
-        
-        Args:
-            query: Search query string
-            limit: Maximum number of results to return
-            similarity_threshold: Minimum similarity score (0.0-1.0)
-            
-        Returns:
-            List of search results from ChromaDB
-        """
+
+    def _search(
+        self, query: str, limit: int, min_score: float, mode: str
+    ) -> tuple[list[dict[str, Any]], str]:
+        if self.collection.count() == 0:
+            return [], "none"
+
+        # Always built: even a dense-only search needs the chunk text cache to
+        # assemble its hits.
+        index = self._ensure_index()
+
+        dense_ids, dense_scores = ([], {}) if mode == "lexical" else self._dense(query)
+        lexical = [] if mode == "dense" else index.search(query, CANDIDATES)
+
+        candidates, scores, scored_by = self._rank(query, mode, dense_ids, dense_scores, lexical)
+        if not candidates:
+            return [], "none"
+
+        order = sorted(range(len(candidates)), key=lambda i: scores[i], reverse=True)
+
+        hits: list[dict[str, Any]] = []
+        for i in order:
+            # An RRF score is a rank artefact with no meaning on a 0-1 scale, so
+            # thresholding it would repeat exactly the mistake this project
+            # already made once with l2 distances.
+            if scored_by == "cross-encoder" and scores[i] < min_score:
+                continue
+            candidate = candidates[i]
+            hits.append(self._hit(candidate, scores[i], scored_by, dense_scores.get(candidate.id)))
+            if len(hits) >= limit:
+                break
+        return hits, scored_by
+
+    def _rank(
+        self,
+        query: str,
+        mode: str,
+        dense_ids: list[str],
+        dense_scores: dict[str, float],
+        lexical: list[tuple[str, float]],
+    ) -> tuple[list[Fused], list[float], str]:
+        """Produce the candidate list and its scores for the requested mode."""
+        if mode == "dense":
+            candidates = [
+                Fused(id=i, rrf_score=dense_scores[i], dense_rank=rank)
+                for rank, i in enumerate(dense_ids, start=1)
+            ]
+            return candidates, [dense_scores[c.id] for c in candidates], "cosine"
+
+        if mode == "lexical":
+            candidates = [
+                Fused(id=i, rrf_score=score, lexical_rank=rank)
+                for rank, (i, score) in enumerate(lexical, start=1)
+            ]
+            return candidates, [c.rrf_score for c in candidates], "bm25"
+
+        fused = reciprocal_rank_fusion(dense_ids, [i for i, _ in lexical])[:RERANK_DEPTH]
+        if mode == "rrf" or not fused:
+            return fused, [f.rrf_score for f in fused], "rrf"
+
         try:
-            # Check if collection has any documents
-            collection_count = self.collection.count()
-            print(f"DEBUG: ChromaDB collection has {collection_count} documents")
-            
-            if collection_count == 0:
-                print("DEBUG: ChromaDB collection is empty, returning no results")
-                return []
-            
-            # Generate embedding for the query
-            query_embedding = self.embedder.encode([query]).tolist()[0]
-            
-            # Search in ChromaDB collection
-            results = self.collection.query(
-                query_embeddings=[query_embedding],
-                n_results=limit,
-                include=['documents', 'metadatas', 'distances']
-            )
-            
-            # Format results
-            search_results = []
-            if results['documents'] and results['documents'][0]:
-                for i, (doc, metadata, distance) in enumerate(zip(
-                    results['documents'][0],
-                    results['metadatas'][0],
-                    results['distances'][0]
-                )):
-                    # Convert distance to similarity score (ChromaDB uses distance, we want similarity)
-                    similarity_score = 1 - distance
-                    
-                    if similarity_score >= similarity_threshold:
-                        search_results.append({
-                            "id": metadata.get("id", f"doc_{i}"),
-                            "title": metadata.get("title", "Document"),
-                            "content": doc,
-                            "similarity_score": similarity_score,
-                            "source": metadata.get("source", "unknown"),
-                            "page": metadata.get("page", 1),
-                            "category": metadata.get("category", "general")
-                        })
-            
-            return search_results
-            
-        except Exception as e:
-            print(f"ChromaDB search error: {e}")
-            # Fallback to in-memory search
-            return self._perform_similarity_search(query, limit, similarity_threshold)
-    
-    def _perform_similarity_search(self, query: str, limit: int, similarity_threshold: float) -> List[Dict[str, Any]]:
-        """
-        Perform similarity search on in-memory text entries
-        
-        Args:
-            query: Search query string
-            limit: Maximum number of results to return
-            similarity_threshold: Minimum similarity score (0.0-1.0)
-            
-        Returns:
-            List of document results with similarity scores
-        """
-        query_lower = query.lower()
-        scored_results = []
-        
-        for entry in self.text_entries:
-            # Calculate similarity score using multiple methods
-            similarity_score = self._calculate_similarity(query_lower, entry)
-            
-            # Only include results above threshold
-            if similarity_score >= similarity_threshold:
-                result = {
-                    "id": entry["id"],
-                    "title": entry["title"],
-                    "content": entry["content"],
-                    "similarity_score": similarity_score,
-                    "source": entry["source"],
-                    "page": entry["page"],
-                    "category": entry["category"]
-                }
-                scored_results.append(result)
-        
-        # Sort by similarity score (highest first)
-        scored_results.sort(key=lambda x: x["similarity_score"], reverse=True)
-        
-        # Return top results up to limit
-        return scored_results[:limit]
-    
-    def _calculate_similarity(self, query: str, entry: Dict[str, Any]) -> float:
-        """
-        Calculate similarity score between query and text entry
-        
-        Args:
-            query: Lowercase search query
-            entry: Text entry dictionary
-            
-        Returns:
-            float: Similarity score between 0.0 and 1.0
-        """
-        # Combine title and content for similarity calculation
-        text_to_search = f"{entry['title']} {entry['content']}".lower()
-        
-        # Method 1: Substring matching (exact matches get high scores)
-        substring_score = 0.0
-        query_words = query.split()
-        for word in query_words:
-            if word in text_to_search:
-                substring_score += 0.3  # Boost for exact word matches
-        
-        # Method 2: Sequence similarity using difflib
-        sequence_score = SequenceMatcher(None, query, text_to_search).ratio()
-        
-        # Method 3: Keyword density (how many query words appear)
-        keyword_density = 0.0
-        if query_words:
-            matches = sum(1 for word in query_words if word in text_to_search)
-            keyword_density = matches / len(query_words)
-        
-        # Combine scores with weights
-        final_score = (
-            substring_score * 0.4 +      # Exact matches get priority
-            sequence_score * 0.4 +       # Overall text similarity
-            keyword_density * 0.2        # Keyword coverage
+            passages = [self._corpus.get(f.id, ("", {}))[0] for f in fused]
+            return fused, self.reranker.score(query, passages), "cross-encoder"
+        except RerankerUnavailable as e:
+            # Not a silent fallback: every hit reports `scored_by`, so the
+            # caller can see that these are fusion ranks and not relevance.
+            logger.warning("Reranker unavailable, returning fused ranks: %s", e)
+            return fused, [f.rrf_score for f in fused], "rrf"
+
+    def _dense(self, query: str) -> tuple[list[str], dict[str, float]]:
+        """Vector search: ids in rank order, plus their cosine similarities."""
+        embedding = self.embedder.encode([query])[0]
+        if self._ann_backend != "chroma":
+            return self._ann_dense(embedding)
+        raw = self.collection.query(
+            query_embeddings=cast(Any, [embedding]),
+            n_results=min(CANDIDATES, self.collection.count()),
+            include=["distances"],
         )
-        
-        # Cap at 1.0
-        return min(final_score, 1.0)
-    
-    async def get_document_by_id(self, doc_id: str) -> Optional[Dict[str, Any]]:
+        ids = (raw.get("ids") or [[]])[0]
+        distances = (raw.get("distances") or [[]])[0]
+        # strict: Chroma returns these as parallel lists; a length mismatch is a
+        # bug in the driver, not something to silently truncate.
+        return list(ids), {i: 1 - d for i, d in zip(ids, distances, strict=True)}
+
+    def _ann_dense(self, embedding: Any) -> tuple[list[str], dict[str, float]]:
+        """The dense half through a hand-written index instead of Chroma.
+
+        Returns exactly what the Chroma path does -- ids in rank order and their
+        cosine similarities on the same 0-1 scale -- so fusion and reranking
+        downstream cannot tell which backend produced the shortlist. The index is
+        exact (`flat`) or approximate (`hnsw`/`ivfpq`/`ivfpq_rerank`) per config.
         """
-        Retrieve a specific document by ID from in-memory entries
-        
-        Args:
-            doc_id: Document identifier
-            
-        Returns:
-            Dict containing document data or None if not found
+        count = self.collection.count()
+        if count == 0:
+            return [], {}
+        index = self._ensure_ann_index()
+        hits = index.search(embedding, min(CANDIDATES, count))
+        ids = [chunk_id for chunk_id, _ in hits]
+        return ids, {chunk_id: float(sim) for chunk_id, sim in hits}
+
+    def _ensure_ann_index(self) -> Any:
+        """Build the dense ANN index once, then reuse it. Double-checked."""
+        index = self._ann_index
+        if index is not None:
+            return index
+        with self._ann_lock:
+            if self._ann_index is not None:
+                return self._ann_index
+            self._ann_index = self._build_ann_index()
+            return self._ann_index
+
+    def _build_ann_index(self) -> Any:
+        """Construct the configured index over the whole corpus.
+
+        Deferred import so the ANN package never loads on the default Chroma
+        path. The embeddings already exist in the store -- built from them, not a
+        re-encode, so this index searches exactly what Chroma does.
         """
-        # TODO: Replace with actual document retrieval from vector DB
-        # Example for ChromaDB:
-        # result = self.collection.get(ids=[doc_id])
-        # if result['ids']:
-        #     return result['metadatas'][0]
-        
-        await asyncio.sleep(0.1)
-        
-        # Search in-memory entries
-        for entry in self.text_entries:
-            if entry["id"] == doc_id:
-                return {
-                    "id": entry["id"],
-                    "title": entry["title"],
-                    "content": entry["content"],
-                    "source": entry["source"],
-                    "page": entry["page"],
-                    "category": entry["category"],
-                    "metadata": {
-                        "created_at": "2024-01-01T00:00:00Z",
-                        "updated_at": "2024-01-01T00:00:00Z",
-                        "database": "in-memory_vector_db"
-                    }
-                }
-        
-        return None
-    
-    async def add_documents(self, documents: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        Add documents to the vector database
-        
-        Args:
-            documents: List of documents with 'content', 'title', 'metadata'
-            
-        Returns:
-            Dict containing addition results
-        """
-        if not self.use_chromadb:
-            return {
-                "success": False,
-                "message": "ChromaDB not available, cannot add documents",
-                "documents_added": 0
-            }
-        
-        try:
-            print(f"DEBUG: Adding {len(documents)} documents to ChromaDB")
-            
-            # Extract content and metadata
-            texts = [doc["content"] for doc in documents]
-            metadatas = []
-            ids = []
-            
-            for i, doc in enumerate(documents):
-                metadata = {
-                    "id": doc.get("id", f"doc_{i}"),
-                    "title": doc.get("title", "Untitled"),
-                    "source": doc.get("source", "unknown"),
-                    "page": doc.get("page", 1),
-                    "category": doc.get("category", "general")
-                }
-                metadatas.append(metadata)
-                ids.append(metadata["id"])
-            
-            print(f"DEBUG: Generated {len(texts)} texts, {len(metadatas)} metadatas, {len(ids)} ids")
-            
-            # Generate embeddings
-            embeddings = self.embedder.encode(texts).tolist()
-            print(f"DEBUG: Generated {len(embeddings)} embeddings")
-            
-            # Add to ChromaDB collection
-            self.collection.add(
-                embeddings=embeddings,
-                documents=texts,
-                metadatas=metadatas,
-                ids=ids
+        from tools.vector_db.ann import INDEX_TYPES
+        from tools.vector_db.ann.ivfpq import IvfPqIndex
+        from tools.vector_db.ann.rerank import RerankIndex
+
+        stored = self.collection.get(include=["embeddings"])
+        ids = list(stored.get("ids") or [])
+        embeddings = stored.get("embeddings")
+        if embeddings is None or len(embeddings) == 0:
+            ids, embeddings = [], []
+
+        if self._ann_backend == "ivfpq_rerank":
+            index: Any = RerankIndex(IvfPqIndex())
+        else:
+            index = INDEX_TYPES[self._ann_backend]()
+        index.build(ids, embeddings)
+        logger.info(
+            "Dense ANN index (%s) built over %d chunks", self._ann_backend, len(ids)
+        )
+        return index
+
+    def _hit(
+        self, fused: Fused, score: float, scored_by: str, dense_score: float | None
+    ) -> dict[str, Any]:
+        text, meta = self._corpus.get(fused.id, ("", {}))
+        return {
+            "id": fused.id,
+            "document_id": meta.get("document_id", fused.id),
+            "title": meta.get("title", "Untitled document"),
+            "content": text,
+            "source": meta.get("source", "unknown"),
+            "page": meta.get("page"),
+            "section": meta.get("section"),
+            "category": meta.get("category", "general"),
+            "score": round(float(score), 4),
+            "scored_by": scored_by,
+            "dense_score": round(dense_score, 4) if dense_score is not None else None,
+            "matched": fused.matched,
+            "chunk_index": meta.get("chunk_index", 0),
+        }
+
+    # -- ingestion ---------------------------------------------------------
+
+    async def add_documents(self, documents: list[dict[str, Any]]) -> dict[str, Any]:
+        """Chunk, embed and store documents. Ingested content survives a restart."""
+        async with self._write_lock:
+            return await asyncio.to_thread(self._add_documents_sync, documents)
+
+    def _add_documents_sync(self, documents: list[dict[str, Any]]) -> dict[str, Any]:
+        if not documents:
+            return self._ingest_failure("No documents provided")
+
+        loaded: list[LoadedDocument] = []
+        for i, doc in enumerate(documents):
+            content = doc.get("content")
+            if not content:
+                return self._ingest_failure(f"Every document needs a 'content' field (item {i})")
+
+            loaded.append(
+                LoadedDocument(
+                    doc_id=str(doc.get("id") or f"doc_{i}"),
+                    title=doc.get("title") or "Untitled",
+                    text=content,
+                    source=doc.get("source") or "unknown",
+                    category=doc.get("category") or "general",
+                    locators=_locators(doc, len(content)),
+                )
             )
-            
-            print(f"DEBUG: Successfully added documents to ChromaDB")
-            
-            return {
-                "success": True,
-                "message": f"Successfully added {len(documents)} documents",
-                "documents_added": len(documents),
-                "collection_size": self.collection.count()
-            }
-            
+        return self._store(loaded)
+
+    async def add_file(self, path: str, category: str = "general") -> dict[str, Any]:
+        """Load a PDF, Markdown or text file and store its chunks."""
+        async with self._write_lock:
+            return await asyncio.to_thread(self._add_file_sync, path, category)
+
+    def _add_file_sync(self, path: str, category: str) -> dict[str, Any]:
+        # Parsing a 144-page PDF is seconds of blocking work before any
+        # embedding starts, so the load belongs on the thread too.
+        return self._store([load_path(path, category=category)])
+
+    def _store(self, documents: list[LoadedDocument]) -> dict[str, Any]:
+        ids: list[str] = []
+        texts: list[str] = []
+        metadatas: list[dict[str, Any]] = []
+
+        for document in documents:
+            chunks = chunk_text(document.text, self.embedder.count_tokens)
+            if not chunks:
+                logger.warning("%s produced no chunks -- empty after stripping", document.doc_id)
+                continue
+
+            for chunk in chunks:
+                ids.append(f"{document.doc_id}#{chunk.index}")
+                texts.append(chunk.text)
+                meta: dict[str, Any] = {
+                    "document_id": document.doc_id,
+                    "title": document.title,
+                    "source": document.source,
+                    "category": document.category,
+                    "chunk_index": chunk.index,
+                    "char_start": chunk.char_start,
+                    "char_end": chunk.char_end,
+                    "tokens": chunk.tokens,
+                }
+                # A chunk is attributed to wherever it *starts*, so one that runs
+                # across a page break cites the page a reader would turn to.
+                meta.update(document.locate(chunk.char_start))
+                # Chroma rejects None-valued metadata outright.
+                metadatas.append({k: v for k, v in meta.items() if v is not None})
+
+        if not ids:
+            return self._ingest_failure("Nothing to store: all documents were empty")
+
+        try:
+            embeddings = self.embedder.encode(texts)
+            # upsert, not add: re-ingesting the same id replaces it rather than
+            # raising, which is what you want when re-running an ingest script.
+            self.collection.upsert(
+                embeddings=cast(Any, embeddings),
+                documents=texts,
+                metadatas=cast(Any, metadatas),
+                ids=ids,
+            )
         except Exception as e:
+            logger.exception("Ingestion failed")
+            return self._ingest_failure(f"Error adding documents: {e}")
+
+        self._invalidate_index()
+        return {
+            "success": True,
+            "message": (
+                f"Stored {len(documents)} document(s) as {len(ids)} chunk(s)"
+            ),
+            "documents_added": len(documents),
+            "chunks_added": len(ids),
+            "collection_size": self.collection.count(),
+        }
+
+    def _ingest_failure(self, message: str) -> dict[str, Any]:
+        return {
+            "success": False,
+            "message": message,
+            "documents_added": 0,
+            "chunks_added": 0,
+            "collection_size": self.collection.count(),
+        }
+
+    # -- introspection -----------------------------------------------------
+
+    async def get_document_by_id(self, chunk_id: str) -> dict[str, Any] | None:
+        """Fetch one stored chunk by id, or None if it isn't there."""
+        return await asyncio.to_thread(self._get_document_sync, chunk_id)
+
+    def _get_document_sync(self, chunk_id: str) -> dict[str, Any] | None:
+        result = self.collection.get(ids=[chunk_id], include=["documents", "metadatas"])
+        if not result.get("ids"):
+            return None
+
+        meta = (result.get("metadatas") or [{}])[0] or {}
+        return {
+            "id": chunk_id,
+            "document_id": meta.get("document_id", chunk_id),
+            "title": meta.get("title", "Untitled document"),
+            "content": (result.get("documents") or [""])[0],
+            "source": meta.get("source", "unknown"),
+            "page": meta.get("page"),
+            "section": meta.get("section"),
+            "category": meta.get("category", "general"),
+        }
+
+    # -- ANN benchmark -----------------------------------------------------
+
+    def _all_vectors(self) -> tuple[list[str], Any]:
+        """Every stored chunk id and its embedding, straight from Chroma.
+
+        The vectors already exist -- they were computed at ingestion and are what
+        `_dense` queries against. The ANN indexes are built from these, not from
+        a re-embedding: re-encoding the corpus would measure the embedder, not
+        the index, and would let the benchmark drift from what production
+        actually searches.
+        """
+        stored = self.collection.get(include=["embeddings"])
+        ids = stored.get("ids") or []
+        embeddings = stored.get("embeddings")
+        if embeddings is None or len(embeddings) == 0:
+            return list(ids), []
+        return list(ids), embeddings
+
+    async def ann_benchmark(
+        self, k: int = 10, n_queries: int = 200, grid: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Sweep HNSW and IVF-PQ against exact search over the live corpus."""
+        return await asyncio.to_thread(self._ann_benchmark_sync, k, n_queries, grid)
+
+    def _ann_benchmark_sync(
+        self, k: int, n_queries: int, grid: dict[str, Any] | None
+    ) -> dict[str, Any]:
+        # Imported here, not at module top: the ANN package pulls in nothing the
+        # MCP server needs on the ingest path, and a store that is only written
+        # to should not pay to import three index implementations.
+        from tools.vector_db.ann.benchmark import Grid, sweep
+
+        ids, vectors = self._all_vectors()
+        if len(ids) < 2:
             return {
-                "success": False,
-                "message": f"Error adding documents: {str(e)}",
-                "documents_added": 0
+                "error": "The corpus has fewer than two chunks; there is nothing to "
+                "compare an index against. Ingest some documents first.",
+                "corpus": {"vectors": len(ids)},
             }
-    
-    async def health_check(self) -> Dict[str, Any]:
-        """
-        Check vector database health (in-memory implementation)
-        
-        Returns:
-            Dict containing health status
-        """
+        return sweep(ids, vectors, k=k, n_queries=n_queries, grid=Grid(**(grid or {})))
+
+    async def ann_compare(
+        self,
+        query: str,
+        k: int = 10,
+        hnsw: dict[str, Any] | None = None,
+        ivfpq: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Run one query through every index, side by side against exact search."""
+        return await asyncio.to_thread(self._ann_compare_sync, query, k, hnsw, ivfpq)
+
+    def _ann_compare_sync(
+        self,
+        query: str,
+        k: int,
+        hnsw: dict[str, Any] | None,
+        ivfpq: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        from tools.vector_db.ann.benchmark import compare_query
+
+        ids, vectors = self._all_vectors()
+        if len(ids) < 2:
+            return {
+                "error": "The corpus has fewer than two chunks; there is nothing to "
+                "compare. Ingest some documents first.",
+                "corpus": {"vectors": len(ids)},
+            }
+
+        # The query is embedded with the same encoder the corpus was, so the
+        # comparison runs in the space the vectors actually live in.
+        query_vector = self.embedder.encode([query])[0]
+        result = compare_query(ids, vectors, query_vector, k=k, hnsw=hnsw, ivfpq=ivfpq)
+
+        # Attach the human-readable title and text to each id so the frontend can
+        # show which passage an index found or missed, not just an opaque id.
+        index = self._ensure_index()  # noqa: F841 -- ensures _corpus is populated
+        wanted = set(result["exact"])
+        for res in result["results"].values():
+            for hit in res["hits"]:
+                wanted.add(hit["id"])
+        result["passages"] = {
+            cid: {
+                "title": (self._corpus.get(cid, ("", {}))[1] or {}).get(
+                    "title", "Untitled document"
+                ),
+                "excerpt": self._corpus.get(cid, ("", {}))[0][:200],
+            }
+            for cid in wanted
+        }
+        return result
+
+    async def health_check(self) -> dict[str, Any]:
+        """Report what the store actually contains."""
+        return await asyncio.to_thread(self._health_check_sync)
+
+    def _health_check_sync(self) -> dict[str, Any]:
+        stored = self.collection.get(include=["metadatas"])
+        documents = {
+            (meta or {}).get("document_id") for meta in (stored.get("metadatas") or [])
+        }
         return {
             "status": "healthy",
-            "database": "in-memory_vector_db",
-            "connected": self.is_connected,
-            "entries_count": len(self.text_entries),
+            "database": "chromadb",
+            "embedding_model": self.embedder.name,
+            "embedding_max_tokens": self.embedder.max_tokens,
+            "chunking": {
+                "target_tokens": DEFAULT_TARGET_TOKENS,
+                "overlap_tokens": DEFAULT_OVERLAP_TOKENS,
+            },
+            "retrieval": "dense + BM25, fused with RRF, reranked by cross-encoder",
+            "dense_backend": self._ann_backend,
+            "reranker": self.reranker.model_name,
             "collection": self.collection_name,
-            "timestamp": datetime.now().isoformat()
+            "collection_size": self.collection.count(),
+            "documents": len(documents - {None}),
+            "persist_dir": str(self.persist_dir),
+            "timestamp": datetime.now().isoformat(),
         }
-
-
-# Convenience function for direct search
-async def search_vector_db(query: str, limit: int = 50) -> Dict[str, Any]:
-    """
-    Convenience function to search vector database
-    
-    Args:
-        query: Search query string
-        limit: Maximum number of results
-        
-    Returns:
-        Dict containing search results
-    """
-    tool = VectorSearchTool()
-    await tool.connect()
-    return await tool.search(query, limit)
-
-
-# Example usage and testing
-if __name__ == "__main__":
-    async def test_vector_search():
-        """Test the Vector Search Tool"""
-        tool = VectorSearchTool()
-        
-        # Test connection
-        connected = await tool.connect()
-        print(f"Connected: {connected}")
-        
-        # Test health check
-        health = await tool.health_check()
-        print(f"Health: {health}")
-        
-        # Test search with various similarity scenarios
-        test_queries = [
-            "machine learning",           # Should match ML documents
-            "neural networks",           # Should match deep learning
-            "python programming",        # Should match Python guide
-            "data science workflow",     # Should match data science
-            "computer vision",           # Should match CV document
-            "artificial intelligence"    # Should match multiple documents
-        ]
-        
-        for query in test_queries:
-            print(f"\nSearching for: {query}")
-            results = await tool.search(query, limit=3)
-            print(f"Found {results['total_found']} results")
-            for i, doc in enumerate(results['results'], 1):
-                print(f"  {i}. {doc['title']} (score: {doc['similarity_score']})")
-    
-    # Run the test
-    asyncio.run(test_vector_search())

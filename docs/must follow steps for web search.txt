@@ -1,0 +1,26 @@
+Implement General Web Search with Clean Output
+Prompt:
+“Refactor the web search tool to use an official web search API (such as SerpAPI, Brave API, or Exa).
+	•	For every search, call the API and retrieve results from its ‘organic_results’ (or equivalent main listing) field.
+	•	Present the response as a clean, numbered markdown or plain text list, with each result’s title, snippet, and URL clearly separated.
+	•	If there are no results, respond clearly: ‘No relevant web results found for your query. Please try rephrasing or making your question more specific.’”
+3. Ensure Formatting and Output are User Friendly
+Prompt:
+“Ensure that all web search results are formatted in a way that’s clear to the user:
+	•	Each result should be a separate numbered bullet point.
+	•	Display the title (bold), snippet (as a paragraph), and the clickable URL on a new line.
+	•	Do not repeat the source as ‘DuckDuckGo’ or related boilerplate—just show real titles and URLs.
+	•	Never show ad or sponsored content in any answer.”
+4. Fallback Logic for No Results
+Prompt:
+“If the chosen search API returns no relevant results, provide a friendly fallback message:
+‘Sorry, no relevant web results were found for your query. You may try rephrasing your question, or request a summary/explanation from the language model instead.’
+Do not try to ‘fabricate’ snippets or fallback to questionable scraping.”
+
+5. Document the API Key Requirement
+Prompt:
+“Document clearly at the top of the web_search.py file:
+‘NOTE: This file requires an API key for SerpAPI (https://serpapi.com/), Brave Search (https://brave.com/search/api/), or a similar provider. Place your API key in a secure place and never commit it to public repositories.’”
+6. Optional: Route Coding Questions to Stack Overflow or GitHub APIs
+Prompt:
+“For queries that appear to be coding or programming-related (e.g., containing phrases like ‘C++ solution’, ‘Python code’, or ‘function implementation’), prioritize using the Stack Overflow or GitHub API for relevant search results before falling back to general web search.”

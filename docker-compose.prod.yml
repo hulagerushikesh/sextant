@@ -1,0 +1,103 @@
+# Production stack: Caddy at the edge, the api behind it. Two containers.
+#
+#   deploy/deploy.sh user@vm             # rsync + build + up (see deploy/README.md)
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Differences from the dev docker-compose.yml this file deliberately does NOT
+# reuse: there is no `vite preview` frontend service (the UI is baked into the
+# Caddy image as static files), the api is not published to the host (only Caddy
+# is public, on 80/443), and everything restarts unless explicitly stopped.
+#
+# Every ${VAR} is interpolated from the box's .env, which sits next to this file
+# and is never committed. See deploy/env.example for the full list.
+
+services:
+  # The public edge: TLS, the Basic-auth gate, and path routing. The React app
+  # is compiled into this image at build time, so PUBLIC_URL must be known now
+  # (Vite inlines it) -- that is why the subdomain has to exist before the build.
+  caddy:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.caddy
+      args:
+        # The origin the browser will call. Same host the UI is served from, so
+        # no CORS preflight ever fires in production.
+        VITE_SERVER_URL: ${PUBLIC_URL:?set PUBLIC_URL in .env}
+    restart: unless-stopped
+    # SITE_ADDRESS / ACME_EMAIL / BASIC_AUTH_USER / BASIC_AUTH_HASH are read from
+    # here by the Caddyfile's {$VAR} placeholders at load time.
+    #
+    # `format: raw` is load-bearing, not tidiness. By default compose
+    # interpolates env_file values, and a bcrypt hash is full of $ signs:
+    # $2a$14$Zx9... becomes `$2a$14` with `$Zx9...` swallowed as an unset
+    # variable, so the gate silently never authenticates. Raw passes the line
+    # through byte for byte -- paste the hash exactly as caddy prints it.
+    env_file:
+      - path: .env
+        format: raw
+    ports:
+      - "80:80"
+      - "443:443"
+    # Cap container stdout/stderr so months of logs can't quietly fill the disk
+    # and take the box down -- the failure mode a "dumb" deploy discovers at 3am.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    volumes:
+      # Caddy's own /data holds the Let's Encrypt account + certificates; a named
+      # volume keeps them across rebuilds so a redeploy never re-fetches a cert
+      # (and never risks the rate limit).
+      - caddy_data:/data
+      - caddy_config:/config
+      - caddy_logs:/var/log/caddy
+    depends_on:
+      # Don't take traffic until the api answers /health -- the embedder loads on
+      # first use, so this can take a minute on a cold boot (start_period below).
+      api:
+        condition: service_healthy
+
+  # FastAPI + the knowledge-base MCP subprocess. Internal only: reachable from
+  # Caddy over the compose network as `api:8000`, never from the host.
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    # Brings GEMINI_API_KEY and any AGENTICRAG_* tuning from .env into the app.
+    # Raw for the same reason as above: an API key is opaque and may contain $.
+    env_file:
+      - path: .env
+        format: raw
+    environment:
+      AGENTICRAG_CHROMA_DIR: /data/chroma
+      AGENTICRAG_LOG_FORMAT: json
+      # Honour env.example's promise that PUBLIC_URL is the CORS allowlist. Same
+      # origin in the one-subdomain layout, so this is belt-and-braces; it also
+      # makes a future split app./api. deploy a .env change, not a code change.
+      AGENTICRAG_ALLOWED_ORIGINS: ${PUBLIC_URL:?set PUBLIC_URL in .env}
+    expose:
+      - "8000"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    volumes:
+      # The attached persistent disk, mounted at /data on the VM (see README B2).
+      # Ingested documents and the vector store survive VM rebuilds and redeploys.
+      - /data/chroma:/data/chroma
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      # The embedder loads lazily on the first call; an impatient probe would
+      # report a false failure while the model is still loading on a cold boot.
+      start_period: 120s
+      retries: 5
+
+volumes:
+  caddy_data:
+  caddy_config:
+  caddy_logs:

@@ -1,0 +1,213 @@
+AGENTIC RAG SYSTEM ARCHITECTURE AND WORKFLOW
+==============================================
+
+OVERVIEW
+--------
+This is a Model Context Protocol (MCP) powered Retrieval-Augmented Generation (RAG) system that combines vector database search, web search, and language model fallback to provide intelligent answers to user queries.
+
+SYSTEM COMPONENTS
+-----------------
+
+1. FRONTEND (React + Vite)
+   - Location: /frontend/
+   - Port: 3000
+   - Purpose: User interface for submitting queries and viewing responses
+   - Technology: React.js with Vite build tool
+   - Features: Query input, document management, response display
+
+2. MCP CLIENT (FastAPI)
+   - Location: /mcp_client/
+   - Port: 5001
+   - Purpose: Intermediary between frontend and MCP server
+   - Technology: FastAPI with Uvicorn
+   - Functions: Receives frontend requests, forwards to MCP server, returns responses
+
+3. MCP SERVER (FastAPI)
+   - Location: /mcp_server/
+   - Port: 8000
+   - Purpose: Core processing engine that coordinates tools and generates responses
+   - Technology: FastAPI with Uvicorn
+   - Functions: Query analysis, tool orchestration, response generation
+
+4. VECTOR DATABASE TOOL
+   - Location: /tools/vector_db/
+   - Purpose: Semantic search in knowledge base
+   - Technology: ChromaDB with sentence transformers
+   - Functions: Document storage, similarity search, embedding generation
+
+5. WEB SEARCH TOOL
+   - Location: /tools/web_search/
+   - Purpose: Real-time web search for current information
+   - Technology: DuckDuckGo HTML scraping with BeautifulSoup
+   - Functions: Web search, content extraction, result formatting
+
+QUERY PROCESSING WORKFLOW
+-------------------------
+
+When a user submits a query, the following process occurs:
+
+STEP 1: FRONTEND TO MCP CLIENT
+- User types query in React frontend
+- Frontend sends POST request to MCP Client (localhost:5001/query)
+- MCP Client receives request and forwards to MCP Server
+
+STEP 2: MCP CLIENT TO MCP SERVER
+- MCP Client forwards query to MCP Server (localhost:8000/query)
+- MCP Server receives query and begins processing
+
+STEP 3: QUERY ANALYSIS
+- MCP Server analyzes query type (technical vs general)
+- Determines search strategy based on query content
+- Technical queries prioritize vector database
+- General queries can use either vector DB or web search
+
+STEP 4: VECTOR DATABASE SEARCH
+- If query is technical or vector DB is prioritized:
+  - Search ChromaDB for relevant documents
+  - Use sentence transformers for semantic similarity
+  - Return ranked results based on similarity scores
+  - If good results found, return response from vector DB
+
+STEP 5: WEB SEARCH (if vector DB fails)
+- If vector DB returns no results or poor results:
+  - Query DuckDuckGo HTML search
+  - Parse results using BeautifulSoup
+  - Extract titles, URLs, and snippets
+  - Filter results for relevance
+  - Return formatted web search results
+
+STEP 6: LANGUAGE MODEL FALLBACK
+- If both vector DB and web search fail:
+  - Generate general answer using built-in language model
+  - Provide basic response based on query context
+  - Ensure user never gets "no results found"
+
+STEP 7: RESPONSE FORMATTING
+- Format results based on source (vector DB, web search, or language model)
+- Add source attribution
+- Clean up formatting for user-friendly display
+- Return structured response to frontend
+
+MCP CLIENT AND SERVER ARCHITECTURE
+----------------------------------
+
+MCP CLIENT PURPOSE:
+- Acts as a proxy between frontend and backend
+- Handles CORS and request routing
+- Provides a clean API interface for frontend
+- Manages communication with MCP Server
+
+MCP CLIENT FUNCTIONS:
+- Receives HTTP requests from frontend
+- Forwards requests to MCP Server
+- Handles response formatting
+- Manages error handling and timeouts
+
+MCP SERVER PURPOSE:
+- Core processing engine for the RAG system
+- Orchestrates different tools (vector DB, web search)
+- Implements query processing logic
+- Manages tool integration and response generation
+
+MCP SERVER FUNCTIONS:
+- Query analysis and routing
+- Tool coordination and management
+- Response generation and formatting
+- Error handling and fallback mechanisms
+
+TOOL INTEGRATION SYSTEM
+-----------------------
+
+VECTOR DATABASE TOOL INTEGRATION:
+- ChromaDB for document storage and retrieval
+- Sentence transformers for semantic embeddings
+- Similarity search using cosine similarity
+- Document ingestion and management
+- Real-time search capabilities
+
+WEB SEARCH TOOL INTEGRATION:
+- DuckDuckGo HTML scraping for real-time search
+- BeautifulSoup for HTML parsing
+- Multiple selector strategies for content extraction
+- Result filtering and ranking
+- Snippet extraction and formatting
+
+TOOL ORCHESTRATION:
+- MCP Server coordinates between tools
+- Implements fallback strategies
+- Manages tool responses and formatting
+- Handles tool failures gracefully
+
+RESPONSE GENERATION PROCESS
+---------------------------
+
+1. QUERY RECEIVED: User submits query through frontend
+2. ANALYSIS: Determine query type and search strategy
+3. VECTOR SEARCH: Search knowledge base for relevant documents
+4. WEB SEARCH: If vector search fails, search the web
+5. FILTERING: Filter and rank results for relevance
+6. FORMATTING: Format results for user-friendly display
+7. ATTRIBUTION: Add source information to response
+8. DELIVERY: Return formatted response to user
+
+ERROR HANDLING AND FALLBACKS
+----------------------------
+
+VECTOR DATABASE FALLBACKS:
+- If ChromaDB fails, use in-memory fallback
+- If no documents found, proceed to web search
+- If similarity scores too low, try web search
+
+WEB SEARCH FALLBACKS:
+- If DuckDuckGo fails, try alternative parsing
+- If no results found, use language model
+- If parsing fails, return basic information
+
+LANGUAGE MODEL FALLBACK:
+- Generate general answer based on query
+- Provide basic information about topic
+- Ensure user always gets a response
+- Never return "no results found"
+
+SYSTEM BENEFITS
+---------------
+
+1. COMPREHENSIVE SEARCH: Combines knowledge base and web search
+2. INTELLIGENT ROUTING: Prioritizes appropriate search methods
+3. REAL-TIME INFORMATION: Web search provides current data
+4. SEMANTIC UNDERSTANDING: Vector DB provides contextual search
+5. RELIABLE FALLBACKS: Multiple layers ensure responses
+6. SOURCE ATTRIBUTION: Users know where information comes from
+7. SCALABLE ARCHITECTURE: Easy to add new tools and capabilities
+
+TECHNICAL IMPLEMENTATION
+------------------------
+
+FRONTEND STACK:
+- React.js for user interface
+- Vite for build tooling
+- Fetch API for HTTP requests
+- CSS for styling
+
+BACKEND STACK:
+- FastAPI for API framework
+- Uvicorn for ASGI server
+- ChromaDB for vector storage
+- BeautifulSoup for HTML parsing
+- Sentence transformers for embeddings
+
+DEPLOYMENT:
+- All services run locally
+- Frontend: localhost:3000
+- MCP Client: localhost:5001
+- MCP Server: localhost:8000
+- Services communicate via HTTP
+
+DEVELOPMENT WORKFLOW:
+- Start all services using start_servers.py
+- Frontend connects to MCP Client
+- MCP Client forwards to MCP Server
+- MCP Server coordinates tools
+- Response flows back through chain
+
+This architecture provides a robust, scalable RAG system that can handle various query types while maintaining reliability through multiple fallback mechanisms.

@@ -1,0 +1,76 @@
+[project]
+name = "agentic-rag"
+version = "0.6.0"
+description = "MCP-powered agentic RAG system"
+requires-python = ">=3.11"
+
+dependencies = [
+    # Web layer
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+
+    # Config
+    "python-dotenv>=1.0",
+
+    # Generation
+    "google-genai>=2.19",
+
+    # Protocol
+    "mcp[cli]>=2.0",
+    "pypdf>=5.0",
+
+    # Retrieval
+    "chromadb>=1.0",
+    "sentence-transformers>=3.0",
+]
+
+[project.scripts]
+agenticrag-kb = "tools.vector_db.server:main"
+agenticrag-ingest = "tools.vector_db.ingest_cli:main"
+agenticrag-eval = "eval.harness:main"
+agenticrag-judge = "eval.judge:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.27",
+    "ruff>=0.7",
+    "mypy>=1.13",
+]
+# Optional: the FAISS reference column in the ANN benchmark. Not required to run
+# the app or the hand-written indexes; the benchmark notes it as skipped if absent.
+bench = [
+    "faiss-cpu>=1.9",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.setuptools]
+packages = ["mcp_server", "tools", "tools.vector_db", "eval"]
+
+[tool.mypy]
+# 3.12, not the 3.11 floor in requires-python: numpy's own stubs use `type`
+# statements, so checking against 3.11 fails inside a dependency before it
+# reaches any of this code. The runtime floor stays at 3.11.
+python_version = "3.12"
+# The dependencies that matter here -- chromadb, sentence-transformers, pypdf --
+# ship no usable stubs, and chasing them with `type: ignore` at every call site
+# would add noise without catching anything.
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unreachable = true
+no_implicit_optional = true
+check_untyped_defs = true
+exclude = "^(docs|frontend)/"

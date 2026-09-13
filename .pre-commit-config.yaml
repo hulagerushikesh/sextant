@@ -1,0 +1,35 @@
+# Fast checks only. The eval harness and the model-loading tests belong in CI,
+# not in the half-second between typing `git commit` and it returning.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.2
+    hooks:
+      - id: ruff
+        args: [--fix]
+      # ruff-format is deliberately absent. Line length is already enforced by
+      # the linter, and adopting a formatter would rewrite sixteen files whose
+      # wrapping was chosen for readability. It is a style decision for the
+      # owner to make, not something to slip in with a hardening pass:
+      #   ruff format . && add `- id: ruff-format` here
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      # A 2 GB ChromaDB directory or a stray PDF should never reach a commit.
+      - id: check-added-large-files
+        args: [--maxkb=2048]
+      # This repo has had real API keys sitting in an untracked .env for
+      # months. The one thing that must never become tracked.
+      - id: detect-private-key
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.18.2
+    hooks:
+      - id: mypy
+        files: ^(mcp_server|tools|eval)/
+        additional_dependencies: [pydantic>=2.9, types-requests]

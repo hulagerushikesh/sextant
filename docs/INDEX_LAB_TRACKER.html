@@ -1,0 +1,375 @@
+<title>Index Lab Tracker</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #f6f7f5;
+    --panel: #ffffff;
+    --panel-2: #f0f2ef;
+    --ink: #1a1d1a;
+    --ink-soft: #5b615b;
+    --ink-faint: #8a908a;
+    --line: #e2e5e1;
+    --line-strong: #cdd2cb;
+    --accent: #0f766e;
+    --accent-soft: #d6eae7;
+    --flat: #6b7280;
+    --hnsw: #2563eb;
+    --ivfpq: #b45309;
+    --rerank: #1f7a4d;
+    --good: #15803d;
+    --warn: #b45309;
+    --shadow: 0 1px 2px rgba(20,25,20,.06), 0 8px 24px rgba(20,25,20,.05);
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --bg: #0f120f;
+      --panel: #171b17;
+      --panel-2: #1e231e;
+      --ink: #e8ece7;
+      --ink-soft: #a6ada4;
+      --ink-faint: #6f766d;
+      --line: #262c25;
+      --line-strong: #333a32;
+      --accent: #2dd4bf;
+      --accent-soft: #12312d;
+      --flat: #9ca3af;
+      --hnsw: #60a5fa;
+      --ivfpq: #f59e0b;
+      --rerank: #57c98a;
+      --good: #4ade80;
+      --warn: #fbbf24;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --rerank: #57c98a;
+    --bg: #0f120f;
+    --panel: #171b17;
+    --panel-2: #1e231e;
+    --ink: #e8ece7;
+    --ink-soft: #a6ada4;
+    --ink-faint: #6f766d;
+    --line: #262c25;
+    --line-strong: #333a32;
+    --accent: #2dd4bf;
+    --accent-soft: #12312d;
+    --flat: #9ca3af;
+    --hnsw: #60a5fa;
+    --ivfpq: #f59e0b;
+    --good: #4ade80;
+    --warn: #fbbf24;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 40px 22px 80px; }
+
+  header.masthead { margin-bottom: 8px; }
+  .eyebrow {
+    font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--accent); font-weight: 600; margin: 0 0 6px;
+  }
+  h1 { font-size: clamp(26px, 4vw, 36px); margin: 0 0 8px; letter-spacing: -.02em; text-wrap: balance; }
+  .sub { color: var(--ink-soft); font-size: 15px; max-width: 62ch; margin: 0; }
+  .meta-row { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 16px; font-size: 12.5px; color: var(--ink-faint); }
+  .meta-row b { color: var(--ink-soft); font-weight: 600; }
+
+  /* progress bar */
+  .progress { margin: 26px 0 34px; }
+  .progress-track { height: 8px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 99px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--hnsw)); border-radius: 99px; transition: width .4s ease; }
+  .progress-label { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--ink-soft); margin-top: 8px; }
+  .progress-label b { color: var(--ink); }
+
+  section.card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 22px 24px; margin-bottom: 20px; box-shadow: var(--shadow);
+  }
+  .card > h2 {
+    font-size: 17px; margin: 0 0 4px; letter-spacing: -.01em;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .card > .card-note { color: var(--ink-soft); font-size: 13.5px; margin: 0 0 16px; max-width: 64ch; }
+  .stage-tag {
+    font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: .04em;
+    padding: 2px 8px; border-radius: 6px; background: var(--accent-soft); color: var(--accent);
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  .stage-tag.done { background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); border-color: color-mix(in srgb, var(--good) 35%, transparent); }
+  .stage-tag.next { background: var(--panel-2); color: var(--ink-soft); border-color: var(--line-strong); }
+
+  /* checklist */
+  ul.checklist { list-style: none; margin: 0; padding: 0; }
+  ul.checklist li {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 11px 0; border-top: 1px solid var(--line);
+  }
+  ul.checklist li:first-child { border-top: none; }
+  .box {
+    flex: 0 0 auto; width: 20px; height: 20px; margin-top: 1px; border-radius: 6px;
+    border: 1.5px solid var(--line-strong); background: var(--panel-2);
+    cursor: pointer; display: grid; place-items: center; transition: all .15s ease;
+    color: transparent; font-size: 12px; font-weight: 700;
+  }
+  .box:hover { border-color: var(--accent); }
+  li.checked .box { background: var(--accent); border-color: var(--accent); color: #fff; }
+  li.checked .task-title { color: var(--ink-faint); text-decoration: line-through; text-decoration-color: var(--line-strong); }
+  .task { flex: 1 1 auto; min-width: 0; }
+  .task-title { font-size: 14.5px; font-weight: 550; }
+  .task-desc { font-size: 13px; color: var(--ink-soft); margin-top: 2px; }
+  .task-desc code { font-family: var(--mono); font-size: 12px; background: var(--panel-2); padding: 1px 5px; border-radius: 5px; }
+  .pri { font-family: var(--mono); font-size: 10.5px; font-weight: 700; letter-spacing: .05em; padding: 1px 6px; border-radius: 5px; margin-left: 8px; vertical-align: middle; }
+  .pri.rec { background: color-mix(in srgb, var(--good) 15%, transparent); color: var(--good); }
+  .pri.soon { background: color-mix(in srgb, var(--hnsw) 15%, transparent); color: var(--hnsw); }
+  .pri.later { background: var(--panel-2); color: var(--ink-faint); border: 1px solid var(--line); }
+
+  /* results table */
+  .table-scroll { overflow-x: auto; margin: 4px -4px 0; padding: 0 4px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: right; padding: 8px 12px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  thead th { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-faint); border-bottom: 1px solid var(--line-strong); }
+  tbody tr td:first-child { font-weight: 600; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 99px; margin-right: 7px; vertical-align: middle; }
+  .d-flat { background: var(--flat); } .d-hnsw { background: var(--hnsw); } .d-ivfpq { background: var(--ivfpq); } .d-rerank { background: var(--rerank); }
+  .win { color: var(--good); font-weight: 700; }
+
+  .callout { display: flex; gap: 10px; background: var(--panel-2); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 10px; padding: 12px 15px; font-size: 13.5px; color: var(--ink-soft); margin-top: 16px; }
+  .callout b { color: var(--ink); }
+  .findings { margin: 4px 0 0; padding: 0; list-style: none; }
+  .findings li { padding: 7px 0 7px 22px; position: relative; font-size: 13.5px; border-top: 1px solid var(--line); }
+  .findings li:first-child { border-top: none; }
+  .findings li::before { content: "→"; position: absolute; left: 0; color: var(--accent); font-weight: 700; }
+  .findings b { color: var(--ink); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--ink-soft); margin-top: 14px; }
+  .legend span { display: inline-flex; align-items: center; }
+
+  footer { margin-top: 30px; font-size: 12px; color: var(--ink-faint); text-align: center; }
+  .reset { font: inherit; font-size: 12px; color: var(--ink-faint); background: none; border: 1px solid var(--line); border-radius: 7px; padding: 4px 10px; cursor: pointer; }
+  .reset:hover { color: var(--ink); border-color: var(--line-strong); }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <p class="eyebrow">AgenticRAG · Index Lab</p>
+    <h1>ANN Comparison — Progress Tracker</h1>
+    <p class="sub">HNSW vs IVF-PQ, hand-written in NumPy, measured on a real corpus. This page tracks what is built, what step A proved on live data, and what comes next. Checkboxes save in your browser.</p>
+    <div class="meta-row">
+      <span><b>Updated</b> 2026-08-25</span>
+      <span><b>Corpus</b> 22 docs · 1,602 chunks · 384-d</span>
+      <span><b>Server</b> localhost:8100</span>
+      <span><b>Tests</b> 306 · ruff + mypy clean</span>
+    </div>
+  </header>
+
+  <div class="progress">
+    <div class="progress-track"><div class="progress-fill" id="pfill" style="width:0%"></div></div>
+    <div class="progress-label"><span id="pcount">0 of 0 done</span><button class="reset" id="reset">Reset checklist</button></div>
+  </div>
+
+  <!-- BUILT -->
+  <section class="card">
+    <h2><span class="stage-tag done">SHIPPED</span> Foundation — the three indexes</h2>
+    <p class="card-note">Phase 9. Built from scratch so the parameter behaviour is legible, wired behind the MCP boundary, compared in the UI.</p>
+    <ul class="checklist" data-group="built">
+      <li data-id="b1"><div class="box">✓</div><div class="task"><div class="task-title">Shared base — unit vectors, squared-L2 ≡ cosine, IndexStats contract</div><div class="task-desc"><code>ann/base.py</code> — one normalise at the boundary; overhead_bytes split from amortised per-vector cost</div></div></li>
+      <li data-id="b2"><div class="box">✓</div><div class="task"><div class="task-title">FlatIndex — exact baseline / ground truth</div><div class="task-desc"><code>ann/flat.py</code> — argpartition top-k, batch search_many for the sweep</div></div></li>
+      <li data-id="b3"><div class="box">✓</div><div class="task"><div class="task-title">HnswIndex — layered navigable small-world graph</div><div class="task-desc"><code>ann/hnsw.py</code> — Malkov neighbour heuristic, two-heap beam, efSearch dial</div></div></li>
+      <li data-id="b4"><div class="box">✓</div><div class="task"><div class="task-title">IvfPqIndex — inverted file + product quantization</div><div class="task-desc"><code>ann/ivfpq.py</code> — k-means coarse quantizer, residual PQ codes, asymmetric distance tables, nprobe/m dials</div></div></li>
+      <li data-id="b5"><div class="box">✓</div><div class="task"><div class="task-title">Benchmark harness + MCP tools + API</div><div class="task-desc"><code>ann/benchmark.py</code> → <code>kb_ann_benchmark</code>/<code>kb_ann_compare</code> → <code>/ann/benchmark</code>, <code>/ann/compare</code></div></div></li>
+      <li data-id="b6"><div class="box">✓</div><div class="task"><div class="task-title">Frontend — Index Lab (sweep chart + per-query A/B)</div><div class="task-desc"><code>Lab.jsx</code>, <code>SweepChart.jsx</code> — recall-vs-latency scatter, side-by-side columns</div></div></li>
+      <li data-id="b7"><div class="box">✓</div><div class="task"><div class="task-title">Web search kept as an opt-in switch (not removed)</div><div class="task-desc">env + per-request flag + composer toggle; off by default</div></div></li>
+    </ul>
+  </section>
+
+  <!-- STEP A -->
+  <section class="card">
+    <h2><span class="stage-tag done">DONE · STEP A</span> Prove it on a real corpus</h2>
+    <p class="card-note">Ingested 21 committed VisionTrack docs (52 chunks) into the live store and ran the sweep against real MiniLM embeddings — not synthetic clusters.</p>
+    <ul class="checklist" data-group="stepa">
+      <li data-id="a1"><div class="box">✓</div><div class="task"><div class="task-title">Ingest real documents into the live knowledge base</div><div class="task-desc"><code>agenticrag-ingest -r eval/corpus</code> → 21 docs, 52 chunks</div></div></li>
+      <li data-id="a2"><div class="box">✓</div><div class="task"><div class="task-title">Restart API so ChromaDB reloads the persisted store</div><div class="task-desc">fixed the stale-segment "Nothing found on disk" error</div></div></li>
+      <li data-id="a3"><div class="box">✓</div><div class="task"><div class="task-title">Run live benchmark sweep + per-query compare</div><div class="task-desc">52 queries, k=10; IVF-PQ nprobe swept 1→32</div></div></li>
+    </ul>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>index</th><th>dial</th><th>recall@10</th><th>p50 ms</th><th>build s</th><th>B/vec (total)</th><th>B/vec (amort.)</th></tr></thead>
+        <tbody>
+          <tr><td><span class="dot d-flat"></span>flat</td><td>—</td><td class="win">1.00</td><td class="win">0.019</td><td>0.0001</td><td>1536</td><td>1536</td></tr>
+          <tr><td><span class="dot d-hnsw"></span>hnsw</td><td>ef=10</td><td>1.00</td><td>0.110</td><td>0.092</td><td>1664</td><td>1664</td></tr>
+          <tr><td><span class="dot d-hnsw"></span>hnsw</td><td>ef=160</td><td>1.00</td><td>0.147</td><td>0.092</td><td>1664</td><td>1664</td></tr>
+          <tr><td><span class="dot d-ivfpq"></span>ivfpq</td><td>nprobe=1</td><td>0.10</td><td>0.152</td><td>0.004</td><td>9114</td><td class="win">16</td></tr>
+          <tr><td><span class="dot d-ivfpq"></span>ivfpq</td><td>nprobe=4</td><td>0.40</td><td>0.489</td><td>0.004</td><td>9114</td><td class="win">16</td></tr>
+          <tr><td><span class="dot d-ivfpq"></span>ivfpq</td><td>nprobe=8</td><td>0.80</td><td>0.904</td><td>0.004</td><td>9114</td><td class="win">16</td></tr>
+          <tr><td><span class="dot d-ivfpq"></span>ivfpq</td><td>nprobe=16</td><td>1.00</td><td>1.727</td><td>0.004</td><td>9114</td><td class="win">16</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="legend">
+      <span><span class="dot d-flat"></span>flat · exact</span>
+      <span><span class="dot d-hnsw"></span>hnsw · graph</span>
+      <span><span class="dot d-ivfpq"></span>ivfpq · quantized</span>
+      <span class="win">green = best on that axis</span>
+    </div>
+
+    <ul class="findings">
+      <li><b>The IVF-PQ nprobe dial visibly works on real data</b> — recall climbs 0.10 → 0.40 → 0.80 → 1.00 as nprobe goes 1 → 16. That curve is the whole lesson.</li>
+      <li><b>flat & HNSW are trivially perfect at 52 vectors</b> — confirms "a personal corpus does not need an approximate index," now on your own embeddings, not synthetic ones.</li>
+      <li><b>IVF-PQ amortised cost is 16 B/vec vs flat's 1536 — a 96× per-vector shrink</b> (m=16). The <i>total</i> reads 9114 B/vec only because the fixed codebooks dominate at n=52 — exactly the overhead the stat split exists to expose.</li>
+      <li><b>Per-query (a Kalman-filter question): all three return the identical top-5.</b> IVF-PQ is the slowest here (~1 ms) — approximation buys nothing at this scale.</li>
+    </ul>
+    <div class="callout"><span>⚠︎</span><div><b>Scale caveat.</b> 52 chunks is too small to show the flat↔ANN crossover; it confirms flat dominance at personal scale and that each recall dial behaves correctly. The crossover lives in the synthetic 2k / 20k sweep in <code>docs/ANN_COMPARISON.md</code>. Latencies are pure-Python constant factors — read as ordering, not production.</div></div>
+  </section>
+
+  <!-- STEP C -->
+  <section class="card">
+    <h2><span class="stage-tag done">DONE · STEP C</span> Coarse-retrieve → exact-rerank</h2>
+    <p class="card-note">The pattern production systems ship: IVF-PQ gathers an oversized candidate set cheaply, then exact cosine re-scores only those and keeps the true top-k. Fixes IVF-PQ's recall ceiling while keeping its tiny hot memory.</p>
+    <ul class="checklist" data-group="stepc">
+      <li data-id="c1"><div class="box">✓</div><div class="task"><div class="task-title">RerankIndex — generic wrapper over any base index</div><div class="task-desc"><code>ann/rerank.py</code> — <code>k×oversample</code> candidates → exact re-score → top-k; splits hot (codes) from cold (full vectors)</div></div></li>
+      <li data-id="c2"><div class="box">✓</div><div class="task"><div class="task-title">Wired into sweep + A/B as series <code>ivfpq_rerank</code></div><div class="task-desc">green curve on the chart, its own A/B column, honest hot/cold memory note</div></div></li>
+      <li data-id="c3"><div class="box">✓</div><div class="task"><div class="task-title">8 new tests · docs · live-verified</div><div class="task-desc">recall-lift, oversample monotonicity, exact-score, hot/cold stats; 297 tests green</div></div></li>
+    </ul>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>index</th><th>nprobe</th><th>recall@10</th><th>p50 ms</th><th>hot B/vec</th><th>amort B/vec</th></tr></thead>
+        <tbody>
+          <tr><td><span class="dot d-ivfpq"></span>ivfpq</td><td>4</td><td>0.701</td><td>0.48</td><td>16</td><td>16</td></tr>
+          <tr><td><span class="dot d-ivfpq"></span>ivfpq</td><td>32</td><td>0.701 <span style="color:var(--warn)">ceiling</span></td><td>3.47</td><td>16</td><td>16</td></tr>
+          <tr><td><span class="dot d-rerank"></span>ivfpq + rerank</td><td>1</td><td class="win">0.853</td><td>0.29</td><td class="win">16</td><td>528</td></tr>
+          <tr><td><span class="dot d-rerank"></span>ivfpq + rerank</td><td>4</td><td class="win">1.000</td><td>0.75</td><td class="win">16</td><td>528</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:12px;color:var(--ink-faint);margin:8px 0 0">Synthetic sweep · 2,000 × 128-d · 40 clusters · oversample=8 (cells hold ~31 vectors, so there is a shortlist to reorder)</p>
+
+    <ul class="findings">
+      <li><b>Rerank breaks IVF-PQ's recall ceiling for almost nothing.</b> 0.701 → 1.000 at nprobe=4 for ~0.27 ms extra. Even at nprobe=1 it beats bare IVF-PQ at <i>any</i> nprobe.</li>
+      <li><b>The memory win survives in the tier that counts.</b> Hot RAM stays the 16-byte PQ codes; the full vectors are a cold disk tier in production, fetched only for the shortlist. The 528 B/vec is this in-RAM harness being honest.</li>
+      <li><b>On a tiny 52-chunk corpus rerank is a no-op</b> — near-singleton cells, nothing to reorder. It needs multi-vector cells (scale) to help.</li>
+    </ul>
+    <div class="callout"><span>✓</span><div><b>Confirmed live at scale.</b> Ingested the arXiv LLM survey (arXiv 2303.18223, ~144 pp → 1,550 chunks; corpus now 1,602). On real embeddings bare IVF-PQ plateaus at recall <b>0.717</b>; <b>IVF-PQ + rerank climbs to 0.978</b> — at nprobe=8, <b>0.707 → 0.937</b>. Exactly the synthetic result, now on real data. (Flat still wins on speed even at 1,602 chunks — 0.055 ms, exact — so the "personal-scale → flat" thesis holds; ANN's turn comes at far larger corpora.)</div></div>
+  </section>
+
+  <!-- STEP B -->
+  <section class="card">
+    <h2><span class="stage-tag done">DONE · STEP B</span> FAISS reference column</h2>
+    <p class="card-note">The same HNSW and IVF-PQ from FAISS's compiled C++ library, swept over the same dials, drawn as dashed reference lines. Turns the "these are pure-Python constant factors" caveat into a measured gap you can point at.</p>
+    <ul class="checklist" data-group="stepb">
+      <li data-id="bx1"><div class="box">✓</div><div class="task"><div class="task-title">FaissHnswIndex / FaissIvfPqIndex — same interface, dashed reference series</div><div class="task-desc"><code>ann/faiss_ref.py</code> — opt-in <code>bench</code> extra; benchmark notes it skipped when faiss is absent</div></div></li>
+      <li data-id="bx2"><div class="box">✓</div><div class="task"><div class="task-title">Fixed the faiss + PyTorch OpenMP segfault</div><div class="task-desc">both bundle an OpenMP runtime; on macOS the second to load segfaults. Fix: preload faiss before torch in the kb subprocess (+ <code>KMP_DUPLICATE_LIB_OK</code>). Verified live — a sweep no longer crashes the server.</div></div></li>
+      <li data-id="bx3"><div class="box">✓</div><div class="task"><div class="task-title">5 new tests · docs · live-verified on 1,602 chunks</div><div class="task-desc">tests skip cleanly without faiss; 302 total green</div></div></li>
+    </ul>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>algorithm</th><th>impl</th><th>recall</th><th>p50 ms</th><th>build s</th><th>speedup</th></tr></thead>
+        <tbody>
+          <tr><td><span class="dot d-hnsw"></span>HNSW ef=160</td><td>Python</td><td>1.000</td><td>1.16</td><td>11.1</td><td>—</td></tr>
+          <tr><td><span class="dot d-hnsw"></span>HNSW ef=160</td><td><b>FAISS C++</b></td><td>1.000</td><td class="win">0.12</td><td class="win">0.04</td><td class="win">~10× / ~280× build</td></tr>
+          <tr><td><span class="dot d-ivfpq"></span>IVF-PQ np=32</td><td>Python</td><td>0.717</td><td>3.26</td><td>1.25</td><td>—</td></tr>
+          <tr><td><span class="dot d-ivfpq"></span>IVF-PQ np=32</td><td><b>FAISS C++</b></td><td>0.675</td><td class="win">0.076</td><td class="win">0.13</td><td class="win">~43×</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:12px;color:var(--ink-faint);margin:8px 0 0">Live, on the 1,602-chunk corpus. FAISS drawn dashed on the chart — reference, not under test.</p>
+
+    <ul class="findings">
+      <li><b>Same algorithm, ~10–43× lower latency and up to ~280× faster build in C++.</b> That gap <i>is</i> the "pure-Python constant factor" caveat, now a number instead of a paragraph.</li>
+      <li><b>Recall lines track</b> — FAISS HNSW hits 1.0, FAISS IVF-PQ ~0.68 (a touch under the Python 0.717, different training/selection defaults, not a better method).</li>
+      <li><b>The real lesson sharpens:</b> FAISS's latencies brush up against flat's, so the crossover where any ANN beats a linear scan moves down substantially in C++ — but at personal-corpus scale, flat still wins even against C++.</li>
+    </ul>
+  </section>
+
+  <!-- STEP D -->
+  <section class="card">
+    <h2><span class="stage-tag done">DONE · STEP D</span> Index choice in the live retrieval path</h2>
+    <p class="card-note">The comparison becomes a switch. An env var chooses which index answers the <i>dense</i> half of retrieval — so a chosen index isn't just benchmarked, it actually serves queries. Lexical, fusion and reranking are untouched.</p>
+    <ul class="checklist" data-group="stepd">
+      <li data-id="d1"><div class="box">✓</div><div class="task"><div class="task-title"><code>AGENTICRAG_ANN_INDEX</code> — chroma (default) · flat · hnsw · ivfpq · ivfpq_rerank</div><div class="task-desc"><code>vector_search.py</code>: <code>_dense</code> branches to a lazily-built, corpus-invalidated ANN cache; validated at startup, reported at <code>/stats</code> as <code>dense_backend</code></div></div></li>
+      <li data-id="d2"><div class="box">✓</div><div class="task"><div class="task-title">Forwarded the env to the kb MCP subprocess</div><div class="task-desc"><code>mcp_host.py</code>: MCP stdio strips env; the backend choice is now forwarded by hand alongside the store override, or the switch would silently no-op</div></div></li>
+      <li data-id="d3"><div class="box">✓</div><div class="task"><div class="task-title">4 new tests · docs · live-verified end to end</div><div class="task-desc">default stays chroma; flat matches chroma's top hit; invalid rejected; 306 tests green</div></div></li>
+    </ul>
+    <div class="callout"><span>✓</span><div><b>Verified live.</b> Restarted the server with <code>AGENTICRAG_ANN_INDEX=hnsw</code> → <code>/stats</code> reported <code>dense_backend: hnsw</code>, and a real query ("What does the Kalman filter do in tracking?") retrieved the right passages (Kalman Filter, Motion Models, Track Lifecycle) through the hand-written HNSW graph built in the subprocess. Restored to <code>chroma</code> default afterward.</div></div>
+    <ul class="findings">
+      <li><b>Same ids, same cosine scale as Chroma</b> — nothing downstream can tell which backend produced the shortlist, except in recall and latency. That's what makes it a drop-in switch.</li>
+      <li><b>Default is untouched.</b> <code>chroma</code> stays the default; the ANN package never even loads on that path. The switch is strictly opt-in.</li>
+      <li><b>The honest call is still flat/chroma at this scale</b> — the switch exists so that the day a corpus grows into HNSW/IVF-PQ territory, adopting it is one env var, not a rewrite.</li>
+    </ul>
+  </section>
+
+  <!-- NEXT -->
+  <section class="card">
+    <h2><span class="stage-tag next">NEXT</span> Where to go from here</h2>
+    <p class="card-note">Split into "make the lesson land harder" and "make it production-real". Tick items as you pick them up.</p>
+    <ul class="checklist" data-group="next">
+      <li data-id="n1"><div class="box">✓</div><div class="task"><div class="task-title">A · Prove it on a real corpus <span class="pri rec">DONE</span></div><div class="task-desc">live sweep on 52 real chunks</div></div></li>
+      <li data-id="n2"><div class="box">✓</div><div class="task"><div class="task-title">C · Coarse-retrieve → exact-rerank <span class="pri rec">DONE</span></div><div class="task-desc">shipped above — breaks IVF-PQ's recall ceiling (0.70 → 1.00) at unchanged hot memory</div></div></li>
+      <li data-id="n5"><div class="box">✓</div><div class="task"><div class="task-title">Ingest a larger real corpus to see the lift live <span class="pri rec">DONE</span></div><div class="task-desc">arXiv LLM survey ingested → 1,602 chunks; the rerank lift shows up live (0.717 → 0.978). See the Step C callout.</div></div></li>
+      <li data-id="n3"><div class="box">✓</div><div class="task"><div class="task-title">B · Add a FAISS reference column <span class="pri rec">DONE</span></div><div class="task-desc">shipped above — dashed C++ reference lines; the constant-factor gap is now measured, not asserted</div></div></li>
+      <li data-id="n4"><div class="box">✓</div><div class="task"><div class="task-title">D · Wire index choice into the live retrieval path <span class="pri rec">DONE</span></div><div class="task-desc">shipped above — <code>AGENTICRAG_ANN_INDEX</code> switches the live dense backend; verified with a real query through HNSW</div></div></li>
+    </ul>
+  </section>
+
+  <footer>
+    AgenticRAG Index Lab · run the live sweep from <b>Index Lab → Benchmark sweep</b> or <code>POST /ann/benchmark</code>
+  </footer>
+</div>
+
+<script>
+  const KEY = "agenticrag.tracker.v5";
+  const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
+  const save = (s) => { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch {} };
+
+  const items = Array.from(document.querySelectorAll("li[data-id]"));
+  let state = load();
+
+  // Seed defaults from markup (a filled ✓ box means default-checked) only on first load.
+  if (Object.keys(state).length === 0) {
+    items.forEach(li => { state[li.dataset.id] = li.querySelector(".box").textContent.trim() === "✓"; });
+    save(state);
+  }
+
+  function render() {
+    let done = 0;
+    items.forEach(li => {
+      const on = !!state[li.dataset.id];
+      li.classList.toggle("checked", on);
+      li.querySelector(".box").textContent = on ? "✓" : "";
+      if (on) done++;
+    });
+    const total = items.length;
+    const pct = total ? Math.round(done / total * 100) : 0;
+    document.getElementById("pfill").style.width = pct + "%";
+    document.getElementById("pcount").innerHTML = "<b>" + done + "</b> of " + total + " done · " + pct + "%";
+  }
+
+  items.forEach(li => {
+    li.querySelector(".box").addEventListener("click", () => {
+      state[li.dataset.id] = !state[li.dataset.id];
+      save(state); render();
+    });
+  });
+
+  document.getElementById("reset").addEventListener("click", () => {
+    // Drop saved state; reload re-seeds from the markup's default ✓ boxes.
+    localStorage.removeItem(KEY);
+    location.reload();
+  });
+
+  render();
+</script>

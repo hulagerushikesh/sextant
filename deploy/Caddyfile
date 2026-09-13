@@ -1,0 +1,57 @@
+# Reverse proxy, TLS terminator, and the front door's auth gate.
+#
+# Caddy gets a real Let's Encrypt certificate for {$SITE_ADDRESS} automatically
+# the first time it starts, provided the DNS A record already points here and
+# ports 80/443 are reachable. That ordering is why the subdomain has to exist
+# before this comes up (see deploy/README.md).
+#
+# One subdomain serves both halves: the static single-page app is the default
+# handler, and the API's own paths are routed to the app container. Because the
+# UI and API share an origin, the browser never issues a CORS preflight in
+# production -- the localhost CORS allowance only matters for local dev.
+
+{
+	# The address Let's Encrypt sends expiry notices to.
+	email {$ACME_EMAIL}
+}
+
+{$SITE_ADDRESS} {
+	# Everything behind a shared Basic-auth credential. The hash is generated
+	# once with:  docker run --rm caddy caddy hash-password --plaintext 'secret'
+	# and lives only in the box's .env -- never the image, never git.
+	basic_auth {
+		{$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
+	}
+
+	# The app server's HTTP surface. Keep this list in step with main.py's
+	# routes: a path that isn't matched here falls through to the static UI
+	# and 404s as index.html, which looks like a frontend bug, not a routing one.
+	@api path /query* /health /ingest /upload /stats /tools /ann/*
+	handle @api {
+		reverse_proxy api:8000
+	}
+
+	# The built React app. try_files makes client-side routing work: any
+	# unknown path returns index.html and the app router takes it from there.
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+
+	encode gzip zstd
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+	}
+}

@@ -1,0 +1,64 @@
+name: ci
+
+# Lint, types, tests, then retrieval quality.
+#
+# The last of those is the unusual one: retrieval quality is a number, and a
+# number that is not checked drifts. This runs the same harness a developer runs
+# locally and fails the build if any metric falls more than the tolerance below
+# its committed baseline.
+#
+# Generation metrics are deliberately absent: they need GEMINI_API_KEY twice
+# over, once to produce answers and once to grade them, which makes them a
+# billed, non-deterministic job rather than a gate on every push. Run
+# `agenticrag-judge` before a release instead.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # The embedder and the cross-encoder are ~180 MB of downloads and do not
+      # change between runs. Without this the model fetch dominates the job.
+      - name: Cache models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-${{ runner.os }}-minilm-crossencoder-v1
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Type check
+        run: mypy mcp_server tools eval tests
+
+      - name: Unit tests
+        run: pytest tests/ -q
+
+      # Rebuilds the index from eval/corpus on every run, so this also proves
+      # ingestion still works end to end.
+      - name: Retrieval evaluation
+        run: agenticrag-eval --check --out eval-results.json
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: eval-results.json

@@ -1,842 +1,631 @@
 """
-MCP Server - FastAPI backend for Agentic RAG system
+Agent server.
 
-This server acts as the core agent that makes intelligent decisions about
-tool usage and orchestrates responses from Vector DB and Web Search tools.
+Retrieval runs over MCP; the knowledge base is a separate process speaking
+JSON-RPC over stdio and is never imported here (see `mcp_host.py`). The model
+chooses which of its discovered tools to call, and when to stop (see `agent.py`).
+
+This file is now thin on purpose. It holds the HTTP surface -- request shapes,
+the SSE encoding, the MCP connection's lifetime -- and delegates every decision
+about what to retrieve to the agent loop. Before Phase 3 the interesting logic
+was a `_retrieve()` helper right here that called `kb_search` once, unconditionally.
 """
 
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Dict, Any, List, Optional
-import uvicorn
-from datetime import datetime
-import time
-import sys
+from __future__ import annotations
+
+import json
+import logging
 import os
+import time
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from datetime import datetime
+from pathlib import Path
+from typing import Annotated, Any, Literal
 
-# Load environment variables from .env file
-def load_env():
-    """Load environment variables from .env file"""
-    env_file = os.path.join(os.path.dirname(__file__), '..', '.env')
-    if os.path.exists(env_file):
-        with open(env_file, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith('#') and '=' in line:
-                    key, value = line.split('=', 1)
-                    os.environ[key] = value
-        print(f"Loaded environment variables from {env_file}")
-    else:
-        print(f"No .env file found at {env_file}")
+import uvicorn
+from dotenv import load_dotenv
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, Field, field_validator
 
-# Load .env file
-load_env()
+from mcp_server.agent import AgentUnavailable, declare_tools, web_search_default
+from mcp_server.agent import run as run_agent
+from mcp_server.conversation import MAX_TURNS as MAX_HISTORY_TURNS
+from mcp_server.mcp_host import MCPHost, ToolUnavailable
+from mcp_server.observability import (
+    REQUEST_ID_HEADER,
+    DailyBudget,
+    RateLimiter,
+    configure_logging,
+    new_request_id,
+    request_id,
+)
+from mcp_server.sources import MAX_RESTORED
+from mcp_server.uploads import MAX_FILES, SUPPORTED_SUFFIXES, to_document
+from tools.vector_db.loaders import UnsupportedDocument
 
-# Add tools directory to path for imports
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'tools'))
+configure_logging()
+logger = logging.getLogger(__name__)
 
-# Import tool classes
-from vector_db.vector_search import VectorSearchTool
-from web_search.web_search import WebSearchTool
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+
+host = MCPHost()
+limiter = RateLimiter()
+budget = DailyBudget()
+
+# Bounds at the edge. None of these are tuning knobs -- they are the difference
+# between a malformed request being rejected and it becoming a large bill or an
+# out-of-memory kill deep inside the model call.
+MAX_QUERY_CHARS = 2000
+MAX_DOCUMENTS = 100
+MAX_DOCUMENT_CHARS = 1_000_000
+
+# Raw transcript entries accepted per request. `conversation.replay` decides how
+# many are actually sent to the model; this only stops an unbounded POST body.
+# Twice the replay budget, so a client that sends its whole transcript is
+# trimmed rather than rejected.
+MAX_HISTORY_ENTRIES = MAX_HISTORY_TURNS * 2
+MAX_HISTORY_TURN_CHARS = 20_000
 
 
-# Request/Response Models
+# -- models ----------------------------------------------------------------
+
+class HistoryTurn(BaseModel):
+    """One earlier turn of this conversation, as the client remembers it."""
+
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=MAX_HISTORY_TURN_CHARS)
+
+
+class SourceRef(BaseModel):
+    """A label already handed out, sent back so [3] keeps meaning [3].
+
+    Deliberately thin: the passage text is not replayed to the model, so the
+    client only returns what identifies a source and what the UI would show if
+    an old citation is clicked. See `sources.SourceRegistry.restore`.
+    """
+
+    n: int = Field(ge=1)
+    key: str = Field(max_length=500)
+    origin: Literal["knowledge_base", "web"]
+    title: str | None = Field(default=None, max_length=500)
+    url: str | None = Field(default=None, max_length=2000)
+    location: str | None = Field(default=None, max_length=300)
+    score: float | None = None
+
+
 class QueryRequest(BaseModel):
-    """Request model for query endpoint"""
-    query: str
-    timestamp: Optional[str] = None
-    client_id: Optional[str] = None
+    # Constraints live on the model so they appear in /docs and are enforced
+    # before any handler runs.
+    query: str = Field(min_length=1, max_length=MAX_QUERY_CHARS)
+    timestamp: str | None = None
+    client_id: str | None = Field(default=None, max_length=100)
+    # Both default to empty, so a single-shot POST is unchanged by Phase 7.
+    history: list[HistoryTurn] = Field(default_factory=list, max_length=MAX_HISTORY_ENTRIES)
+    sources: list[SourceRef] = Field(default_factory=list, max_length=MAX_RESTORED)
+    # None means "whatever the server is configured for", which is off. Sent per
+    # request rather than only as server config so the UI can offer the web tier
+    # as a deliberate, visible choice on the question that needs it.
+    web_search: bool | None = None
+
+    def prior(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """The two things the agent needs from the transcript."""
+        return (
+            [turn.model_dump() for turn in self.history],
+            [source.model_dump() for source in self.sources],
+        )
+
+    @field_validator("query")
+    @classmethod
+    def not_only_whitespace(cls, value: str) -> str:
+        """Reject a blank query in the schema rather than in the handler.
+
+        Otherwise "" fails validation with a 422 and "   " fails a hand-written
+        check with a 400 -- two status codes for one condition, and only one of
+        them visible in the OpenAPI document.
+        """
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Query cannot be empty")
+        return stripped
 
 
 class QueryResponse(BaseModel):
-    """Response model for query endpoint"""
     success: bool
     response: str
-    sources_used: List[str]
+    sources_used: list[str]
+    tool_calls: list[dict[str, Any]] = []
+    sources: list[dict[str, Any]] = []
+    abstained: bool = False
+    turns: int = 0
+    truncated: bool = False
+    usage: dict[str, float] = {}
+    request_id: str = "-"
     processing_time: float
     query_received: str
     timestamp: str
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class DocumentRequest(BaseModel):
-    """Request model for document ingestion"""
-    documents: List[Dict[str, Any]]
-    client_id: Optional[str] = None
+    documents: list[dict[str, Any]] = Field(min_length=1, max_length=MAX_DOCUMENTS)
+    client_id: str | None = Field(default=None, max_length=100)
 
 
 class DocumentResponse(BaseModel):
-    """Response model for document ingestion"""
     success: bool
     message: str
     documents_added: int
     collection_size: int
-    error: Optional[str] = None
+    error: str | None = None
 
 
-# Initialize FastAPI app
+# -- app -------------------------------------------------------------------
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Hold the MCP connection open for the process lifetime."""
+    await host.connect()
+    try:
+        yield
+    finally:
+        await host.close()
+
+
 app = FastAPI(
-    title="MCP Server - Agentic RAG",
-    description="Core agent server for intelligent query processing",
-    version="1.0.0",
+    title="Agentic RAG - agent server",
+    description="Retrieval over MCP, tool selection by the model",
+    version="0.3.0",
+    lifespan=lifespan,
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
 )
 
-# Add CORS middleware for frontend communication
+def _allowed_origins() -> list[str]:
+    """Browser origins permitted to call this API, from the environment.
+
+    Comma-separated in `AGENTICRAG_ALLOWED_ORIGINS`; defaults to the dev
+    frontend. In the single-subdomain production layout the UI and the API are
+    served from the same origin, so CORS never fires there -- but keeping this
+    env-driven means a split-origin deploy (a separate `app.` and `api.` host)
+    is a config change, not a code change, and the origin is never hardcoded to
+    localhost in a shipped image.
+    """
+    raw = os.getenv("AGENTICRAG_ALLOWED_ORIGINS", "http://localhost:3000")
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5001"],  # Frontend and MCP Client URLs
+    allow_origins=_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[REQUEST_ID_HEADER],
 )
 
-# Initialize tools
-vector_tool = VectorSearchTool()
-web_tool = WebSearchTool()
+
+@app.middleware("http")
+async def tag_request(request: Request, call_next):
+    """Give every request an id, and put it on every log line it causes.
+
+    A caller-supplied id is honoured so a trace can span the browser, this
+    server and whatever sits in front of it.
+    """
+    incoming = request.headers.get(REQUEST_ID_HEADER)
+    token = request_id.set(incoming or new_request_id())
+    try:
+        response = await call_next(request)
+        response.headers[REQUEST_ID_HEADER] = request_id.get()
+        return response
+    finally:
+        request_id.reset(token)
+
+
+def _rate_limit(request: Request) -> None:
+    """Reject a client that is asking too often. Raises 429 with Retry-After."""
+    client = request.client.host if request.client else "unknown"
+    allowed, retry_after = limiter.check(client)
+    if not allowed:
+        logger.warning("rate limited %s", client)
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many requests. Try again in {retry_after}s.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+
+def _budget_gate() -> None:
+    """Refuse a query once the day's model spend has hit the cap.
+
+    A hard ceiling, not a rate limit: it counts dollars, not requests, and
+    resets at UTC midnight rather than on a rolling window. Off unless
+    AGENTICRAG_DAILY_BUDGET_USD is set. 429 (not 402) so a browser's fetch
+    retry/backoff treats it like the rate limiter it sits next to.
+    """
+    allowed, spent, retry_after = budget.check()
+    if not allowed:
+        logger.warning("daily budget reached: $%.4f of $%.2f", spent, budget.budget)
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"Daily spend cap of ${budget.budget:.2f} reached. "
+                "Answering is paused until 00:00 UTC."
+            ),
+            headers={"Retry-After": str(retry_after)},
+        )
+
+
+@app.exception_handler(ValueError)
+async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
+    """A bad argument is the caller's problem, not a 500."""
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
 @app.get("/")
 async def root():
-    """Root endpoint - basic health check"""
     return {
-        "message": "MCP Server is running",
+        "message": "Agent server is running",
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "endpoints": {
             "query": "/query (POST)",
+            "query_stream": "/query/stream (POST)",
+            "ingest": "/ingest (POST)",
+            "upload": "/upload (POST, multipart)",
+            "stats": "/stats (GET)",
+            "tools": "/tools (GET)",
             "health": "/health (GET)",
-            "docs": "/docs"
-        }
+            "docs": "/docs",
+        },
     }
 
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
+    """Health of this server, the MCP connection, and the model behind it."""
+    model_ready = bool(os.getenv("GEMINI_API_KEY"))
     return {
-        "status": "healthy",
+        "status": "healthy" if host.connected and model_ready else "degraded",
+        "mcp_connected": host.connected,
+        # Retrieval works without a key; answering does not. Reported separately
+        # so "the corpus is reachable" is never mistaken for "this can answer".
+        "model_configured": model_ready,
+        "supported_uploads": SUPPORTED_SUFFIXES,
+        # Off by default and reported, because a tier that silently is not there
+        # looks exactly like a model that chose not to use it.
+        "web_search_enabled": web_search_default(),
+        # The day's model spend against the cap, so the UI can show how much is
+        # left and warn before answering stops. {"enabled": false} when unset.
+        "budget": budget.status(),
+        "mcp_error": host.error,
+        "tools_discovered": [t["name"] for t in host.tools],
+        "tools_offered_to_model": [t.get("name") for t in declare_tools(host)],
         "timestamp": datetime.now().isoformat(),
-        "server": "MCP Agent Server",
-        "version": "1.0.0"
     }
 
 
-@app.post("/ingest", response_model=DocumentResponse)
-async def ingest_documents(request: DocumentRequest):
+@app.get("/tools")
+async def list_tools():
+    """The tool schemas discovered over MCP, exactly as the server declared them.
+
+    Nothing here is written by hand -- this is `tools/list` output, and the same
+    schemas go to the model. `kb_ingest` is discovered but withheld from the
+    agent; see READABLE_TOOLS in `agent.py`.
     """
-    Ingest documents into the vector database
-    
-    Args:
-        request: DocumentRequest containing documents to add
-        
-    Returns:
-        DocumentResponse: Results of document ingestion
+    if not host.connected:
+        raise HTTPException(status_code=503, detail=host.error or "MCP server not connected")
+    return {
+        "count": len(host.tools),
+        "tools": host.tools,
+        "offered_to_model": [t.get("name") for t in declare_tools(host)],
+    }
+
+
+@app.get("/stats")
+async def collection_stats():
+    """Size and backing models of the knowledge base, via the MCP `kb_stats` tool.
+
+    Separate from /health because they answer different questions: /health is
+    "is the pipe open", this is "is there anything in the collection". A UI that
+    cannot tell an empty corpus from a failed search will blame the search.
     """
     try:
-        # Validate documents
-        if not request.documents:
-            raise HTTPException(
-                status_code=400,
-                detail="No documents provided"
-            )
-        
-        # Add documents to vector database
-        result = await vector_tool.add_documents(request.documents)
-        
-        return DocumentResponse(
-            success=result["success"],
-            message=result["message"],
-            documents_added=result["documents_added"],
-            collection_size=result.get("collection_size", 0),
-            error=result.get("error")
+        return await host.call("kb_stats", {})
+    except ToolUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+
+
+class BenchmarkRequest(BaseModel):
+    """A parameter sweep over the ANN indexes. All fields have working defaults."""
+
+    k: int = Field(default=10, ge=1, le=100)
+    n_queries: int = Field(default=200, ge=1, le=1000)
+    # Passed through to benchmark.Grid. Left loose on purpose: the grid's own
+    # fields are the contract, and duplicating them here as a rigid schema would
+    # mean editing two files every time a knob is added to the sweep.
+    grid: dict[str, Any] | None = None
+
+
+class CompareRequest(BaseModel):
+    """One query through every index, for the side-by-side view."""
+
+    query: str = Field(min_length=1, max_length=MAX_QUERY_CHARS)
+    k: int = Field(default=10, ge=1, le=50)
+    hnsw: dict[str, Any] | None = None
+    ivfpq: dict[str, Any] | None = None
+
+
+@app.post("/ann/benchmark")
+async def ann_benchmark(request: BenchmarkRequest):
+    """Sweep HNSW and IVF-PQ against exact search over the live corpus.
+
+    Heavy and synchronous under the hood -- it builds real indexes -- so it is a
+    deliberate, on-demand call the UI makes when the benchmark view is opened,
+    never part of answering a question. The model is never offered these tools;
+    READABLE_TOOLS in agent.py sees to that.
+    """
+    try:
+        return await host.call(
+            "kb_ann_benchmark",
+            {"k": request.k, "n_queries": request.n_queries, "grid": request.grid},
         )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
+    except ToolUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+
+
+@app.post("/ann/compare")
+async def ann_compare(request: CompareRequest):
+    """Run one query through exact, HNSW and IVF-PQ and return them side by side."""
+    try:
+        return await host.call(
+            "kb_ann_compare",
+            {"query": request.query, "k": request.k, "hnsw": request.hnsw, "ivfpq": request.ivfpq},
+        )
+    except ToolUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+
+
+@app.post("/ingest", response_model=DocumentResponse)
+async def ingest_documents(request: DocumentRequest, http_request: Request):
+    """Store documents in the knowledge base, via the MCP `kb_ingest` tool.
+
+    Writes live here rather than in the agent's tool list: answering a question
+    must not be able to change the corpus it is answering from.
+    """
+    _rate_limit(http_request)
+
+    oversized = sum(len(str(doc.get("content", ""))) for doc in request.documents)
+    if oversized > MAX_DOCUMENT_CHARS:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"Payload is {oversized} characters, over the {MAX_DOCUMENT_CHARS} limit. "
+                "Use the agenticrag-ingest command for large files."
+            ),
+        )
+
+    try:
+        result = await host.call("kb_ingest", {"documents": request.documents})
+    except ToolUnavailable as e:
+        return DocumentResponse(
+            success=False, message="", documents_added=0, collection_size=0, error=str(e)
+        )
+
+    return DocumentResponse(
+        success=result.get("success", False),
+        message=result.get("message", ""),
+        documents_added=result.get("documents_added", 0),
+        collection_size=result.get("collection_size", 0),
+        error=result.get("error"),
+    )
+
+
+@app.post("/upload", response_model=DocumentResponse)
+async def upload_files(
+    http_request: Request, files: Annotated[list[UploadFile], File()]
+):
+    """Index uploaded files, parsing them here and storing them over MCP.
+
+    Separate from /ingest, which takes documents a caller has already turned into
+    text. This one takes bytes and runs the loaders, so a PDF keeps its page
+    numbers and a citation can say "p. 14" -- the thing the old browser upload
+    could not do, and the reason it only accepted text files.
+    """
+    _rate_limit(http_request)
+    if len(files) > MAX_FILES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"{len(files)} files at once, over the {MAX_FILES} limit.",
+        )
+
+    documents: list[dict[str, Any]] = []
+    skipped: list[str] = []
+    for upload in files:
+        try:
+            documents.append(to_document(upload.filename or "upload", await upload.read()))
+        except UnsupportedDocument as e:
+            # One unreadable file should not lose the others in the same drop.
+            skipped.append(str(e))
+        finally:
+            await upload.close()
+
+    if not documents:
         return DocumentResponse(
             success=False,
             message="",
             documents_added=0,
             collection_size=0,
-            error=f"Server error: {str(e)}"
+            error=" ".join(skipped) or "No readable files in the upload.",
         )
+
+    try:
+        result = await host.call("kb_ingest", {"documents": documents})
+    except ToolUnavailable as e:
+        return DocumentResponse(
+            success=False, message="", documents_added=0, collection_size=0, error=str(e)
+        )
+
+    message = result.get("message", "")
+    if skipped:
+        message = f"{message} Skipped: {' '.join(skipped)}".strip()
+    return DocumentResponse(
+        success=result.get("success", False),
+        message=message,
+        documents_added=result.get("documents_added", 0),
+        collection_size=result.get("collection_size", 0),
+        error=result.get("error"),
+    )
 
 
 @app.post("/query", response_model=QueryResponse)
-async def process_query(request: QueryRequest):
-    """
-    Process user queries and return intelligent responses
-    
-    Currently echoes back the query as a placeholder implementation.
-    Future implementation will include intelligent tool selection and response aggregation.
-    """
-    start_time = time.time()
-    
+async def process_query(request: QueryRequest, http_request: Request):
+    """Run the agent to completion and return the whole answer at once."""
+    start = time.time()
+    _rate_limit(http_request)
+    _budget_gate()
+    logger.info("query received (%d chars)", len(request.query))
+
+    answer: list[str] = []
+    tool_calls: list[dict[str, Any]] = []
+    sources: list[dict[str, Any]] = []
+    usage: dict[str, float] = {}
+    turns = 0
+    truncated = False
+    history, prior_sources = request.prior()
+
     try:
-        # Validate query
-        if not request.query or not request.query.strip():
-            raise HTTPException(
-                status_code=400,
-                detail="Query cannot be empty"
-            )
-        
-        # Process query using tools: Vector DB first, then Web Search if empty
-        response_data = await _process_query_with_tools(request.query)
-        
-        processing_time = time.time() - start_time
-        
-        return QueryResponse(
-            success=response_data["success"],
-            response=response_data["response"],
-            sources_used=response_data["sources_used"],
-            processing_time=processing_time,
-            query_received=request.query,
-            timestamp=datetime.now().isoformat(),
-            error=response_data.get("error")
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        processing_time = time.time() - start_time
+        async for event in run_agent(
+            request.query, host, history, prior_sources, request.web_search
+        ):
+            kind = event["type"]
+            if kind == "token":
+                answer.append(event["text"])
+            elif kind == "citation":
+                # Web citations arrive as their own event so the streaming client
+                # can render a link. Here there is nowhere to hang one, so the
+                # label goes inline and matches the knowledge base's `[n]`.
+                answer.append(f"[{event['n']}]")
+            elif kind == "tool_call":
+                tool_calls.append({"name": event["name"], "where": event["where"]})
+            elif kind == "tool_result":
+                # Attach to the most recent call of that tool rather than adding
+                # a second entry: one call, one row, now with its outcome.
+                for call in reversed(tool_calls):
+                    if call["name"] == event["name"] and "summary" not in call:
+                        call["summary"] = event["summary"]
+                        break
+            elif kind == "sources":
+                sources = event["sources"]
+            elif kind == "done":
+                sources = event["sources"]
+                usage = event["usage"]
+                turns = event["turns"]
+                truncated = event["truncated"]
+    except (AgentUnavailable, ToolUnavailable) as e:
         return QueryResponse(
             success=False,
             response="",
             sources_used=[],
-            processing_time=processing_time,
+            processing_time=time.time() - start,
             query_received=request.query,
             timestamp=datetime.now().isoformat(),
-            error=f"Server error: {str(e)}"
+            error=str(e),
+        )
+    except Exception as e:
+        logger.exception("Query failed")
+        return QueryResponse(
+            success=False,
+            response="",
+            sources_used=[],
+            processing_time=time.time() - start,
+            query_received=request.query,
+            timestamp=datetime.now().isoformat(),
+            error=f"Server error: {e}",
         )
 
+    # Charge the day's budget with what this query actually cost. Done here, on
+    # the success path, because a failed query that never reached the model
+    # should not spend the cap.
+    budget.record(float(usage.get("cost_usd", 0.0)))
 
-async def _process_query_with_tools(query: str) -> Dict[str, Any]:
-    """
-    Enhanced query processing with technical content prioritization and explicit search explanations
-    
-    Args:
-        query: The user's query string
-        
-    Returns:
-        Dict containing response data and metadata
-    """
-    try:
-        # Initialize search process explanation
-        search_process = []
-        
-        # Step 1: Analyze query type and determine search strategy
-        is_technical_query = _is_technical_query(query)
-        search_process.append(f"Query Analysis: {'Technical/Coding' if is_technical_query else 'General'} query detected")
-        
-        # Step 2: Search Vector DB first (especially for technical queries)
-        search_process.append("Step 1: Searching Vector Database for relevant documents...")
-        vector_result = await _search_vector_db(query)
-        
-        if vector_result["success"] and vector_result["total_found"] > 0:
-            search_process.append(f"Vector DB Results: Found {vector_result['total_found']} relevant documents")
-            
-            # For technical queries, prioritize Vector DB results
-            if is_technical_query:
-                search_process.append("Technical Query: Prioritizing Vector DB results for code/technical content")
-                return {
-                    "success": True,
-                    "response": _format_enhanced_response(vector_result, search_process, "vector_db", is_technical_query),
-                    "sources_used": ["vector_db"],
-                    "error": None
-                }
-            else:
-                # For general queries, use Vector DB if results are good
-                return {
-                    "success": True,
-                    "response": _format_enhanced_response(vector_result, search_process, "vector_db", is_technical_query),
-                    "sources_used": ["vector_db"],
-                    "error": None
-                }
-        
-        search_process.append("Vector DB Results: No relevant documents found")
-        
-        # Step 3: If Vector DB is empty, try Web Search
-        search_process.append("Step 2: Searching Web for current information...")
-        web_result = await _search_web(query)
-        
-        if web_result["success"]:
-            # Use web search results (even if total_results is 0, the formatted_results might contain useful info)
-            search_process.append(f"Web Search Results: Found {web_result.get('total_results', 0)} results")
-            if web_result.get("formatted_results"):
-                # Use the formatted results from web search (includes API setup messages)
-                return {
-                    "success": True,
-                    "response": web_result["formatted_results"],
-                    "sources_used": ["web_search"],
-                    "error": None
-                }
-            elif web_result.get("total_results", 0) > 0:
-                # Use enhanced response formatting for actual results
-                return {
-                    "success": True,
-                    "response": _format_enhanced_response(web_result["results"], search_process, "web_search", is_technical_query),
-                    "sources_used": ["web_search"],
-                    "error": None
-                }
-            else:
-                search_process.append("Web Search Results: No results found")
-        else:
-            search_process.append("Web Search Results: No results found")
-        
-        # Step 4: If both tools return empty, return no results found
-        search_process.append("No relevant information found from any source")
-        return {
-            "success": True,
-            "response": "I don't have specific information about this topic in my current knowledge base. For detailed and up-to-date information, I recommend consulting reliable sources, official documentation, or specialized resources related to your topic of interest.",
-            "sources_used": ["vector_db", "web_search"],
-            "error": None
-        }
-        
-    except Exception as e:
-        search_process.append(f"Error: {str(e)}")
-        return {
-            "success": False,
-            "response": "",
-            "sources_used": [],
-            "error": f"Tool processing error: {str(e)}"
-        }
-
-
-async def _search_vector_db(query: str) -> Dict[str, Any]:
-    """
-    Search vector database for relevant documents
-    
-    Args:
-        query: Search query string
-        
-    Returns:
-        Dict containing vector search results
-    """
-    try:
-        print(f"DEBUG: MCP Server - Searching vector DB for query: '{query}'")
-        
-        # Connect to vector DB (placeholder)
-        await vector_tool.connect()
-        
-        # Search for relevant documents
-        result = await vector_tool.search(query)
-        print(f"DEBUG: MCP Server - Vector search result: {result}")
-        return result
-    except Exception as e:
-        return {
-            "success": False,
-            "query": query,
-            "results": [],
-            "total_found": 0,
-            "error": str(e)
-        }
-
-
-async def _search_web(query: str) -> Dict[str, Any]:
-    """
-    Search web for current information
-    
-    Args:
-        query: Search query string
-        
-    Returns:
-        Dict containing web search results
-    """
-    try:
-        print(f"DEBUG: MCP Server - Searching web for query: '{query}'")
-        
-        # Configure web search tool (placeholder)
-        await web_tool.configure()
-        
-        # Search for current information
-        result = await web_tool.search(query, num_results=3)
-        print(f"DEBUG: MCP Server - Web search result: {result}")
-        return result
-    except Exception as e:
-        return {
-            "success": False,
-            "query": query,
-            "results": [],
-            "total_found": 0,
-            "error": str(e)
-        }
-
-
-def _is_technical_query(query: str) -> bool:
-    """
-    This function is kept for compatibility but no longer filters queries.
-    All queries are treated equally.
-    
-    Args:
-        query: The user's query string
-        
-    Returns:
-        bool: Always returns False to allow all queries through
-    """
-    return False
-
-
-def _format_enhanced_response(results, search_process: List[str], source: str, is_technical: bool) -> str:
-    """
-    Format clean, user-friendly response with source attribution
-    
-    Args:
-        results: Search results from vector DB or web search
-        search_process: List of search process steps
-        source: Source of the results (vector_db, web_search, etc.)
-        is_technical: Whether the query is technical (unused now)
-        
-    Returns:
-        Formatted response string
-    """
-    if source == "vector_db":
-        response = _format_vector_response(results)
-        source_info = "📚 **Source: Knowledge Base** (Vector Database)"
-    elif source == "web_search":
-        response = _format_web_response(results)
-        source_info = "🌐 **Source: Web Search** (Current Information)"
-    else:
-        response = str(results) if results else "No information available"
-        source_info = f"📄 **Source: {source.replace('_', ' ').title()}**"
-    
-    return f"{response}\n\n---\n{source_info}"
-    
-    # More lenient technical keywords for fallback
-    lenient_coding_keywords = [
-        'code', 'programming', 'function', 'class', 'method', 'algorithm',
-        'python', 'javascript', 'java', 'c++', 'html', 'css', 'react',
-        'development', 'software', 'application', 'program', 'script',
-        'data', 'database', 'api', 'web', 'frontend', 'backend'
-    ]
-    
-    # General relevance keywords
-    general_keywords = [
-        'solution', 'help', 'guide', 'tutorial', 'example', 'how to',
-        'implementation', 'best practice', 'tips', 'tricks', 'explanation'
-    ]
-    
-    for result in web_result["results"]:
-        content = result.get("content", "").lower()
-        title = result.get("title", "").lower()
-        
-        # Calculate lenient relevance scores
-        coding_score = sum(1 for keyword in lenient_coding_keywords if keyword in content or keyword in title)
-        general_score = sum(1 for keyword in general_keywords if keyword in content or keyword in title)
-        
-        # Much more lenient filtering - include results with any relevance
-        if coding_score > 0 or general_score > 0 or not is_technical_query:
-            result["coding_score"] = coding_score
-            result["general_score"] = general_score
-            result["total_score"] = coding_score + general_score
-            result["relevance_analysis"] = f"Lenient match: Coding concepts: {coding_score}, General relevance: {general_score}"
-            closest_results.append(result)
-    
-    # Sort by total relevance score and return top 3
-    closest_results.sort(key=lambda x: x.get("total_score", 0), reverse=True)
-    return closest_results
-
-
-def _get_minimal_relevant_snippets(web_result: Dict[str, Any], is_technical_query: bool) -> List[Dict[str, Any]]:
-    """
-    Get minimal relevant snippets when even lenient filtering fails
-    Uses very basic keyword matching to ensure we return something useful
-    
-    Args:
-        web_result: Results from web search
-        is_technical_query: Whether the query is technical
-        
-    Returns:
-        List of minimally relevant results
-    """
-    if not web_result.get("results"):
-        return []
-    
-    minimal_results = []
-    
-    # Very basic keywords for minimal filtering
-    basic_keywords = [
-        'information', 'about', 'related', 'topic', 'subject', 'matter',
-        'details', 'facts', 'data', 'content', 'text', 'article',
-        'discussion', 'explanation', 'description', 'overview'
-    ]
-    
-    for result in web_result["results"]:
-        content = result.get("content", "").lower()
-        title = result.get("title", "").lower()
-        
-        # Calculate basic relevance score
-        basic_score = sum(1 for keyword in basic_keywords if keyword in content or keyword in title)
-        
-        # Include any result that has some basic relevance or if it's not a technical query
-        if basic_score > 0 or not is_technical_query:
-            result["basic_score"] = basic_score
-            result["total_score"] = basic_score
-            result["relevance_analysis"] = f"Minimal match: Basic relevance score: {basic_score}"
-            minimal_results.append(result)
-    
-    # Sort by basic score and return top 3
-    minimal_results.sort(key=lambda x: x.get("basic_score", 0), reverse=True)
-    return minimal_results
-
-
-def _create_summary_from_all_results(web_result: Dict[str, Any], is_technical_query: bool) -> List[Dict[str, Any]]:
-    """
-    Create a summary from all available web results when all filtering fails
-    This ensures we never return zero results if web search found anything
-    
-    Args:
-        web_result: Results from web search
-        is_technical_query: Whether the query is technical
-        
-    Returns:
-        List containing a summary of all results
-    """
-    if not web_result.get("results"):
-        return []
-    
-    # Create a summary result from all available content
-    all_content = []
-    all_titles = []
-    all_urls = []
-    
-    for result in web_result["results"]:
-        content = result.get("content", result.get("snippet", ""))
-        title = result.get("title", "")
-        url = result.get("url", "")
-        
-        if content:
-            all_content.append(content)  # Use full content
-        if title:
-            all_titles.append(title)
-        if url:
-            all_urls.append(url)
-    
-    if not all_content:
-        return []
-    
-    # Create a summary result
-    summary_result = {
-        "title": f"Summary of {len(all_titles)} search results",
-        "content": "Based on available web search results: " + " ".join(all_content),  # Combine all results
-        "url": all_urls[0] if all_urls else "",
-        "source": "Web Search Summary",
-        "date": "",
-        "summary_score": len(all_content),
-        "total_score": len(all_content),
-        "relevance_analysis": f"Summary generated from {len(all_content)} available results"
-    }
-    
-    return [summary_result]
-
-
-def _filter_technical_content(web_result: Dict[str, Any], is_technical_query: bool) -> List[Dict[str, Any]]:
-    """
-    Enhanced filtering for coding/C++/algorithms content with detailed relevance analysis
-    
-    Args:
-        web_result: Results from web search
-        is_technical_query: Whether the query is technical
-        
-    Returns:
-        List of filtered and ranked results with relevance analysis
-    """
-    if not web_result.get("results"):
-        return []
-    
-    filtered_results = []
-    
-    # Enhanced technical keywords for coding/C++/algorithms
-    coding_keywords = [
-        'code', 'function', 'class', 'method', 'algorithm', 'implementation', 'example',
-        'c++', 'cpp', 'programming', 'syntax', 'variable', 'loop', 'array', 'pointer',
-        'recursion', 'iteration', 'optimization', 'complexity', 'data structure',
-        'binary search', 'sorting', 'tree', 'graph', 'hash', 'stack', 'queue',
-        'template', 'namespace', 'inheritance', 'polymorphism', 'encapsulation',
-        'debug', 'error', 'exception', 'try', 'catch', 'throw', 'const', 'static',
-        'inline', 'virtual', 'override', 'final', 'auto', 'decltype', 'lambda'
-    ]
-    
-    # Problem-solving and algorithm keywords
-    algorithm_keywords = [
-        'algorithm', 'solution', 'approach', 'technique', 'pattern', 'strategy',
-        'optimization', 'efficiency', 'performance', 'time complexity', 'space complexity',
-        'big o', 'o(n)', 'o(log n)', 'o(1)', 'worst case', 'best case', 'average case',
-        'dynamic programming', 'greedy', 'backtring', 'divide and conquer',
-        'two pointers', 'sliding window', 'hash map', 'binary search', 'merge sort',
-        'quick sort', 'heap', 'priority queue', 'union find', 'trie', 'segment tree'
-    ]
-    
-    for result in web_result["results"]:
-        content = result.get("content", "").lower()
-        title = result.get("title", "").lower()
-        url = result.get("url", "").lower()
-        
-        # Calculate detailed relevance scores
-        coding_score = sum(1 for keyword in coding_keywords if keyword in content or keyword in title)
-        algorithm_score = sum(1 for keyword in algorithm_keywords if keyword in content or keyword in title)
-        
-        # Check for generic/unrelated content indicators
-        generic_indicators = [
-            'buy now', 'shop', 'price', 'discount', 'sale', 'advertisement',
-            'news', 'blog', 'forum', 'discussion', 'opinion', 'review',
-            'tutorial', 'course', 'book', 'ebook', 'pdf', 'download'
-        ]
-        
-        is_generic = any(indicator in content or indicator in title for indicator in generic_indicators)
-        
-        # Calculate total relevance score
-        total_score = coding_score + algorithm_score
-        
-        # Exclude generic content unless it has high technical relevance
-        if is_generic and total_score < 3:
-            continue
-            
-        # Include results with sufficient technical content
-        if total_score > 0 or is_technical_query:
-            result["coding_score"] = coding_score
-            result["algorithm_score"] = algorithm_score
-            result["total_score"] = total_score
-            result["is_generic"] = is_generic
-            result["relevance_analysis"] = _analyze_relevance(result, coding_keywords, algorithm_keywords)
-            filtered_results.append(result)
-    
-    # Sort by total relevance score, then by coding score
-    filtered_results.sort(key=lambda x: (x.get("total_score", 0), x.get("coding_score", 0)), reverse=True)
-    return filtered_results  # Return all relevant results
-
-
-def _analyze_relevance(result: Dict[str, Any], coding_keywords: List[str], algorithm_keywords: List[str]) -> str:
-    """
-    Analyze and describe the relevance of a search result
-    
-    Args:
-        result: Search result dictionary
-        coding_keywords: List of coding-related keywords
-        algorithm_keywords: List of algorithm-related keywords
-        
-    Returns:
-        String describing the relevance analysis
-    """
-    content = result.get("content", "").lower()
-    title = result.get("title", "").lower()
-    
-    found_coding = [kw for kw in coding_keywords if kw in content or kw in title]
-    found_algorithms = [kw for kw in algorithm_keywords if kw in content or kw in title]
-    
-    analysis_parts = []
-    
-    if found_coding:
-        analysis_parts.append(f"Coding concepts: {', '.join(found_coding)}")
-    if found_algorithms:
-        analysis_parts.append(f"Algorithm concepts: {', '.join(found_algorithms)}")
-    
-    if not analysis_parts:
-        return "General technical content"
-    
-    return "; ".join(analysis_parts)
-
-
-def _format_enhanced_response(results, search_process: List[str], source: str, is_technical: bool) -> str:
-    """
-    Format clean, user-friendly response with source attribution
-    
-    Args:
-        results: Search results (can be dict or list)
-        search_process: List of search process steps (not used in output)
-        source: Source of results (vector_db or web_search)
-        is_technical: Whether query is technical
-        
-    Returns:
-        Formatted response string with source information
-    """
-    if source == "vector_db":
-        response = _format_vector_response(results)
-        source_info = "📚 **Source: Knowledge Base** (Vector Database)"
-    elif source == "web_search":
-        response = _format_web_response(results)
-        source_info = "🌐 **Source: Web Search** (Current Information)"
-    else:
-        response = str(results) if results else "No information available"
-        source_info = f"📄 **Source: {source.replace('_', ' ').title()}**"
-    
-    # Add source attribution at the end
-    return f"{response}\n\n---\n{source_info}"
-
-
-
-
-
-
-
-
-
-
-def _format_vector_response(vector_result: Dict[str, Any]) -> str:
-    """
-    Format vector database results into clean, user-friendly response
-    
-    Args:
-        vector_result: Results from vector search
-        
-    Returns:
-        str: Clean, formatted response text
-    """
-    if not vector_result.get("results"):
-        return "I don't have specific information about this topic in my knowledge base."
-    
-    # For definitions, provide the most relevant content directly
-    best_doc = max(vector_result["results"], key=lambda x: x.get("similarity_score", 0))
-    
-    if any(word in best_doc.get("content", "").lower() for word in ["definition", "define", "meaning", "is a", "refers to"]):
-        return best_doc["content"]
-    
-    # For other queries, provide a clean summary
-    response_parts = []
-    for doc in vector_result["results"]:  # Use all results
-        content = doc.get("content", "")
-        if content:
-            response_parts.append(content)
-    
-    if response_parts:
-        return "\n\n".join(response_parts)
-    else:
-        return "I found some relevant information but couldn't provide a clear answer."
-
-
-def _format_web_response(web_result) -> str:
-    """
-    Format web search results in a clean, user-friendly way
-    
-    Args:
-        web_result: Results from web search (can be dict with results key or list)
-        
-    Returns:
-        str: Clean, formatted response text
-    """
-    # Handle both dict and list inputs
-    if isinstance(web_result, dict):
-        results = web_result.get("results", [])
-    elif isinstance(web_result, list):
-        results = web_result
-    else:
-        return "I couldn't find specific information about your query. Let me provide a general answer based on what I know."
-    
-    if not results:
-        return "I couldn't find specific information about your query. Let me provide a general answer based on what I know."
-    
-    # Get the best snippet from the results
-    best_snippet = ""
-    for result in results:
-        snippet = result.get("snippet", "")
-        if snippet and len(snippet) > len(best_snippet):
-            best_snippet = snippet
-    
-    if best_snippet:
-        # Clean up the snippet
-        cleaned = best_snippet.strip()
-        
-        # Remove URLs, dates, and other noise
-        import re
-        cleaned = re.sub(r'https?://\S+', '', cleaned)
-        cleaned = re.sub(r'www\.\S+', '', cleaned)
-        cleaned = re.sub(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+', '', cleaned)
-        cleaned = re.sub(r'\d{4}-\d{2}-\d{2}', '', cleaned)
-        
-        # Remove common redundant patterns
-        if cleaned.lower().startswith('the '):
-            cleaned = cleaned[4:]
-        
-        # Clean up multiple spaces
-        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
-        
-        # Ensure proper sentence structure
-        if cleaned and not cleaned.endswith(('.', '!', '?')):
-            cleaned += '.'
-        
-        return cleaned
-    else:
-        return "I couldn't find specific information about your query. Let me provide a general answer based on what I know."
-
-
-def _clean_web_content(content: str) -> str:
-    """
-    Clean web search content to remove redundant questions and improve readability
-    
-    Args:
-        content: Raw content from web search
-        
-    Returns:
-        Cleaned content without redundant questions
-    """
-    if not content:
-        return content
-    
-    # Remove common question patterns from the beginning
-    question_patterns = [
-        r'^What is [^?]+\?',
-        r'^What are [^?]+\?',
-        r'^How does [^?]+\?',
-        r'^How do [^?]+\?',
-        r'^Why is [^?]+\?',
-        r'^Why are [^?]+\?',
-        r'^When is [^?]+\?',
-        r'^When are [^?]+\?',
-        r'^Where is [^?]+\?',
-        r'^Where are [^?]+\?',
-        r'^Who is [^?]+\?',
-        r'^Who are [^?]+\?',
-    ]
-    
-    import re
-    cleaned = content
-    
-    # Remove question patterns from the beginning
-    for pattern in question_patterns:
-        cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE).strip()
-    
-    # Remove leading question marks and clean up
-    cleaned = cleaned.lstrip('?').strip()
-    
-    # If the content starts with the same word repeated, remove it
-    words = cleaned.split()
-    if len(words) > 1 and words[0].lower() == words[1].lower():
-        cleaned = ' '.join(words[1:])
-    
-    # Remove redundant "is" at the beginning
-    if cleaned.lower().startswith('is '):
-        cleaned = cleaned[3:].strip()
-    
-    # Remove "Information about:" patterns
-    if cleaned.lower().startswith('information about:'):
-        cleaned = cleaned[18:].strip()
-    
-    # Remove redundant title patterns
-    if ':' in cleaned and len(cleaned.split(':')) == 2:
-        parts = cleaned.split(':')
-        if len(parts[0]) < 50:  # If the part before colon is short, it's likely a title
-            cleaned = parts[1].strip()
-    
-    # Capitalize the first letter
-    if cleaned:
-        cleaned = cleaned[0].upper() + cleaned[1:]
-    
-    return cleaned
-
-
-# Development server runner
-if __name__ == "__main__":
-    print("Starting MCP Server...")
-    print("Server will be available at: http://localhost:8000")
-    print("API documentation at: http://localhost:8000/docs")
-    
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
+    return QueryResponse(
+        success=True,
+        response="".join(answer).strip(),
+        # Which tools the model actually chose -- not a fixed list any more.
+        sources_used=sorted({call["name"] for call in tool_calls}),
+        tool_calls=tool_calls,
+        sources=sources,
+        abstained=not sources,
+        turns=turns,
+        truncated=truncated,
+        usage=usage,
+        request_id=request_id.get(),
+        processing_time=time.time() - start,
+        query_received=request.query,
+        timestamp=datetime.now().isoformat(),
     )
+
+
+@app.post("/query/stream")
+async def process_query_stream(request: QueryRequest, http_request: Request):
+    """Same as /query, streamed as Server-Sent Events.
+
+    Event sequence, in the order the agent produces them:
+      tool_call   : the model chose a tool
+      tool_result : that tool came back -- hit count, how it was scored, and how
+                    long it took, so an empty search is legible as one
+      sources     : the numbered source list grew -- may arrive more than once,
+                    and now arrives *during* the answer rather than before it,
+                    because the model decides what to retrieve as it goes
+      token       : one text delta
+      citation    : a web citation closed; `n` matches an entry in `sources`
+      done        : end of stream, with the final source list and usage
+      error       : something failed; the message is human-readable
+    """
+    _rate_limit(http_request)
+    _budget_gate()
+    history, prior_sources = request.prior()
+
+    # The context var is read inside the generator, which runs after the
+    # middleware's `finally` has reset it -- so capture the value here.
+    current = request_id.get()
+
+    async def events():
+        token = request_id.set(current)
+        try:
+            async for event in run_agent(
+                request.query, host, history, prior_sources, request.web_search
+            ):
+                # Charge the cap as the closing event goes past, so a streamed
+                # query counts against the day exactly like a non-streamed one.
+                if event["type"] == "done":
+                    budget.record(float(event.get("usage", {}).get("cost_usd", 0.0)))
+                yield _sse(event["type"], event)
+        except (AgentUnavailable, ToolUnavailable) as e:
+            yield _sse("error", {"message": str(e)})
+        except Exception as e:
+            logger.exception("Streaming query failed")
+            yield _sse("error", {"message": f"Server error: {e}"})
+        finally:
+            request_id.reset(token)
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            REQUEST_ID_HEADER: current,
+        },
+    )
+
+
+def _sse(event: str, data: dict[str, Any]) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, default=str)}\n\n"
+
+
+if __name__ == "__main__":
+    uvicorn.run("mcp_server.main:app", host="0.0.0.0", port=8000, reload=True, log_level="info")

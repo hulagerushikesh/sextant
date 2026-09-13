@@ -1,0 +1,44 @@
+# The whole stack: `docker compose up --build`.
+#
+# The knowledge-base MCP server is not a service here. It is a stdio subprocess
+# of the agent server, which owns its lifetime -- giving it its own container
+# would mean inventing a network transport the protocol does not need.
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      # Optional: retrieval works without a key, generation does not.
+      - path: .env
+        required: false
+    environment:
+      AGENTICRAG_CHROMA_DIR: /data/chroma
+      AGENTICRAG_LOG_FORMAT: json
+    volumes:
+      - chroma:/data/chroma
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      # The embedder loads on the first tool call, so an impatient healthcheck
+      # would report a false failure during startup.
+      start_period: 90s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # The browser talks to the published port on the host, not to the
+        # compose network -- `http://api:8000` would not resolve from a browser.
+        VITE_SERVER_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  chroma:
