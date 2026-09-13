@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgenticRAG · Deployment Tracker</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --panel:#ffffff; --ink:#151a21; --muted:#5c6672; --line:#e3e7ec;
+    --accent:#2563eb; --done:#1f7a4d; --done-bg:#e7f4ec; --wait:#b45309; --wait-bg:#fdf1e0;
+    --hand:#7c3aed; --hand-bg:#f2ecfd; --code:#0f172a; --codebg:#f0f2f5;
+    --shadow:0 1px 2px rgba(16,24,40,.06),0 8px 24px rgba(16,24,40,.06);
+  }
+  :root:not([data-theme='light']){}
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme='light']){
+      --bg:#0d1117; --panel:#161b22; --ink:#e6edf3; --muted:#9198a1; --line:#232b34;
+      --accent:#4f8cf7; --done:#57c98a; --done-bg:#12241a; --wait:#e0a24a; --wait-bg:#2a1f10;
+      --hand:#a78bfa; --hand-bg:#1e1633; --code:#e6edf3; --codebg:#0c1117;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme='dark']{
+    --bg:#0d1117; --panel:#161b22; --ink:#e6edf3; --muted:#9198a1; --line:#232b34;
+    --accent:#4f8cf7; --done:#57c98a; --done-bg:#12241a; --wait:#e0a24a; --wait-bg:#2a1f10;
+    --hand:#a78bfa; --hand-bg:#1e1633; --code:#e6edf3; --codebg:#0c1117;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;padding:32px 20px 72px}
+  .wrap{max-width:900px;margin:0 auto}
+  header{margin-bottom:22px}
+  h1{font-size:24px;margin:0 0 4px;letter-spacing:-.02em}
+  .sub{color:var(--muted);font-size:14px}
+  .bar{height:10px;border-radius:6px;background:var(--line);overflow:hidden;margin:16px 0 6px}
+  .bar>span{display:block;height:100%;background:linear-gradient(90deg,var(--done),var(--accent));
+    width:0;transition:width .5s ease}
+  .barlbl{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}
+  .grid{display:grid;gap:16px;margin-top:22px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:18px 18px 8px;box-shadow:var(--shadow)}
+  .card h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;margin:0 0 2px;color:var(--muted)}
+  .card .desc{font-size:13.5px;color:var(--muted);margin:0 0 12px}
+  .tag{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;
+    vertical-align:middle;margin-left:8px}
+  .tag.done{color:var(--done);background:var(--done-bg)}
+  .tag.wait{color:var(--wait);background:var(--wait-bg)}
+  ul{list-style:none;margin:0;padding:0}
+  li{display:flex;gap:11px;align-items:flex-start;padding:9px 6px;border-radius:9px;cursor:pointer;
+    border:1px solid transparent}
+  li:hover{background:var(--codebg)}
+  li .box{flex:0 0 20px;width:20px;height:20px;border-radius:6px;border:2px solid var(--line);
+    margin-top:1px;display:grid;place-items:center;font-size:13px;color:#fff;transition:.15s}
+  li.on .box{background:var(--done);border-color:var(--done)}
+  li.on .txt .t{text-decoration:line-through;color:var(--muted)}
+  .txt .t{font-weight:550}
+  .txt .d{font-size:13px;color:var(--muted)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;
+    background:var(--codebg);color:var(--code);padding:1px 5px;border-radius:5px}
+  .handoff{border:1.5px solid var(--hand);background:var(--hand-bg)}
+  .handoff .box{border-color:var(--hand)}
+  .youhere{display:inline-block;font-size:11px;font-weight:700;color:var(--hand);
+    background:var(--hand-bg);border:1px solid var(--hand);padding:2px 9px;border-radius:20px;margin-left:8px}
+  .note{background:var(--codebg);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;
+    padding:11px 14px;margin:8px 6px 14px;font-size:13.5px;color:var(--ink)}
+  footer{margin-top:26px;color:var(--muted);font-size:12.5px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>AgenticRAG — Production Deployment</h1>
+    <div class="sub">Single GCP Compute Engine VM · Caddy (TLS + Basic-auth gate) · embedded Chroma on a persistent disk · Gemini generation</div>
+    <div class="bar"><span id="fill"></span></div>
+    <div class="barlbl"><span id="count">0 / 0</span><span id="pct">0%</span></div>
+  </header>
+
+  <div class="note">
+    <strong>Topology, on purpose:</strong> embedded ChromaDB is a single-writer local store and the
+    image is a heavy warm container, so one vertically-scaled node beats a cold-starting fleet.
+    Managed container services (Cloud Run / Fargate) are the wrong tool here — they give no real
+    persistent local disk. The scale-out path (Chroma→client/server, rate-limit→Redis) is documented
+    for when one node is genuinely outgrown.
+  </div>
+
+  <div class="grid">
+
+    <div class="card">
+      <h2>Track A · Production hardening <span class="tag done">in repo · done</span></h2>
+      <p class="desc">Code + deploy artifacts. Working-tree only — nothing pushed to the non-owner git remote.</p>
+      <ul data-track="A">
+        <li data-id="a1"><div class="box">✓</div><div class="txt"><div class="t">A1 · CORS is env-driven</div><div class="d"><code>AGENTICRAG_ALLOWED_ORIGINS</code> replaces the hardcoded <code>localhost:3000</code>; 4 tests.</div></div></li>
+        <li data-id="a2"><div class="box">✓</div><div class="txt"><div class="t">A2 · Production compose</div><div class="d"><code>docker-compose.prod.yml</code>: API only reachable through Caddy; Chroma on the host persistent disk; restart policy + log rotation.</div></div></li>
+        <li data-id="a3"><div class="box">✓</div><div class="txt"><div class="t">A3 · Caddy edge</div><div class="d"><code>deploy/Caddyfile</code>: auto Let's Encrypt TLS, Basic-auth gate, path routing (API vs static SPA), security headers.</div></div></li>
+        <li data-id="a4"><div class="box">✓</div><div class="txt"><div class="t">A4 · Image hygiene</div><div class="d">Prod image is core deps only — no <code>faiss-cpu</code> (avoids the torch/OpenMP segfault + 2GB bloat); single uvicorn worker (in-process locks).</div></div></li>
+        <li data-id="a5"><div class="box">✓</div><div class="txt"><div class="t">A5 · Secrets + config surface</div><div class="d"><code>deploy/env.example</code>; <code>GEMINI_API_KEY</code> injected at runtime, never baked, never committed.</div></div></li>
+        <li data-id="a6"><div class="box">✓</div><div class="txt"><div class="t">A6 · Runbook + deploy script</div><div class="d"><code>deploy/README.md</code> + <code>deploy/deploy.sh</code> (rsyncs the tree — never <code>git push</code>).</div></div></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Track B · GCP rollout <span class="tag wait">needs your account</span></h2>
+      <p class="desc">Runbook is written; commands are ready to run against your project. I stop at B3.</p>
+      <ul data-track="B">
+        <li data-id="b1"><div class="box">✓</div><div class="txt"><div class="t">B1 · Provision VM + disk + firewall</div><div class="d"><code>e2-standard-2</code> (8GB), separate persistent disk for <code>/data</code>, 80/443 open, SSH locked to your IP.</div></div></li>
+        <li data-id="b2"><div class="box">✓</div><div class="txt"><div class="t">B2 · Reserve static IP</div><div class="d">So the subdomain never has to change.</div></div></li>
+        <li data-id="b3" class="handoff"><div class="box">✓</div><div class="txt"><div class="t">B3 · Add the subdomain <span class="youhere">◀ handoff — you</span></div><div class="d">DNS <code>A</code> record <code>agenticrag.hulage.in → &lt;static IP&gt;</code> at your <code>hulage.in</code> DNS host. Must exist before the frontend build (Vite bakes the URL) and before Caddy can get a cert.</div></div></li>
+        <li data-id="b4"><div class="box">✓</div><div class="txt"><div class="t">B4 · Secrets on the box</div><div class="d"><code>.env</code> (chmod 600): Basic-auth hash + <code>GEMINI_API_KEY</code>.</div></div></li>
+        <li data-id="b5"><div class="box">✓</div><div class="txt"><div class="t">B5 · Ship + verify</div><div class="d"><code>deploy/deploy.sh USER@IP</code>; Caddy issues the cert; <code>/health</code> healthy behind the gate.</div></div></li>
+        <li data-id="b6"><div class="box">✓</div><div class="txt"><div class="t">B6 · Corpus + guardrails</div><div class="d">Ingest <code>eval/corpus</code>, restart api; GCP budget alert + nightly disk snapshot.</div></div></li>
+      </ul>
+    </div>
+
+  </div>
+  <footer>Track A verified: ruff + mypy clean, tests green. Updated 2026-08-26. Click any item to toggle; state saved locally.</footer>
+</div>
+<script>
+  var KEY="agenticrag-deploy-v1";
+  var DONE_A=["a1","a2","a3","a4","a5","a6"];        // Track A seeded complete
+  var saved;
+  try{ saved=JSON.parse(localStorage.getItem(KEY))||{}; }catch(e){ saved={}; }
+  if(!localStorage.getItem(KEY)){ DONE_A.forEach(function(id){saved[id]=true;}); }
+  document.querySelectorAll("li[data-id]").forEach(function(li){
+    var id=li.getAttribute("data-id");
+    if(saved[id]) li.classList.add("on");
+    li.addEventListener("click",function(){
+      li.classList.toggle("on");
+      saved[id]=li.classList.contains("on");
+      localStorage.setItem(KEY,JSON.stringify(saved));
+      recount();
+    });
+  });
+  function recount(){
+    var all=document.querySelectorAll("li[data-id]");
+    var on=document.querySelectorAll("li[data-id].on");
+    var pct=Math.round(on.length/all.length*100);
+    document.getElementById("fill").style.width=pct+"%";
+    document.getElementById("count").textContent=on.length+" / "+all.length;
+    document.getElementById("pct").textContent=pct+"%";
+  }
+  recount();
+</script>
+</body>
+</html>

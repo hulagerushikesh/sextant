@@ -1,20 +1,255 @@
-* {
-  margin: 0;
-  padding: 0;
+/*
+ * Tokens and base type.
+ *
+ * Three typefaces, no downloads: the container builds offline and a webfont that
+ * silently falls back is worse than a system stack that was chosen. Chrome is
+ * sans, the answer is serif, and anything the machine produced -- tool names,
+ * scores, citation numbers, token counts -- is mono. The reader can tell what
+ * kind of thing they are looking at before reading a word of it.
+ *
+ * Colour carries one piece of information: which tier a source came from. Blue
+ * is the user's own corpus, retrieved locally over MCP; ochre is the open web,
+ * fetched by Google. That distinction is the whole point of the system, so it
+ * is the only thing given a hue.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia,
+    ui-serif, serif;
+  --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono',
+    monospace;
+
+  --ground: #eceef2;
+  --surface: #ffffff;
+  --sunken: #f5f6f9;
+  --ink: #131820;
+  --ink-soft: #49525f;
+  --ink-faint: #7c8593;
+  --rule: #dbdfe6;
+  --rule-strong: #c2c8d2;
+
+  --local: #1d4f8c;
+  --local-bg: #e4ecf8;
+  --local-rule: #b9cce8;
+  --web: #8a5210;
+  --web-bg: #f8eeda;
+  --web-rule: #e6d0a6;
+  --rerank: #1f7a4d;
+  --faiss: #7c3aed;
+  --faiss2: #c026d3;
+
+  --danger: #9d2f1c;
+  --danger-bg: #fbeae6;
+
+  /* Primary action colour. Distinct role from --local (which labels the corpus
+     tier): this is the one hue the interface pushes forward -- buttons, the
+     active tab, a focused composer -- so it carries a little more energy than
+     the desaturated source blue. */
+  --accent: #2f5fd0;
+  --accent-strong: #244fb4;
+  --accent-soft: #e9effc;
+  --accent-contrast: #ffffff;
+
+  /* Positive / within-budget. */
+  --ok: #1f7a4d;
+  --ok-bg: #e7f4ec;
+
+  --radius: 8px;
+  --radius-sm: 6px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  /* Elevation. Panels lift off the ground; the ground itself stays flat. */
+  --shadow-sm: 0 1px 2px rgb(16 24 40 / 0.06);
+  --shadow-md: 0 4px 14px rgb(16 24 40 / 0.09);
+  --shadow-lg: 0 16px 40px rgb(16 24 40 / 0.16);
+
+  --rail-width: 22rem;
+  --nav-width: 15rem;
+
+  /* Motion. The built-in easings are too soft to feel intentional; these are
+     the two curves everything below uses. Entering things start fast (out),
+     things that move on screen accelerate and settle (in-out). Nothing that a
+     keyboard triggers many times a day animates at all. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --dur-press: 120ms;
+  --dur: 180ms;
+  --dur-enter: 240ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --ground: #0d1015;
+    --surface: #151a21;
+    --sunken: #1a2029;
+    --ink: #e3e8ef;
+    --ink-soft: #a2abb9;
+    --ink-faint: #767f8d;
+    --rule: #262d38;
+    --rule-strong: #384250;
+
+    --local: #82abe6;
+    --local-bg: #17273c;
+    --local-rule: #2b415e;
+    --web: #ddab6c;
+    --web-bg: #302512;
+    --web-rule: #4d3d1e;
+    --rerank: #57c98a;
+    --faiss: #a78bfa;
+    --faiss2: #e879f9;
+
+    --danger: #e58a78;
+    --danger-bg: #331914;
+
+    --accent: #6f9bf2;
+    --accent-strong: #82abf6;
+    --accent-soft: #16233c;
+    --accent-contrast: #0b1017;
+    --ok: #57c98a;
+    --ok-bg: #12241a;
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-md: 0 6px 18px rgb(0 0 0 / 0.45);
+    --shadow-lg: 0 18px 44px rgb(0 0 0 / 0.55);
+  }
+}
+
+:root[data-theme='dark'] {
+  --rerank: #57c98a;
+  --faiss: #a78bfa;
+  --faiss2: #e879f9;
+  --ground: #0d1015;
+  --surface: #151a21;
+  --sunken: #1a2029;
+  --ink: #e3e8ef;
+  --ink-soft: #a2abb9;
+  --ink-faint: #767f8d;
+  --rule: #262d38;
+  --rule-strong: #384250;
+
+  --local: #82abe6;
+  --local-bg: #17273c;
+  --local-rule: #2b415e;
+  --web: #ddab6c;
+  --web-bg: #302512;
+  --web-rule: #4d3d1e;
+
+  --danger: #e58a78;
+  --danger-bg: #331914;
+
+  --accent: #6f9bf2;
+  --accent-strong: #82abf6;
+  --accent-soft: #16233c;
+  --accent-contrast: #0b1017;
+  --ok: #57c98a;
+  --ok-bg: #12241a;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 6px 18px rgb(0 0 0 / 0.45);
+  --shadow-lg: 0 18px 44px rgb(0 0 0 / 0.55);
+}
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-color: #f5f5f5;
-  color: #333;
-  line-height: 1.6;
+* {
+  margin: 0;
 }
 
+html,
+body,
 #root {
-  min-height: 100vh;
+  height: 100%;
+}
+
+body {
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink);
+  background: var(--ground);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+textarea,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Anything pressable answers the press. Subtle, fast, transform-only, and
+   gated so a tap on a touch screen does not leave a stuck hover. */
+button:not(:disabled) {
+  transition: transform var(--dur-press) var(--ease-out);
+}
+
+button:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+/* Keyboard hints. Real <kbd> so they read as keys to a screen reader too. */
+kbd {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 1px 5px;
+  border: 1px solid var(--rule-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-family: var(--sans);
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+/* A shape where content will be. Opacity-only pulse: no layout, no paint. */
+.skeleton {
+  display: block;
+  height: 0.9em;
+  border-radius: var(--radius-sm);
+  background: var(--rule);
+  animation: skeleton-pulse 1.4s var(--ease-in-out) infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    opacity: 0.7;
+  }
+  button:not(:disabled):active {
+    transform: none;
+  }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
