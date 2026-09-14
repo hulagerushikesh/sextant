@@ -23,8 +23,11 @@ The name finally describes the behaviour: the model chooses its own tools.
 | Multi-turn conversation with stable citation labels | Working |
 | Interface: inline citations, agent trace, drag-and-drop upload | Working |
 
-Anything in [`docs/`](docs/) predates this README and describes features that were
-never built. It is kept for history only — do not treat it as a reference.
+Study material lives in [`learning/`](learning/) (a levelled path from
+foundations to the research papers) and project status, cost and the next
+milestone in [`planning/`](planning/). The original course-era docs are in
+[`planning/archive/`](planning/archive/) — they describe features that were
+never built and are kept for history only.
 
 ## The MCP server
 
@@ -307,7 +310,8 @@ eval/
   judge.py           `agenticrag-judge` — faithfulness and abstention
   baseline.json      Committed results; the CI gate compares against these
 tests/               257 tests: chunking, retrieval, agent loop, API, regressions
-docs/                Superseded documentation, kept for history
+learning/            Study path + measured notes (ANN comparison)
+planning/            Status, cost, milestone plans, trackers, archived docs
 ```
 
 ## The interface
