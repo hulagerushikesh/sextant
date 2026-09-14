@@ -231,7 +231,7 @@
       <li><b>IVF-PQ amortised cost is 16 B/vec vs flat's 1536 — a 96× per-vector shrink</b> (m=16). The <i>total</i> reads 9114 B/vec only because the fixed codebooks dominate at n=52 — exactly the overhead the stat split exists to expose.</li>
       <li><b>Per-query (a Kalman-filter question): all three return the identical top-5.</b> IVF-PQ is the slowest here (~1 ms) — approximation buys nothing at this scale.</li>
     </ul>
-    <div class="callout"><span>⚠︎</span><div><b>Scale caveat.</b> 52 chunks is too small to show the flat↔ANN crossover; it confirms flat dominance at personal scale and that each recall dial behaves correctly. The crossover lives in the synthetic 2k / 20k sweep in <code>docs/ANN_COMPARISON.md</code>. Latencies are pure-Python constant factors — read as ordering, not production.</div></div>
+    <div class="callout"><span>⚠︎</span><div><b>Scale caveat.</b> 52 chunks is too small to show the flat↔ANN crossover; it confirms flat dominance at personal scale and that each recall dial behaves correctly. The crossover lives in the synthetic 2k / 20k sweep in <code>learning/ann-comparison.md</code>. Latencies are pure-Python constant factors — read as ordering, not production.</div></div>
   </section>
 
   <!-- STEP C -->
