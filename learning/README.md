@@ -23,9 +23,10 @@ library folklore, and the numbers are the curriculum.
 | 8 | Interface craft: SSE clients, keyboard-first, motion | `frontend/src/` |
 | 9 | Research frontier: the papers | this file, §9 |
 
-Companion note already in this folder: [`ann-comparison.md`](ann-comparison.md)
-— the measured HNSW vs IVF-PQ study, the best example of the level-3 and
-level-6 material done properly.
+Companion notes in this folder, both examples of the level-6 method done
+properly: [`ann-comparison.md`](ann-comparison.md) — the measured HNSW vs
+IVF-PQ study; [`reranker-decision.md`](reranker-decision.md) — the experiment
+that settled whether the cross-encoder stays.
 
 ---
 
@@ -121,8 +122,8 @@ point.
   Then remove RRF and re-run; watch hit@1 drop 8 points.
 
 **Check yourself.** Under what corpus property would you expect the
-cross-encoder to start earning its 90 MB and latency? (Hint: candidate set
-quality at 1,568 chunks vs 52.)
+cross-encoder to start earning its 90 MB and latency? Answer it before
+reading [`reranker-decision.md`](reranker-decision.md), then check.
 
 ---
 
@@ -388,8 +389,9 @@ read them; start with the one marked ★.
 
 **Research questions this repo is positioned to answer** (each is a
 level-6-style experiment, zero cloud cost):
-1. At what corpus size does the cross-encoder start beating RRF alone? Ingest
-   arXiv 2303.18223 (1,568 chunks) with 30 golden questions and find out.
+1. ~~At what corpus size does the cross-encoder start beating RRF alone?~~
+   Done — [`reranker-decision.md`](reranker-decision.md). Follow-up it
+   raised: tables embed badly; try a row-per-chunk loader and re-grade L25/L26.
 2. Does HyDE help on a technical personal corpus, or hurt (hallucinated
    jargon)? One function in `retrieval.py`, one eval row.
 3. RAPTOR-style summaries vs flat chunks for "overview" questions — the
