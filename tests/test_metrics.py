@@ -87,3 +87,24 @@ def test_summarise_averages_each_key():
 
 def test_summarise_of_nothing():
     assert summarise([]) == {}
+
+
+class TestGradingUnit:
+    """The harness grades what a question labels: documents, or pages of one."""
+
+    def test_document_labelled_question_collapses_chunks_to_document(self):
+        from eval.harness import _relevant, _unit
+
+        hit = {"document_id": "kalman-filter", "page": 3}
+        assert _unit(hit, by_page=False) == "kalman-filter"
+        assert _relevant({"relevant_docs": ["kalman-filter"]}) == {"kalman-filter"}
+
+    def test_page_labelled_question_grades_pages(self):
+        from eval.harness import _relevant, _unit
+
+        hit = {"document_id": "survey", "page": 24}
+        assert _unit(hit, by_page=True) == "survey#p24"
+        assert _relevant({"relevant_pages": {"survey": [23, 24]}}) == {
+            "survey#p23",
+            "survey#p24",
+        }
