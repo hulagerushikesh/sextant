@@ -11,9 +11,10 @@ import Toast, { useToast } from './components/Toast'
 import Trace from './components/Trace'
 import Usage from './components/Usage'
 import { blank, loadAll, remove, saveAll, upsert } from './conversations'
+import { storageKey } from './storage'
 import { money, readLifetime, record, resetLifetime, seedFrom, totals } from './usage'
 
-const FIRST_RUN_KEY = 'agenticrag.onboarded'
+const FIRST_RUN_KEY = storageKey('onboarded')
 
 /**
  * The corpus figures, fetched once and shared.
@@ -137,7 +138,7 @@ export default function App() {
   useEffect(() => {
     const current = saved.find((c) => c.id === activeId)
     const title = current && current.messages.length ? current.title : null
-    document.title = title ? `${title} · Agentic RAG` : 'Agentic RAG'
+    document.title = title ? `${title} · sextant` : 'sextant'
   }, [saved, activeId])
 
   useEffect(() => {
@@ -451,7 +452,7 @@ export default function App() {
     <div className={`shell ${view === 'lab' ? 'shell-lab' : ''}`}>
       <header className="masthead">
         <div className="masthead-name">
-          <h1>Agentic RAG</h1>
+          <h1>sextant</h1>
           <p>
             A private corpus over MCP, and the open web, with the model choosing
             between them.

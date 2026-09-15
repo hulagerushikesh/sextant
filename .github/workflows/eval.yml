@@ -10,7 +10,7 @@ name: ci
 # Generation metrics are deliberately absent: they need GEMINI_API_KEY twice
 # over, once to produce answers and once to grade them, which makes them a
 # billed, non-deterministic job rather than a gate on every push. Run
-# `agenticrag-judge` before a release instead.
+# `sextant-judge` before a release instead.
 
 on:
   push:
@@ -54,7 +54,7 @@ jobs:
       # Rebuilds the index from eval/corpus on every run, so this also proves
       # ingestion still works end to end.
       - name: Retrieval evaluation
-        run: agenticrag-eval --check --out eval-results.json
+        run: sextant-eval --check --out eval-results.json
 
       - name: Upload results
         if: always()

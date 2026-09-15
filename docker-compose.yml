@@ -14,8 +14,8 @@ services:
       - path: .env
         required: false
     environment:
-      AGENTICRAG_CHROMA_DIR: /data/chroma
-      AGENTICRAG_LOG_FORMAT: json
+      SEXTANT_CHROMA_DIR: /data/chroma
+      SEXTANT_LOG_FORMAT: json
     volumes:
       - chroma:/data/chroma
     healthcheck:

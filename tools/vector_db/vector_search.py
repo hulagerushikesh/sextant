@@ -28,13 +28,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import threading
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, cast
 
+from tools import settings
 from tools.vector_db.chunking import (
     DEFAULT_OVERLAP_TOKENS,
     DEFAULT_TARGET_TOKENS,
@@ -58,12 +58,12 @@ DEFAULT_COLLECTION = "documents"
 # The override exists so the evaluation harness and CI can build a throwaway
 # corpus without touching whatever the user has actually indexed.
 DEFAULT_PERSIST_DIR = Path(__file__).resolve().parents[2] / "chroma_db"
-PERSIST_DIR_ENV = "AGENTICRAG_CHROMA_DIR"
+PERSIST_DIR_ENV = settings.env_name("CHROMA_DIR")
 
 
 def persist_dir() -> Path:
     """The collection directory for this process, honouring the override."""
-    override = os.getenv(PERSIST_DIR_ENV)
+    override = settings.getenv("CHROMA_DIR")
     return Path(override).expanduser() if override else DEFAULT_PERSIST_DIR
 
 # Cosine, not Chroma's l2 default. Dense scores are computed as `1 - distance`,
@@ -83,7 +83,7 @@ CANDIDATES = 30
 # HNSW-vs-IVF-PQ comparison stops being a benchmark you read and becomes a switch
 # that changes what the live pipeline actually retrieves. Lexical (BM25), fusion
 # and reranking are unchanged either way; only the dense candidate source moves.
-ANN_BACKEND_ENV = "AGENTICRAG_ANN_INDEX"
+ANN_BACKEND_ENV = settings.env_name("ANN_INDEX")
 ANN_BACKENDS = ("chroma", "flat", "hnsw", "ivfpq", "ivfpq_rerank")
 
 # How many fused candidates the cross-encoder actually scores. It reads every
@@ -102,7 +102,7 @@ RERANK_DEPTH = 25
 # passage contains the answer"; only reading it does, which is the model's job
 # and is what the abstention rule in the agent prompt is for.
 #
-# Re-derive with: agenticrag-eval
+# Re-derive with: sextant-eval
 DEFAULT_MIN_SCORE = 0.01
 
 # Retrieval modes. Only "rerank" is meant for production use; the other three
@@ -120,7 +120,7 @@ def _locators(doc: dict[str, Any], length: int) -> list[Locator]:
     knows at most one page number for the whole thing. The upload endpoint has
     already parsed the file and knows exactly where every page starts, so it
     sends the full list -- which is what lets a PDF dropped into the browser
-    cite "p. 14" the way an `agenticrag-ingest` one does.
+    cite "p. 14" the way a `sextant-ingest` one does.
 
     Note this takes structured locators, not a path. A `kb_ingest_file` tool
     would be simpler and would hand every client that mounts this server the
@@ -161,7 +161,7 @@ def configured_ann_backend() -> str:
     is to change what retrieval does, so a typo that quietly kept the default
     would be the worst outcome.
     """
-    name = os.getenv(ANN_BACKEND_ENV, "chroma").strip().lower()
+    name = (settings.getenv("ANN_INDEX", "chroma") or "chroma").strip().lower()
     if name not in ANN_BACKENDS:
         raise KnowledgeBaseUnavailable(
             f"{ANN_BACKEND_ENV}={name!r} is not a known dense backend; "

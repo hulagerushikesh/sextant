@@ -44,6 +44,7 @@ from mcp_server.observability import (
 )
 from mcp_server.sources import MAX_RESTORED
 from mcp_server.uploads import MAX_FILES, SUPPORTED_SUFFIXES, to_document
+from tools import settings
 from tools.vector_db.loaders import UnsupportedDocument
 
 configure_logging()
@@ -175,7 +176,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(
-    title="Agentic RAG - agent server",
+    title="sextant - agent server",
     description="Retrieval over MCP, tool selection by the model",
     version="0.3.0",
     lifespan=lifespan,
@@ -186,14 +187,14 @@ app = FastAPI(
 def _allowed_origins() -> list[str]:
     """Browser origins permitted to call this API, from the environment.
 
-    Comma-separated in `AGENTICRAG_ALLOWED_ORIGINS`; defaults to the dev
+    Comma-separated in `SEXTANT_ALLOWED_ORIGINS`; defaults to the dev
     frontend. In the single-subdomain production layout the UI and the API are
     served from the same origin, so CORS never fires there -- but keeping this
     env-driven means a split-origin deploy (a separate `app.` and `api.` host)
     is a config change, not a code change, and the origin is never hardcoded to
     localhost in a shipped image.
     """
-    raw = os.getenv("AGENTICRAG_ALLOWED_ORIGINS", "http://localhost:3000")
+    raw = settings.getenv("ALLOWED_ORIGINS", "http://localhost:3000") or ""
     return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 
@@ -242,7 +243,7 @@ def _budget_gate() -> None:
 
     A hard ceiling, not a rate limit: it counts dollars, not requests, and
     resets at UTC midnight rather than on a rolling window. Off unless
-    AGENTICRAG_DAILY_BUDGET_USD is set. 429 (not 402) so a browser's fetch
+    SEXTANT_DAILY_BUDGET_USD is set. 429 (not 402) so a browser's fetch
     retry/backoff treats it like the rate limiter it sits next to.
     """
     allowed, spent, retry_after = budget.check()
@@ -403,7 +404,7 @@ async def ingest_documents(request: DocumentRequest, http_request: Request):
             status_code=413,
             detail=(
                 f"Payload is {oversized} characters, over the {MAX_DOCUMENT_CHARS} limit. "
-                "Use the agenticrag-ingest command for large files."
+                "Use the sextant-ingest command for large files."
             ),
         )
 

@@ -33,8 +33,8 @@ SentenceTransformer('all-MiniLM-L6-v2'); \
 CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')"
 
 # Written to a volume so ingested documents survive `docker compose down`.
-ENV AGENTICRAG_CHROMA_DIR=/data/chroma
-ENV AGENTICRAG_LOG_FORMAT=json
+ENV SEXTANT_CHROMA_DIR=/data/chroma
+ENV SEXTANT_LOG_FORMAT=json
 RUN mkdir -p /data/chroma
 
 EXPOSE 8000
