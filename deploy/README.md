@@ -220,13 +220,39 @@ gcloud compute disks add-resource-policies agenticrag-data \
 App-level, the rate limiter (`SEXTANT_RATE_LIMIT` / `_WINDOW`) already caps
 per-IP request rate; tighten it in `.env` if the gate is shared widely.
 
+### Uptime check (only if the VM runs 24/7)
+
+Pointless while the VM is parked on purpose — it would page you for a
+stop you chose. If the site is meant to stay up, one Cloud Monitoring
+uptime check on `/health` through the gate is free (the free tier covers
+far more than one check a minute) and emails on two consecutive failures.
+The password goes in the console or a local shell, never in a file:
+
+```bash
+gcloud monitoring uptime create sextant-health \
+  --resource-type=uptime-url --monitored-resource-labels=host=agenticrag.hulage.in \
+  --protocol=https --port=443 --path=/health --period=5 --timeout=10 \
+  --username=rush --password="$(read -rsp 'gate password: ' p; echo "$p")" \
+  --matcher-content='"status":"healthy"' --matcher-type=contains-string
+# then an alert policy on it (console: Monitoring -> Alerting -> Create,
+# condition "Uptime check failed", notification = your email).
+```
+
+`/health` is exempt from the rate limiter for exactly this reason.
+
+### The container is not root
+
+The API process runs as uid `APP_UID` (default 1001), the box user that
+owns `/data/chroma`. The preflight checks the two agree. If `id -u` on the
+box is not 1001, put `APP_UID=<uid>` in `.env` before the first build.
+
 ---
 
 ## Redeploying
 
 ```bash
-deploy/deploy.sh USER@IP          # ship changes, rebuild, restart
-deploy/deploy.sh USER@IP down     # stop the containers
+deploy/deploy.sh HOST          # ship changes, rebuild, restart
+deploy/deploy.sh HOST down     # stop the containers
 ```
 
 The box `.env` and `/data` are never touched by a redeploy.
@@ -243,13 +269,16 @@ images and `.env` all survive a stop. Only the meters change:
 | stopped | 600 (idle IP bills ~2× in-use) + 270 (disks) |
 
 ```bash
-gcloud compute instances stop  agenticrag --zone="$ZONE"   # park
-gcloud compute instances start agenticrag --zone="$ZONE"   # resume (~30 s to ssh)
-deploy/deploy.sh USER@IP preflight                         # DNS/.env/disk still right?
-deploy/deploy.sh USER@IP                                   # containers come back with the VM
-                                                           # (restart: unless-stopped) --
-                                                           # run this only if the tree changed
+deploy/deploy.sh HOST status    # RUNNING / TERMINATED, and what is billing
+deploy/deploy.sh HOST stop      # park
+deploy/deploy.sh HOST start     # resume -- states the hourly cost and asks first
+deploy/deploy.sh HOST preflight # DNS/.env/disk still right?
+deploy/deploy.sh HOST           # only if the tree changed; the containers
+                                # come back with the VM on their own
 ```
+
+`HOST` is the config-ssh alias (`agenticrag.us-central1-a.<project>`); the
+lifecycle commands read instance, zone and project out of it.
 
 The static IP does not change across stop/start, so DNS stays valid.
 Releasing the IP saves the ₹600 but changes the address and the DNS record.
