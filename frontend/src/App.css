@@ -235,7 +235,7 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  padding: 28px 28px 20px;
+  padding: 28px 28px 0;
 }
 
 .opening {
@@ -597,15 +597,26 @@
 
 /* --- composer ------------------------------------------------------------ */
 
-.composer {
+/* The composer and its hint dock at the bottom of the thread. Sticky, with
+   the page colour fading in above the box, so text scrolling underneath
+   dissolves into the dock instead of being cut off by the bar's edge. */
+.dock {
   position: sticky;
   bottom: 0;
+  z-index: 2;
+  margin-top: auto;
+  padding: 28px 0 14px;
+  background: linear-gradient(to bottom, transparent, var(--ground) 28px);
+}
+
+.composer {
   width: 100%;
   max-width: 44rem;
-  margin: 24px auto 0;
+  margin: 0 auto;
   display: flex;
-  gap: 10px;
-  padding: 12px;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px 8px 8px 14px;
   border: 1px solid var(--rule);
   border-radius: var(--radius-lg);
   background: var(--surface);
@@ -624,7 +635,8 @@
   border: none;
   background: transparent;
   resize: none;
-  padding: 6px 4px;
+  padding: 8px 0;
+  max-height: 160px;
   font-size: 0.9375rem;
   line-height: 1.5;
 }
@@ -642,6 +654,11 @@
   margin: 6px auto 0;
   font-size: 0.6875rem;
   color: var(--ink-faint);
+}
+
+.composer .button {
+  height: 36px;
+  padding: 0 18px;
 }
 
 /* --- rail ---------------------------------------------------------------- */
@@ -944,8 +961,9 @@
     padding: 20px 18px;
   }
 
-  .composer {
+  .dock {
     position: static;
+    padding-top: 20px;
   }
 }
 
@@ -1072,7 +1090,6 @@
 /* --- web search toggle ---------------------------------------------------- */
 
 .web-toggle {
-  align-self: flex-end;
   flex: none;
   padding: 7px 13px;
   border: 1px dashed var(--rule-strong);

@@ -17,6 +17,16 @@ import { money, readLifetime, record, resetLifetime, seedFrom, totals } from './
 const FIRST_RUN_KEY = storageKey('onboarded')
 
 /**
+ * Grow the composer with its content, one line to six. A fixed two-row box
+ * wasted a line on every short question and still clipped a long one;
+ * measuring scrollHeight after resetting the height is the whole trick.
+ */
+function autosize(box) {
+  box.style.height = 'auto'
+  box.style.height = `${Math.min(box.scrollHeight, 160)}px`
+}
+
+/**
  * The corpus figures, fetched once and shared.
  *
  * `status` separates "still asking" from "asked and got nothing": the panel
@@ -119,6 +129,12 @@ export default function App() {
   const pickRef = useRef(null)
 
   const streaming = live !== null
+
+  // Runs on every draft change, which also covers the two paths that set the
+  // draft from outside the box: a starter click and the post-send reset.
+  useEffect(() => {
+    if (composerRef.current) autosize(composerRef.current)
+  }, [draft])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
@@ -645,8 +661,11 @@ export default function App() {
             </li>
           )}
         </ol>
-        <div ref={bottomRef} />
 
+        {/* The dock is sticky and the anchor sits after it, so "scroll to the
+            bottom" lands below the composer's in-flow slot and the last
+            answer is never under the bar. */}
+        <div className="dock">
         <form className="composer" onSubmit={submit}>
           <textarea
             ref={composerRef}
@@ -658,7 +677,7 @@ export default function App() {
             placeholder={
               messages.length ? 'Ask a follow-up…' : 'Ask a question about your documents…'
             }
-            rows={2}
+            rows={1}
             maxLength={2000}
             aria-label="Your question"
           />
@@ -696,6 +715,8 @@ export default function App() {
           )}
           {webSearch && !streaming && ' · web search on for this question, about $0.014'}
         </p>
+        </div>
+        <div ref={bottomRef} />
       </main>
 
       <aside className="rail">
