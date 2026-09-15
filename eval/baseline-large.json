@@ -1,0 +1,87 @@
+{
+  "k_primary": 5,
+  "k_wide": 10,
+  "questions": 32,
+  "modes": {
+    "dense": {
+      "hit@1": 0.8148,
+      "recall@3": 0.9074,
+      "recall@5": 0.9259,
+      "mrr": 0.8889,
+      "ndcg@5": 0.8751,
+      "scored_by": "cosine"
+    },
+    "lexical": {
+      "hit@1": 0.8148,
+      "recall@3": 0.9259,
+      "recall@5": 0.9444,
+      "mrr": 0.8889,
+      "ndcg@5": 0.8894,
+      "scored_by": "bm25"
+    },
+    "rrf": {
+      "hit@1": 0.8889,
+      "recall@3": 0.9259,
+      "recall@5": 0.9259,
+      "mrr": 0.9296,
+      "ndcg@5": 0.904,
+      "scored_by": "rrf"
+    },
+    "rerank": {
+      "hit@1": 0.9259,
+      "recall@3": 0.9074,
+      "recall@5": 0.963,
+      "mrr": 0.9537,
+      "ndcg@5": 0.931,
+      "scored_by": "cross-encoder"
+    }
+  },
+  "separation": {
+    "dense": {
+      "answerable_min": 0.3733,
+      "answerable_mean": 0.5787,
+      "unanswerable_max": 0.2584,
+      "unanswerable_mean": 0.2176
+    },
+    "lexical": {
+      "answerable_min": 8.6095,
+      "answerable_mean": 20.2059,
+      "unanswerable_max": 11.6048,
+      "unanswerable_mean": 8.5999
+    },
+    "rrf": {
+      "answerable_min": 0.0301,
+      "answerable_mean": 0.0326,
+      "unanswerable_max": 0.0272,
+      "unanswerable_mean": 0.02
+    },
+    "rerank": {
+      "answerable_min": 0.0615,
+      "answerable_mean": 0.9514,
+      "unanswerable_max": 0.0,
+      "unanswerable_mean": 0.0
+    }
+  },
+  "threshold_sweep": {
+    "0.01": {
+      "answerable_lost": 0,
+      "unanswerable_blocked": 5
+    },
+    "0.1": {
+      "answerable_lost": 1,
+      "unanswerable_blocked": 5
+    },
+    "0.3": {
+      "answerable_lost": 1,
+      "unanswerable_blocked": 5
+    },
+    "0.5": {
+      "answerable_lost": 1,
+      "unanswerable_blocked": 5
+    },
+    "0.9": {
+      "answerable_lost": 2,
+      "unanswerable_blocked": 5
+    }
+  }
+}

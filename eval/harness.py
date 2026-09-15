@@ -21,6 +21,11 @@ What this measures and what it does not: the corpus and the questions were
 written together, so this grades the retrieval pipeline, not the world. It will
 catch a regression and it will settle an ablation. It will not tell you how the
 system performs on someone else's documents.
+
+A second, larger set can be graded against an existing store with
+`--store DIR --golden FILE`. Its questions label pages (`relevant_pages`)
+rather than documents, because a single long PDF is one document and grading at
+that grain would score every mode 1.0.
 """
 
 from __future__ import annotations
@@ -52,9 +57,22 @@ K_TIGHT = 3
 REGRESSION_TOLERANCE = 0.02
 
 
-def load_golden() -> list[dict[str, Any]]:
-    with GOLDEN_PATH.open() as handle:
+def load_golden(path: Path = GOLDEN_PATH) -> list[dict[str, Any]]:
+    with path.open() as handle:
         return [json.loads(line) for line in handle if line.strip()]
+
+
+def _unit(hit: dict[str, Any], by_page: bool) -> str:
+    """The thing a question labels: a document, or a page of one."""
+    if by_page:
+        return f"{hit['document_id']}#p{hit.get('page')}"
+    return str(hit["document_id"])
+
+
+def _relevant(item: dict[str, Any]) -> set[str]:
+    if "relevant_pages" in item:
+        return {f"{doc}#p{page}" for doc, pages in item["relevant_pages"].items() for page in pages}
+    return set(item["relevant_docs"])
 
 
 async def build_store(kb_class):
@@ -92,16 +110,18 @@ async def grade(kb, golden: list[dict[str, Any]], mode: str) -> dict[str, Any]:
         hits = result["results"]
         if hits:
             scored_by = result["scored_by"]
-        # Chunks collapse to their document: the golden set labels documents,
-        # and five chunks of one file is one document retrieved.
-        retrieved = [hit["document_id"] for hit in hits]
+        # Chunks collapse to what the question labels: a document (five chunks
+        # of one file is one document retrieved) or, for the page-labelled set,
+        # a page of one.
+        by_page = "relevant_pages" in item
+        retrieved = [_unit(hit, by_page) for hit in hits]
         split = "answerable" if item["answerable"] else "unanswerable"
         top_scores[split].append(hits[0]["score"] if hits else 0.0)
 
         if not item["answerable"]:
             continue
 
-        relevant = set(item["relevant_docs"])
+        relevant = _relevant(item)
         row = {
             "hit@1": hit_at_1(retrieved, relevant),
             f"recall@{K_TIGHT}": recall_at_k(retrieved, relevant, K_TIGHT),
@@ -221,17 +241,24 @@ def check_against_baseline(reports: list[dict[str, Any]]) -> int:
     return 0
 
 
-async def run(modes: list[str]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+async def run(
+    modes: list[str], golden_path: Path = GOLDEN_PATH, store: Path | None = None
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     from tools.vector_db.vector_search import KnowledgeBase
 
-    golden = load_golden()
+    golden = load_golden(golden_path)
     print(
         f"golden set: {len(golden)} questions "
         f"({sum(q['answerable'] for q in golden)} answerable, "
         f"{sum(not q['answerable'] for q in golden)} unanswerable)"
     )
 
-    kb = await build_store(KnowledgeBase)
+    if store is None:
+        kb = await build_store(KnowledgeBase)
+    else:
+        kb = KnowledgeBase()
+        stats = await kb.health_check()
+        print(f"store: {store} -> {stats['collection_size']} chunks (not rebuilt)\n")
     reports = [await grade(kb, golden, mode) for mode in modes]
 
     print_table(reports)
@@ -288,20 +315,32 @@ def main() -> None:
     parser.add_argument("--out", type=Path, help="write results JSON here")
     parser.add_argument("--check", action="store_true", help="fail on regression vs baseline")
     parser.add_argument("--keep-store", action="store_true", help="do not delete the eval index")
+    parser.add_argument("--golden", type=Path, default=GOLDEN_PATH, help="questions to grade")
+    parser.add_argument(
+        "--store",
+        type=Path,
+        help="grade an EXISTING Chroma directory read-only instead of rebuilding from corpus/",
+    )
     args = parser.parse_args()
+    if args.check and (args.store or args.golden != GOLDEN_PATH):
+        parser.error("--check compares the committed corpus and golden set only")
 
     # A throwaway index, so grading never touches whatever the user has
-    # actually ingested. Set before KnowledgeBase is ever constructed.
-    store = Path(tempfile.mkdtemp(prefix="sextant-eval-"))
+    # actually ingested. Set before KnowledgeBase is ever constructed. With
+    # --store the caller owns the directory and it is opened in place.
+    own_store = args.store is None
+    store = Path(tempfile.mkdtemp(prefix="sextant-eval-")) if own_store else args.store
     settings.setenv("CHROMA_DIR", str(store))
     try:
-        payload, reports = asyncio.run(run(args.modes))
+        payload, reports = asyncio.run(run(args.modes, args.golden, args.store))
         if args.out:
             args.out.write_text(json.dumps(payload, indent=2) + "\n")
             print(f"\nwrote {args.out}")
         code = check_against_baseline(reports) if args.check else 0
     finally:
-        if args.keep_store:
+        if not own_store:
+            pass
+        elif args.keep_store:
             print(f"eval index kept at {store}")
         else:
             shutil.rmtree(store, ignore_errors=True)
