@@ -16,7 +16,7 @@ last, gated on an explicit OK.
 | A | Identity: `sextant` everywhere | ₹0 | **Done 2026-09-15** (`13e5c24`) — package/CLIs/env aliased, UI, localStorage migrated |
 | B | Settle the reranker with data | ₹0 (local CPU) | **Done 2026-09-15** (`bd8eec6`) — it stays; `eval/golden-large.jsonl`, `learning/reranker-decision.md` |
 | C | Docs match the code | ₹0 | **Done 2026-09-15** — README roadmap 0–15, env table, `CLAUDE.md` with standing rules |
-| D | Go live behind the gate | **≈₹135/day while up** — ask first | `https://agenticrag.hulage.in/health` → `healthy` through Basic auth; one cited `/query` proof |
+| D | Go live behind the gate | ≈₹5.6/hr while up (approved) | **Live 2026-09-15** — cert issued, gate 401s, cited `/query` served; see `go-live-proof.md`. Run policy: on-demand (stop when not testing) |
 | E | Ops floor | ₹0 | **Done 2026-09-15** — `deploy.sh status\|stop\|start`, non-root image (built + run locally), uptime-check runbook. Snapshot drill skipped on the owner's call |
 
 ## A — Identity (free)
