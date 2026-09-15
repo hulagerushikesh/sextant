@@ -22,9 +22,9 @@ Operational runbooks stay next to what they operate: [`../deploy/README.md`](../
 | --- | --- | --- |
 | 0–8 | Foundation → MCP server → agent loop → hybrid retrieval → eval harness → hardening → interface → Gemini port | Done |
 | 9–12 | Index Lab: flat/HNSW/IVF-PQ from scratch, FAISS reference, two-stage rerank, live `AGENTICRAG_ANN_INDEX` switch | Done |
-| 13 | Production deploy: prod compose, Caddy edge, preflight, GCP provisioned, image built on VM | **Parked** — needs DNS A record + `set-secrets.sh` from the owner |
+| 13 | Production deploy: prod compose, Caddy edge, preflight, GCP provisioned, image built on VM | **Live** 2026-09-15 at `agenticrag.hulage.in` (Basic-auth gate); VM run on demand |
 | 14 | Product-grade UI: ⌘K palette, shortcuts, empty states, onboarding, skeletons, toasts | Done |
-| 15 | Ship + prove + rename | **In progress** — A, B, C, E done 2026-09-15; only D (go-live) open, parked on DNS + secrets + a cost OK — see `milestone-15.md` |
+| 15 | Ship + prove + rename | **Done** 2026-09-15 — A–E; snapshot drill skipped. `go-live-proof.md` |
 
 Numbers that describe the system today: 320 tests, mypy clean, two golden
 sets (60 questions / 52 chunks; 32 page-labelled / 1,602 chunks), hit@1 0.94
@@ -37,7 +37,7 @@ GCP project `agenticrag-rush`, billing account in **INR**.
 
 | Resource | State | ₹/month |
 | --- | --- | --- |
-| VM `agenticrag` e2-standard-2 | **stopped** 2026-09-14 | 0 (≈4,100 if running 24/7; ≈135/day) |
+| VM `agenticrag` e2-standard-2 | on demand — `deploy.sh HOST start\|stop` | ≈135/day while up (≈4,100 if left on) |
 | Static IP `35.226.228.218` | reserved, VM stopped | ≈600 (idle IPs bill ~2× in-use) |
 | Boot disk 30 GB pd-standard + data disk 20 GB pd-balanced | kept | ≈270 |
 | Budget alert "agenticrag monthly" | ₹1,700 (≈$20), 50/90/100 % | — |
@@ -48,10 +48,8 @@ API calls) happens without an explicit OK on the amount.
 
 ## Open decisions
 
-1. **Run policy once live** — 24/7 e2-standard-2 (≈₹4,100/mo), 24/7 e2-medium
-   (≈₹2,100/mo, 4 GB — untested under torch + Chroma), or on-demand start/stop
-   (≈₹5.6/hr while up). Default proposal: on-demand with a `deploy.sh
-   start|stop` wrapper until usage justifies always-on.
+1. ~~**Run policy once live**~~ — decided 2026-09-15: on demand.
+   `deploy.sh HOST start|stop`; stop after each testing session.
 2. **Keep or release the static IP while parked** — ₹600/mo for an address no
    DNS record points at yet. Decided 2026-09-14: keep.
 3. ~~**Reranker**~~ — settled 2026-09-15: it stays. Only stage with a
