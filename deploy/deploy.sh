@@ -10,24 +10,93 @@
 # in the loop.
 #
 # Usage:
-#   deploy/deploy.sh user@vm-host            # preflight + rsync + build + up
-#   deploy/deploy.sh user@vm-host preflight  # just check the box is ready
-#   deploy/deploy.sh user@vm-host logs       # tail the stack
-#   deploy/deploy.sh user@vm-host down       # stop the stack
+#   deploy/deploy.sh vm-host            # preflight + ship + build + up
+#   deploy/deploy.sh vm-host preflight  # just check the box is ready
+#   deploy/deploy.sh vm-host logs       # tail the stack
+#   deploy/deploy.sh vm-host down       # stop the stack (containers only)
+#   deploy/deploy.sh vm-host status     # is the VM up? what does it cost?
+#   deploy/deploy.sh vm-host stop       # park the VM (disks + IP + images kept)
+#   deploy/deploy.sh vm-host start      # unpark it -- asks first, it costs
+#
+# status/stop/start go through gcloud, not ssh. The instance, zone and
+# project are read from the config-ssh alias (`<instance>.<zone>.<project>`)
+# or from VM_INSTANCE / VM_ZONE / VM_PROJECT in the environment.
 #
 # The VM must already have: Docker + compose plugin, /data/chroma on the
 # attached persistent disk, and deploy/.env filled in at ~/agenticrag/.env
 # (see deploy/env.example). This script never creates or overwrites that .env.
 set -euo pipefail
 
-REMOTE="${1:?usage: deploy.sh user@host [logs|down]}"
+REMOTE="${1:?usage: deploy.sh host [up|preflight|logs|down|status|stop|start]}"
 CMD="${2:-up}"
 APP_DIR="agenticrag"                       # ~/agenticrag on the VM
 COMPOSE="docker compose -f docker-compose.prod.yml"
+# What a running e2-standard-2 costs, so `start` can say it out loud. Update
+# if the machine type changes; the number is only for the prompt.
+VM_COST_PER_HOUR="~INR 5.6 (~USD 0.067)"
 
 cd "$(dirname "$0")/.."                     # repo root
 
+# Resolve the gcloud target for the lifecycle commands. The config-ssh alias
+# already carries everything: `agenticrag.us-central1-a.my-project`.
+vm_target() {
+  INSTANCE="${VM_INSTANCE:-}"; ZONE="${VM_ZONE:-}"; PROJECT="${VM_PROJECT:-}"
+  if [ -z "$INSTANCE" ]; then
+    host="${REMOTE#*@}"
+    IFS=. read -r INSTANCE ZONE PROJECT <<<"$host"
+  fi
+  if [ -z "$INSTANCE" ] || [ -z "$ZONE" ] || [ -z "$PROJECT" ]; then
+    echo "cannot tell instance/zone/project from '$REMOTE';" \
+         "set VM_INSTANCE, VM_ZONE and VM_PROJECT" >&2
+    exit 2
+  fi
+  GC=(gcloud compute instances --project="$PROJECT")
+}
+
+vm_status() {
+  "${GC[@]}" describe "$INSTANCE" --zone="$ZONE" \
+    --format='value(status,machineType.basename(),networkInterfaces[0].accessConfigs[0].natIP)'
+}
+
 case "$CMD" in
+  status)
+    vm_target
+    read -r state type ip <<<"$(vm_status)"
+    echo "$INSTANCE ($type, $ZONE): $state${ip:+  ip $ip}"
+    case "$state" in
+      RUNNING)    echo "   billing: VM $VM_COST_PER_HOUR/hour + disks + IP" ;;
+      TERMINATED) echo "   billing: disks + reserved IP only (VM meter off)" ;;
+    esac
+    ;;
+  stop)
+    vm_target
+    read -r state _ _ <<<"$(vm_status)"
+    if [ "$state" = "TERMINATED" ]; then echo "$INSTANCE already stopped"; exit 0; fi
+    echo ">> stopping $INSTANCE (containers restart on their own at next start) ..."
+    "${GC[@]}" stop "$INSTANCE" --zone="$ZONE" --quiet
+    echo ">> stopped. Disks, images, .env and the reserved IP are all kept."
+    ;;
+  start)
+    vm_target
+    read -r state _ _ <<<"$(vm_status)"
+    if [ "$state" = "RUNNING" ]; then echo "$INSTANCE already running"; exit 0; fi
+    # This is the one command here that turns a meter on. Say so, and wait.
+    echo "Starting $INSTANCE bills $VM_COST_PER_HOUR per hour until it is stopped again."
+    if [ "${3:-}" != "--yes" ]; then
+      read -r -p "Start it? [y/N] " answer
+      case "$answer" in y|Y|yes) ;; *) echo "not started"; exit 1 ;; esac
+    fi
+    "${GC[@]}" start "$INSTANCE" --zone="$ZONE" --quiet
+    echo ">> started; waiting for ssh ..."
+    for _ in $(seq 1 30); do
+      ssh -o ConnectTimeout=5 -o BatchMode=yes "$REMOTE" true 2>/dev/null && break
+      sleep 5
+    done
+    read -r _ _ ip <<<"$(vm_status)"
+    echo ">> up at ${ip:-?}. The stack restarts by itself (restart: unless-stopped)."
+    echo ">> if the tree changed:  deploy/deploy.sh $REMOTE"
+    echo ">> when finished:        deploy/deploy.sh $REMOTE stop"
+    ;;
   logs)
     exec ssh -t "$REMOTE" "cd $APP_DIR && $COMPOSE logs -f --tail=200"
     ;;
@@ -59,7 +128,7 @@ perms=$(stat -c '%a' .env)
 while IFS= read -r line; do
   case "$line" in ''|'#'*) continue ;; esac
   key=${line%%=*}; val=${line#*=}
-  case "$key" in SITE_ADDRESS|PUBLIC_URL|BASIC_AUTH_USER|BASIC_AUTH_HASH|GEMINI_API_KEY|ACME_EMAIL)
+  case "$key" in SITE_ADDRESS|PUBLIC_URL|BASIC_AUTH_USER|BASIC_AUTH_HASH|GEMINI_API_KEY|ACME_EMAIL|APP_UID)
     printf -v "v_$key" '%s' "$val" ;;
   esac
 done < .env
@@ -95,6 +164,13 @@ seen=$(getent hosts "$s" | awk '{print $1; exit}')
 
 [ -w /data/chroma ] && ok "/data/chroma is writable" \
   || bad "/data/chroma missing or not writable -- mount the data disk (README B2)"
+
+# The container drops to APP_UID; the bind mount keeps the host's ownership,
+# so a mismatch here is a crash loop on the first ingest, not a warning.
+eval "u=\${v_APP_UID-1001}"
+owner=$(stat -c '%u' /data/chroma 2>/dev/null || echo '?')
+[ "$owner" = "$u" ] && ok "/data/chroma owned by uid $u (APP_UID)" \
+  || bad "/data/chroma owned by uid $owner but the container runs as $u -- chown it or set APP_UID=$owner in .env"
 
 command -v docker >/dev/null && ok "docker present" || bad "docker not installed"
 docker compose version >/dev/null 2>&1 && ok "compose plugin present" \
@@ -137,7 +213,7 @@ PREFLIGHT
     echo ">> tail logs with:  deploy/deploy.sh $REMOTE logs"
     ;;
   *)
-    echo "unknown command: $CMD (use: up | preflight | logs | down)" >&2
+    echo "unknown command: $CMD (use: up | preflight | logs | down | status | stop | start)" >&2
     exit 2
     ;;
 esac

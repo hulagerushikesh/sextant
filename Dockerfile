@@ -6,6 +6,13 @@
 # something people run once to try the project.
 FROM python:3.12
 
+# The process runs as this uid, not root. It must match the owner of the
+# host directory bind-mounted at /data/chroma (deploy/README B2 chowns it to
+# the box user; on the GCE image that is 1001). Override at build time:
+#   docker compose build --build-arg APP_UID=1000
+ARG APP_UID=1001
+RUN useradd --uid "$APP_UID" --create-home --shell /usr/sbin/nologin app
+
 WORKDIR /app
 
 # Dependency install is its own layer, so editing source does not re-resolve
@@ -26,16 +33,28 @@ COPY eval/ eval/
 
 # Bake the models into the image. Without this the first query after
 # `docker compose up` silently downloads ~180 MB and appears to hang.
-ENV HF_HOME=/opt/models
-RUN python -c "\
+# Baked as `app`, not root: huggingface_hub takes a lock file in the cache
+# when it loads a model, and a root-owned cache makes that write fail for
+# the runtime user. Building the cache as the user that reads it is simpler
+# than chowning it afterwards and proves the same thing.
+# HF_HUB_OFFLINE stops the runtime from phoning home to check for newer
+# weights on every start -- the image is the pin.
+ENV HF_HOME=/opt/models HF_HUB_OFFLINE=1
+RUN mkdir -p /opt/models && chown app:app /opt/models
+USER app
+RUN HF_HUB_OFFLINE=0 python -c "\
 from sentence_transformers import CrossEncoder, SentenceTransformer; \
 SentenceTransformer('all-MiniLM-L6-v2'); \
 CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')"
+USER root
 
 # Written to a volume so ingested documents survive `docker compose down`.
+# In production this path is a bind mount and the host's ownership wins; the
+# chown here only covers the dev compose file's named volume.
 ENV SEXTANT_CHROMA_DIR=/data/chroma
 ENV SEXTANT_LOG_FORMAT=json
-RUN mkdir -p /data/chroma
+RUN mkdir -p /data/chroma && chown app:app /data/chroma
 
+USER app
 EXPOSE 8000
 CMD ["uvicorn", "mcp_server.main:app", "--host", "0.0.0.0", "--port", "8000"]
