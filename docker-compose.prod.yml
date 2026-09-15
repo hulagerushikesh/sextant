@@ -64,6 +64,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # The uid the process runs as; must own the host's /data/chroma.
+        # Set APP_UID in .env if the box user is not 1001 (`id -u`).
+        APP_UID: ${APP_UID:-1001}
     restart: unless-stopped
     # Brings GEMINI_API_KEY and any SEXTANT_* (or legacy AGENTICRAG_*) tuning from .env into the app.
     # Raw for the same reason as above: an API key is opaque and may contain $.

@@ -17,7 +17,7 @@ last, gated on an explicit OK.
 | B | Settle the reranker with data | ₹0 (local CPU) | **Done 2026-09-15** (`bd8eec6`) — it stays; `eval/golden-large.jsonl`, `learning/reranker-decision.md` |
 | C | Docs match the code | ₹0 | **Done 2026-09-15** — README roadmap 0–15, env table, `CLAUDE.md` with standing rules |
 | D | Go live behind the gate | **≈₹135/day while up** — ask first | `https://agenticrag.hulage.in/health` → `healthy` through Basic auth; one cited `/query` proof |
-| E | Ops floor | ₹0–small | uptime check, non-root container, start/stop wrapper, snapshot restore tested once |
+| E | Ops floor | ₹0 | **Done 2026-09-15** — `deploy.sh status\|stop\|start`, non-root image (built + run locally), uptime-check runbook. Snapshot drill skipped on the owner's call |
 
 ## A — Identity (free)
 
@@ -97,15 +97,18 @@ Then, **after an explicit OK on ≈₹5.6/hr**:
 
 ## E — Ops floor (mostly free)
 
-1. `deploy/deploy.sh start|stop|status` wrapping `gcloud compute instances
-   …` — the thing that makes on-demand cheap to actually do.
-2. Uptime check with Basic-auth header on `/health` (GCP Monitoring; free
-   tier covers one) — only meaningful if 24/7 is chosen.
-3. Non-root user in the API Dockerfile; verify `HF_HOME` cache and
-   `/data/chroma` are writable by it (the untested risk noted in Phase 13).
-4. Restore a nightly snapshot to a scratch disk once and read the Chroma
-   sqlite from it — a backup is a theory until restored. Small one-off cost
-   (≈₹10) — ask first.
+1. ✅ `deploy/deploy.sh HOST status|stop|start` — reads instance/zone/project
+   from the config-ssh alias; `start` prints the hourly cost and asks.
+2. ✅ Uptime check: documented as a runbook command (`deploy/README.md`,
+   B6) rather than created — it needs the gate password (never handled here)
+   and only makes sense once the VM is meant to stay up.
+3. ✅ Non-root: `ARG APP_UID=1001` → `useradd app`; models baked as `app`
+   with `HF_HUB_OFFLINE=1` at runtime; `/data/chroma` chowned for the dev
+   volume, host ownership wins on the prod bind mount; preflight compares
+   `stat -c %u /data/chroma` to `APP_UID`. Built and run locally: process
+   uid 1001, model load and ingest+search work.
+4. ⏭ Snapshot restore drill — skipped on the owner's call. Still true that
+   a backup is a theory until restored; revisit when the site is live.
 
 ## Out of scope for 15
 

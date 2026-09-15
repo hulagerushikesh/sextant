@@ -102,23 +102,34 @@
 
     <div class="card">
       <h2>Track B · GCP rollout <span class="tag wait">needs your account</span></h2>
-      <p class="desc">Runbook is written; commands are ready to run against your project. I stop at B3.</p>
+      <p class="desc">B1–B2 provisioned 2026-09-13 (project <code>agenticrag-rush</code>, IP <code>35.226.228.218</code>, VM parked/stopped). B3 + B4 are yours; B5–B6 run after an OK on the VM start cost.</p>
       <ul data-track="B">
         <li data-id="b1"><div class="box">✓</div><div class="txt"><div class="t">B1 · Provision VM + disk + firewall</div><div class="d"><code>e2-standard-2</code> (8GB), separate persistent disk for <code>/data</code>, 80/443 open, SSH locked to your IP.</div></div></li>
         <li data-id="b2"><div class="box">✓</div><div class="txt"><div class="t">B2 · Reserve static IP</div><div class="d">So the subdomain never has to change.</div></div></li>
         <li data-id="b3" class="handoff"><div class="box">✓</div><div class="txt"><div class="t">B3 · Add the subdomain <span class="youhere">◀ handoff — you</span></div><div class="d">DNS <code>A</code> record <code>agenticrag.hulage.in → &lt;static IP&gt;</code> at your <code>hulage.in</code> DNS host. Must exist before the frontend build (Vite bakes the URL) and before Caddy can get a cert.</div></div></li>
         <li data-id="b4"><div class="box">✓</div><div class="txt"><div class="t">B4 · Secrets on the box</div><div class="d"><code>.env</code> (chmod 600): Basic-auth hash + <code>GEMINI_API_KEY</code>.</div></div></li>
-        <li data-id="b5"><div class="box">✓</div><div class="txt"><div class="t">B5 · Ship + verify</div><div class="d"><code>deploy/deploy.sh USER@IP</code>; Caddy issues the cert; <code>/health</code> healthy behind the gate.</div></div></li>
-        <li data-id="b6"><div class="box">✓</div><div class="txt"><div class="t">B6 · Corpus + guardrails</div><div class="d">Ingest <code>eval/corpus</code>, restart api; GCP budget alert + nightly disk snapshot.</div></div></li>
+        <li data-id="b5"><div class="box">✓</div><div class="txt"><div class="t">B5 · Ship + verify</div><div class="d"><code>deploy/deploy.sh HOST</code>; Caddy issues the cert; <code>/health</code> healthy behind the gate.</div></div></li>
+        <li data-id="b6"><div class="box">✓</div><div class="txt"><div class="t">B6 · Corpus + guardrails</div><div class="d">Ingest <code>eval/corpus</code>, restart api; GCP budget alert (₹1,700) + nightly disk snapshot — both already in place.</div></div></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Track E · Ops floor <span class="tag">Milestone 15</span></h2>
+      <p class="desc">The things that make running it cheap and boring. Done 2026-09-15 except the one that costs.</p>
+      <ul data-track="E">
+        <li data-id="e1"><div class="box">✓</div><div class="txt"><div class="t">E1 · Park / unpark from the laptop</div><div class="d"><code>deploy/deploy.sh HOST status|stop|start</code> — <code>start</code> states the hourly cost and asks before turning the meter on.</div></div></li>
+        <li data-id="e2"><div class="box">✓</div><div class="txt"><div class="t">E2 · Uptime check</div><div class="d">Runbook command for a Cloud Monitoring check on <code>/health</code> through the gate. Only worth creating if the VM runs 24/7 — it would page on a deliberate stop.</div></div></li>
+        <li data-id="e3"><div class="box">✓</div><div class="txt"><div class="t">E3 · Non-root container</div><div class="d">API runs as <code>APP_UID</code> (1001, the box user that owns <code>/data/chroma</code>); models baked as that user so the HF lock file works; preflight checks the uid matches; built and run locally to prove it.</div></div></li>
+        <li data-id="e4"><div class="box">✓</div><div class="txt"><div class="t">E4 · Snapshot restore drill</div><div class="d">Restore one nightly snapshot to a scratch disk and read the Chroma sqlite from it. Skipped on the owner's call (small one-off cost); a backup stays a theory until this runs.</div></div></li>
       </ul>
     </div>
 
   </div>
-  <footer>Track A verified: ruff + mypy clean, tests green. Updated 2026-08-26. Click any item to toggle; state saved locally.</footer>
+  <footer>Track A verified locally; B1–B2 live; E1–E3 done. Updated 2026-09-15. Click any item to toggle; state saved locally.</footer>
 </div>
 <script>
-  var KEY="agenticrag-deploy-v1";
-  var DONE_A=["a1","a2","a3","a4","a5","a6"];        // Track A seeded complete
+  var KEY="agenticrag-deploy-v2";
+  var DONE_A=["a1","a2","a3","a4","a5","a6","b1","b2","e1","e2","e3"];  // seeded complete
   var saved;
   try{ saved=JSON.parse(localStorage.getItem(KEY))||{}; }catch(e){ saved={}; }
   if(!localStorage.getItem(KEY)){ DONE_A.forEach(function(id){saved[id]=true;}); }

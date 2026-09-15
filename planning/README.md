@@ -24,7 +24,7 @@ Operational runbooks stay next to what they operate: [`../deploy/README.md`](../
 | 9–12 | Index Lab: flat/HNSW/IVF-PQ from scratch, FAISS reference, two-stage rerank, live `AGENTICRAG_ANN_INDEX` switch | Done |
 | 13 | Production deploy: prod compose, Caddy edge, preflight, GCP provisioned, image built on VM | **Parked** — needs DNS A record + `set-secrets.sh` from the owner |
 | 14 | Product-grade UI: ⌘K palette, shortcuts, empty states, onboarding, skeletons, toasts | Done |
-| 15 | Ship + prove + rename | **In progress** — A, B, C done 2026-09-15; D (go-live) and E (ops) open — see `milestone-15.md` |
+| 15 | Ship + prove + rename | **In progress** — A, B, C, E done 2026-09-15; only D (go-live) open, parked on DNS + secrets + a cost OK — see `milestone-15.md` |
 
 Numbers that describe the system today: 320 tests, mypy clean, two golden
 sets (60 questions / 52 chunks; 32 page-labelled / 1,602 chunks), hit@1 0.94
