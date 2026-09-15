@@ -186,7 +186,7 @@ curl -u rush:PASSWORD https://agenticrag.hulage.in/health
 # Ingest the committed corpus into the VM's Chroma volume, then restart the api
 # so it reloads the persisted store (it holds a stale segment after CLI ingest).
 ssh USER@IP 'cd ~/agenticrag && \
-  docker compose -f docker-compose.prod.yml exec api agenticrag-ingest eval/corpus -r && \
+  docker compose -f docker-compose.prod.yml exec api sextant-ingest eval/corpus -r && \
   docker compose -f docker-compose.prod.yml restart api'
 
 # A real gated query end to end:
@@ -200,10 +200,12 @@ curl -u rush:PASSWORD -s https://agenticrag.hulage.in/query \
 ```bash
 # Monthly budget alert, scoped to THIS project so other projects on the same
 # billing account don't count. Emails billing admins at 50/90/100%.
-# (The amount is a bare number -- `20USD` is rejected as an invalid argument.)
+# The amount is a bare number in the BILLING ACCOUNT'S currency -- `20USD` is
+# rejected, and on an INR account `20` means twenty rupees (this bit us: the
+# first budget was ₹2). ~$20 on an INR account is 1700.
 gcloud services enable billingbudgets.googleapis.com
 gcloud billing budgets create --billing-account=YOUR_BILLING_ID \
-  --display-name="agenticrag monthly" --budget-amount=20 \
+  --display-name="agenticrag monthly" --budget-amount=1700 \
   --filter-projects="projects/$PROJECT" \
   --threshold-rule=percent=0.5 --threshold-rule=percent=0.9 --threshold-rule=percent=1.0
 
@@ -215,7 +217,7 @@ gcloud compute disks add-resource-policies agenticrag-data \
   --zone="$ZONE" --resource-policies=agenticrag-daily
 ```
 
-App-level, the rate limiter (`AGENTICRAG_RATE_LIMIT` / `_WINDOW`) already caps
+App-level, the rate limiter (`SEXTANT_RATE_LIMIT` / `_WINDOW`) already caps
 per-IP request rate; tighten it in `.env` if the gate is shared widely.
 
 ---
@@ -223,11 +225,34 @@ per-IP request rate; tighten it in `.env` if the gate is shared widely.
 ## Redeploying
 
 ```bash
-deploy/deploy.sh USER@IP          # rsync changes, rebuild, restart
-deploy/deploy.sh USER@IP down     # stop
+deploy/deploy.sh USER@IP          # ship changes, rebuild, restart
+deploy/deploy.sh USER@IP down     # stop the containers
 ```
 
 The box `.env` and `/data` are never touched by a redeploy.
+
+## Parking the VM (cost)
+
+Running, the VM bills ~₹135/day whether or not anyone uses it. When the
+site is not needed, stop the instance — disks, the reserved IP, the built
+images and `.env` all survive a stop. Only the meters change:
+
+| State | ₹/month (approx.) |
+| --- | --- |
+| running e2-standard-2 | 4,100 + 300 (IP) + 270 (disks) |
+| stopped | 600 (idle IP bills ~2× in-use) + 270 (disks) |
+
+```bash
+gcloud compute instances stop  agenticrag --zone="$ZONE"   # park
+gcloud compute instances start agenticrag --zone="$ZONE"   # resume (~30 s to ssh)
+deploy/deploy.sh USER@IP preflight                         # DNS/.env/disk still right?
+deploy/deploy.sh USER@IP                                   # containers come back with the VM
+                                                           # (restart: unless-stopped) --
+                                                           # run this only if the tree changed
+```
+
+The static IP does not change across stop/start, so DNS stays valid.
+Releasing the IP saves the ₹600 but changes the address and the DNS record.
 
 ---
 

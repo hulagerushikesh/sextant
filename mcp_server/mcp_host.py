@@ -23,6 +23,8 @@ from typing import Any
 from mcp import Client, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
+from tools import settings
+
 logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -31,13 +33,15 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # it here would pull chromadb and torch into the agent server's import graph,
 # and keeping the knowledge base out of this process is the whole point of
 # speaking to it over a protocol.
-PERSIST_DIR_ENV = "AGENTICRAG_CHROMA_DIR"
+PERSIST_DIR_ENV = settings.env_name("CHROMA_DIR")
 # Which dense index the knowledge base uses. Forwarded like the store override:
 # it changes what retrieval does, so dropping it would silently run the default.
-ANN_BACKEND_ENV = "AGENTICRAG_ANN_INDEX"
+ANN_BACKEND_ENV = settings.env_name("ANN_INDEX")
 
 # Variables the subprocess needs but MCP's stdio client would otherwise strip.
-_FORWARDED_ENV = (PERSIST_DIR_ENV, ANN_BACKEND_ENV)
+# Both spellings of each: a `.env` written before the rename still says
+# AGENTICRAG_*, and the subprocess resolves the same fallback order.
+_FORWARDED_ENV = settings.env_names("CHROMA_DIR") + settings.env_names("ANN_INDEX")
 
 
 def kb_server() -> StdioServerParameters:

@@ -46,6 +46,7 @@ from mcp_server.conversation import replay
 from mcp_server.mcp_host import MCPHost, ToolUnavailable
 from mcp_server.pricing import estimate_cost
 from mcp_server.sources import Source, SourceRegistry
+from tools import settings
 
 logger = logging.getLogger(__name__)
 
@@ -56,10 +57,10 @@ logger = logging.getLogger(__name__)
 # with a 400 -- only the Gemini-3 thinking models support it. Chosen as the
 # default because for grounded RAG retrieval does the heavy lifting and the model
 # only writes over passages it is handed. Overridable because model choice is a
-# deployment decision, not a tuning knob: set AGENTICRAG_MODEL=gemini-3.7-flash
+# deployment decision, not a tuning knob: set SEXTANT_MODEL=gemini-3.7-flash
 # for stronger synthesis (~3x the token price), or a pro model for the hardest
 # multi-hop questions.
-MODEL = os.getenv("AGENTICRAG_MODEL", "gemini-3.1-flash-lite")
+MODEL = settings.getenv("MODEL", "gemini-3.1-flash-lite") or "gemini-3.1-flash-lite"
 
 # Thinking tokens come out of this budget, so it is the answer allowance *plus*
 # room to reason. 4096 was enough for the answer alone and truncated in
@@ -88,15 +89,15 @@ READABLE_TOOLS = {"kb_search", "kb_stats"}
 # every path that formats a grounded citation, prices it and shows it in the
 # trace stays live, so turning it back on is one flag and not a re-port.
 #
-#   export AGENTICRAG_WEB_SEARCH=on     # for the whole server
+#   export SEXTANT_WEB_SEARCH=on        # for the whole server
 #   {"query": "...", "web_search": true}  # for one request
-WEB_SEARCH_ENV = "AGENTICRAG_WEB_SEARCH"
+WEB_SEARCH_ENV = settings.env_name("WEB_SEARCH")
 _TRUTHY = {"1", "true", "yes", "on"}
 
 
 def web_search_default() -> bool:
     """Whether web search is offered when a request does not say."""
-    return os.getenv(WEB_SEARCH_ENV, "").strip().lower() in _TRUTHY
+    return (settings.getenv("WEB_SEARCH", "") or "").strip().lower() in _TRUTHY
 
 SYSTEM_PROMPT = """You answer questions for a user who keeps a private document \
 collection. You have tools; use them before answering.
@@ -386,7 +387,7 @@ async def run(
     """Answer `query`, yielding events as the agent works.
 
     `web_search` overrides the server default for this one question; None
-    means whatever `AGENTICRAG_WEB_SEARCH` says, which is off.
+    means whatever `SEXTANT_WEB_SEARCH` says, which is off.
 
     `history` is the conversation so far and `prior_sources` the labels already
     handed out in it. Both come from the client -- this process keeps no session

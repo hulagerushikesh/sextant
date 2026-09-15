@@ -68,7 +68,7 @@ class TestParsing:
     def test_an_oversized_upload_points_at_the_command_that_handles_it(self):
         with pytest.raises(UnsupportedDocument) as caught:
             to_document("huge.txt", b"x" * (MAX_UPLOAD_BYTES + 1))
-        assert "agenticrag-ingest" in str(caught.value)
+        assert "sextant-ingest" in str(caught.value)
 
     def test_pdf_is_among_the_formats_offered(self):
         # The whole point of moving parsing to the server.

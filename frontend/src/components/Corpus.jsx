@@ -117,7 +117,7 @@ export default function Corpus({ corpus, supported, onRefresh, pickRef }) {
           {report.tone === 'error' && (
             <p>
               For anything too large for an upload, or a whole directory:
-              <code className="report-cmd">agenticrag-ingest -r ./docs</code>
+              <code className="report-cmd">sextant-ingest -r ./docs</code>
             </p>
           )}
         </div>

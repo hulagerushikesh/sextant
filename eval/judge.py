@@ -40,6 +40,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from tools import settings
+
 JUDGE_MODEL = "gemini-3.7-flash"
 CITATION = re.compile(r"\[(\d+)\]")
 
@@ -240,12 +242,11 @@ def summarise(records: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def main() -> None:
-    """Console-script entry point: `agenticrag-judge`."""
+    """Console-script entry point: `sextant-judge`."""
     from eval.harness import load_golden
-    from tools.vector_db.vector_search import PERSIST_DIR_ENV
 
     parser = argparse.ArgumentParser(
-        prog="agenticrag-judge",
+        prog="sextant-judge",
         description="Grade generated answers for faithfulness, relevance and abstention.",
     )
     parser.add_argument("-n", "--limit", type=int, help="grade only the first N questions")
@@ -256,11 +257,11 @@ def main() -> None:
         sys.exit(
             "GEMINI_API_KEY is not set. Generation metrics need it twice over: once to "
             "produce the answers and once to grade them. Retrieval metrics do not -- run "
-            "`agenticrag-eval` instead."
+            "`sextant-eval` instead."
         )
 
-    store = Path(tempfile.mkdtemp(prefix="agenticrag-judge-"))
-    os.environ[PERSIST_DIR_ENV] = str(store)
+    store = Path(tempfile.mkdtemp(prefix="sextant-judge-"))
+    settings.setenv("CHROMA_DIR", str(store))
     try:
         summary = asyncio.run(run(load_golden(), args.limit))
         records = summary.pop("records")

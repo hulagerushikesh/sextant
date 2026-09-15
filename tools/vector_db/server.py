@@ -136,7 +136,7 @@ async def kb_search(
         "attributed to the region it starts in. Re-using an existing 'id' "
         "replaces that document. Long documents are split into overlapping "
         "chunks automatically. To index a file from disk, use the "
-        "agenticrag-ingest command instead."
+        "sextant-ingest command instead."
     )
 )
 async def kb_ingest(
@@ -227,7 +227,7 @@ async def kb_ann_compare(
 
 
 def main() -> None:
-    """Console-script entry point: `agenticrag-kb`.
+    """Console-script entry point: `sextant-kb`.
 
     Installed by pyproject so MCP clients can name a single command with no
     flags -- some clients parse the argument list themselves and would eat a
