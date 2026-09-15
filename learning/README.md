@@ -388,7 +388,8 @@ read them; start with the one marked ★.
   — read *Transports* and *Tools* end to end; the rest is reference.
 
 **Research questions this repo is positioned to answer** (each is a
-level-6-style experiment, zero cloud cost):
+level-6-style experiment, zero cloud cost; the open ones are scheduled as
+`planning/milestone-16.md`):
 1. ~~At what corpus size does the cross-encoder start beating RRF alone?~~
    Done — [`reranker-decision.md`](reranker-decision.md). Follow-up it
    raised: tables embed badly; try a row-per-chunk loader and re-grade L25/L26.
