@@ -28,12 +28,13 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
 import shutil
 import sys
 import tempfile
 from pathlib import Path
 from typing import Any
+
+from tools import settings
 
 EVAL_DIR = Path(__file__).resolve().parent
 CORPUS_DIR = EVAL_DIR / "corpus"
@@ -274,11 +275,11 @@ async def run(modes: list[str]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
 
 
 def main() -> None:
-    """Console-script entry point: `agenticrag-eval`."""
-    from tools.vector_db.vector_search import PERSIST_DIR_ENV, RETRIEVAL_MODES
+    """Console-script entry point: `sextant-eval`."""
+    from tools.vector_db.vector_search import RETRIEVAL_MODES
 
     parser = argparse.ArgumentParser(
-        prog="agenticrag-eval",
+        prog="sextant-eval",
         description="Grade retrieval configurations against the committed golden set.",
     )
     parser.add_argument(
@@ -291,8 +292,8 @@ def main() -> None:
 
     # A throwaway index, so grading never touches whatever the user has
     # actually ingested. Set before KnowledgeBase is ever constructed.
-    store = Path(tempfile.mkdtemp(prefix="agenticrag-eval-"))
-    os.environ[PERSIST_DIR_ENV] = str(store)
+    store = Path(tempfile.mkdtemp(prefix="sextant-eval-"))
+    settings.setenv("CHROMA_DIR", str(store))
     try:
         payload, reports = asyncio.run(run(args.modes))
         if args.out:

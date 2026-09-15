@@ -65,18 +65,18 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
-    # Brings GEMINI_API_KEY and any AGENTICRAG_* tuning from .env into the app.
+    # Brings GEMINI_API_KEY and any SEXTANT_* (or legacy AGENTICRAG_*) tuning from .env into the app.
     # Raw for the same reason as above: an API key is opaque and may contain $.
     env_file:
       - path: .env
         format: raw
     environment:
-      AGENTICRAG_CHROMA_DIR: /data/chroma
-      AGENTICRAG_LOG_FORMAT: json
+      SEXTANT_CHROMA_DIR: /data/chroma
+      SEXTANT_LOG_FORMAT: json
       # Honour env.example's promise that PUBLIC_URL is the CORS allowlist. Same
       # origin in the one-subdomain layout, so this is belt-and-braces; it also
       # makes a future split app./api. deploy a .env change, not a code change.
-      AGENTICRAG_ALLOWED_ORIGINS: ${PUBLIC_URL:?set PUBLIC_URL in .env}
+      SEXTANT_ALLOWED_ORIGINS: ${PUBLIC_URL:?set PUBLIC_URL in .env}
     expose:
       - "8000"
     logging:

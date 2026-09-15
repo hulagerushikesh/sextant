@@ -1,7 +1,7 @@
 {
-  "name": "agentic-rag-frontend",
+  "name": "sextant-frontend",
   "version": "1.0.0",
-  "description": "Frontend UI for MCP-Powered Agentic RAG system",
+  "description": "sextant web interface",
   "main": "index.js",
   "scripts": {
     "dev": "vite",

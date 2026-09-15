@@ -159,7 +159,7 @@ class TestEmptyCollection:
 
 
 class TestDenseBackend:
-    """The dense-retrieval backend switch (AGENTICRAG_ANN_INDEX).
+    """The dense-retrieval backend switch (SEXTANT_ANN_INDEX).
 
     The default is Chroma's own vector search, unchanged. The point of the switch
     is that one of the hand-written ANN indexes can answer the dense half instead

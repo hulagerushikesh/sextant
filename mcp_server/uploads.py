@@ -15,7 +15,7 @@ base read arbitrary files on the machine, which is a far larger grant than
 crosses it.
 
 Chunking still happens once, over the whole document, exactly as it does for
-`agenticrag-ingest`. Splitting per page first would look equivalent and quietly
+`sextant-ingest`. Splitting per page first would look equivalent and quietly
 lose every page shorter than the minimum chunk size.
 """
 
@@ -74,10 +74,10 @@ def to_document(filename: str, data: bytes, category: str = "upload") -> dict[st
     if len(data) > MAX_UPLOAD_BYTES:
         raise UnsupportedDocument(
             f"{name} is {len(data) // 1_000_000}MB, over the "
-            f"{MAX_UPLOAD_BYTES // 1_000_000}MB limit. Use: agenticrag-ingest {name}"
+            f"{MAX_UPLOAD_BYTES // 1_000_000}MB limit. Use: sextant-ingest {name}"
         )
 
-    with tempfile.TemporaryDirectory(prefix="agenticrag-upload-") as directory:
+    with tempfile.TemporaryDirectory(prefix="sextant-upload-") as directory:
         path = Path(directory) / name
         path.write_bytes(data)
         loaded = load_path(path, category=category)

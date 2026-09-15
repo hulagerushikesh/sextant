@@ -173,7 +173,7 @@ class TestIngest:
         big = [{"content": "x" * 2_000_000}]
         response = client.post("/ingest", json={"documents": big})
         assert response.status_code == 413
-        assert "agenticrag-ingest" in response.json()["detail"]
+        assert "sextant-ingest" in response.json()["detail"]
 
     def test_a_tool_failure_becomes_a_body_error_not_a_500(self, client, host):
         host.results.pop("kb_ingest")

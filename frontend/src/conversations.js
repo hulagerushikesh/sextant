@@ -12,7 +12,9 @@
  * run yourself; neither would be for a hosted product.
  */
 
-const KEY = 'agenticrag.conversations.v1'
+import { storageKey } from './storage'
+
+const KEY = storageKey('conversations.v1')
 
 // Old threads are cheap to keep and impossible to keep forever. Thirty is well
 // inside a 5MB quota even with passage text attached, and the writer evicts

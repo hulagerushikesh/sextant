@@ -36,7 +36,7 @@ export default function Opening({ corpus, recent, onAsk, onAddFiles, firstRun, o
           <ol className="firstrun-steps">
             <li>
               <strong>Add documents.</strong> Drop files on the Corpus panel, or index a folder
-              with <code>agenticrag-ingest -r ./docs</code>. PDFs keep their page numbers.
+              with <code>sextant-ingest -r ./docs</code>. PDFs keep their page numbers.
             </li>
             <li>
               <strong>Ask.</strong> The agent searches your corpus first and only reaches for
@@ -89,7 +89,7 @@ export default function Opening({ corpus, recent, onAsk, onAddFiles, firstRun, o
               Add documents
             </button>
             <span className="opening-or">
-              or run <code>agenticrag-ingest -r ./docs</code>
+              or run <code>sextant-ingest -r ./docs</code>
             </span>
           </div>
         </>

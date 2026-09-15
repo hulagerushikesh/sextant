@@ -18,7 +18,9 @@
  * deliberately overcharged; the panel repeats the important half of that.
  */
 
-const KEY = 'agenticrag.usage.v1'
+import { storageKey } from './storage'
+
+const KEY = storageKey('usage.v1')
 
 const EMPTY = {
   questions: 0,

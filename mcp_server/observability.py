@@ -15,13 +15,14 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import threading
 import time
 import uuid
 from collections import defaultdict, deque
 from contextvars import ContextVar
 from datetime import UTC, date, datetime, timedelta
+
+from tools import settings
 
 REQUEST_ID_HEADER = "X-Request-ID"
 request_id: ContextVar[str] = ContextVar("request_id", default="-")
@@ -30,13 +31,13 @@ request_id: ContextVar[str] = ContextVar("request_id", default="-")
 # this protects a single-process demo from a runaway loop or an open tab
 # hammering the model, and it is not a substitute for a real gateway in front of
 # a deployment that has more than one replica.
-RATE_LIMIT_REQUESTS = int(os.getenv("AGENTICRAG_RATE_LIMIT", "20"))
-RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("AGENTICRAG_RATE_WINDOW", "60"))
+RATE_LIMIT_REQUESTS = int(settings.getenv("RATE_LIMIT", "20") or "20")
+RATE_LIMIT_WINDOW_SECONDS = int(settings.getenv("RATE_WINDOW", "60") or "60")
 
 # Hard ceiling on estimated model spend per UTC day. Off by default (<= 0): a
 # cost cap that fires unexpectedly is worse than none for someone running
 # locally. Set it in a public deployment so a leaked URL can never run up a bill.
-DAILY_BUDGET_USD = float(os.getenv("AGENTICRAG_DAILY_BUDGET_USD", "0"))
+DAILY_BUDGET_USD = float(settings.getenv("DAILY_BUDGET_USD", "0") or "0")
 
 
 class RequestIdFilter(logging.Filter):
@@ -71,7 +72,7 @@ class JsonFormatter(logging.Formatter):
 def configure_logging(level: str | None = None, json_logs: bool | None = None) -> None:
     """Install the formatter and the request-id filter on the root logger."""
     if json_logs is None:
-        json_logs = os.getenv("AGENTICRAG_LOG_FORMAT", "text").lower() == "json"
+        json_logs = (settings.getenv("LOG_FORMAT", "text") or "text").lower() == "json"
 
     handler = logging.StreamHandler()
     handler.addFilter(RequestIdFilter())
@@ -83,7 +84,7 @@ def configure_logging(level: str | None = None, json_logs: bool | None = None) -
 
     root = logging.getLogger()
     root.handlers = [handler]
-    root.setLevel(level or os.getenv("AGENTICRAG_LOG_LEVEL") or "INFO")
+    root.setLevel(level or settings.getenv("LOG_LEVEL") or "INFO")
 
 
 def new_request_id() -> str:

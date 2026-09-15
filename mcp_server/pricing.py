@@ -34,7 +34,7 @@ PRICING_AS_OF = "2026-08"
 # gemini-3.1-flash-lite, the default in `agent.py`. A flat list rate, not an
 # introductory one, so there is no expiry to track. This model thinks, and
 # thinking bills as output (folded into the output count where it is read), so
-# the output rate carries that. If AGENTICRAG_MODEL is bumped to a flash or pro
+# the output rate carries that. If SEXTANT_MODEL is bumped to a flash or pro
 # model these numbers understate the bill -- update them to match whatever model
 # is actually deployed (gemini-3.7-flash is $0.75/$3.75 on its introductory rate
 # to 2026-12-31, then $1.50/$7.50).

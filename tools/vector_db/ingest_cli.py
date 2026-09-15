@@ -1,5 +1,5 @@
 """
-Command-line ingestion: `agenticrag-ingest`.
+Command-line ingestion: `sextant-ingest`.
 
 File loading lives here rather than behind an MCP tool on purpose. A
 `kb_ingest_file` tool would hand every client that mounts this server the ability
@@ -67,9 +67,9 @@ async def _ingest(files: list[Path], category: str) -> int:
 
 
 def main() -> None:
-    """Console-script entry point: `agenticrag-ingest`."""
+    """Console-script entry point: `sextant-ingest`."""
     parser = argparse.ArgumentParser(
-        prog="agenticrag-ingest",
+        prog="sextant-ingest",
         description="Index PDF, Markdown and text files into the knowledge base.",
     )
     parser.add_argument("paths", nargs="+", help="files or directories to index")

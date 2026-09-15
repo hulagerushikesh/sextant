@@ -34,7 +34,7 @@ CORPUS = {
 
 @pytest.fixture(scope="session")
 def corpus_dir() -> Iterator[Path]:
-    directory = Path(tempfile.mkdtemp(prefix="agenticrag-test-corpus-"))
+    directory = Path(tempfile.mkdtemp(prefix="sextant-test-corpus-"))
     for name, text in CORPUS.items():
         (directory / f"{name}.md").write_text(text)
     yield directory
@@ -46,7 +46,7 @@ def store_dir() -> Iterator[Path]:
     """An isolated ChromaDB directory, so tests never touch a real corpus."""
     from tools.vector_db.vector_search import PERSIST_DIR_ENV
 
-    directory = Path(tempfile.mkdtemp(prefix="agenticrag-test-store-"))
+    directory = Path(tempfile.mkdtemp(prefix="sextant-test-store-"))
     previous = os.environ.get(PERSIST_DIR_ENV)
     os.environ[PERSIST_DIR_ENV] = str(directory)
     yield directory
