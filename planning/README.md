@@ -4,8 +4,11 @@ Where the project is, what it costs, and what comes next. Learning material
 lives in [`../learning/`](../learning/); this folder is only about moving the
 product.
 
-- [`milestone-15.md`](milestone-15.md) — **current plan**: ship, prove, and
-  make the name true.
+- [`milestone-16.md`](milestone-16.md) — **current plan**: retrieval
+  research, measured — five experiments against both golden sets.
+- [`milestone-15.md`](milestone-15.md) — done: ship, prove, rename.
+- [`go-live-proof.md`](go-live-proof.md) — what was observed when the site
+  went live.
 - [`trackers/`](trackers/) — self-contained HTML checklists from earlier
   phases (open in a browser; state lives in localStorage).
   - `deployment-tracker.html` — Phase 13 track A/B checklist.
@@ -25,6 +28,7 @@ Operational runbooks stay next to what they operate: [`../deploy/README.md`](../
 | 13 | Production deploy: prod compose, Caddy edge, preflight, GCP provisioned, image built on VM | **Live** 2026-09-15 at `agenticrag.hulage.in` (Basic-auth gate); VM run on demand |
 | 14 | Product-grade UI: ⌘K palette, shortcuts, empty states, onboarding, skeletons, toasts | Done |
 | 15 | Ship + prove + rename | **Done** 2026-09-15 — A–E; snapshot drill skipped. `go-live-proof.md` |
+| 16 | Retrieval research: table chunking, agent-level eval, chunk size, embedder swap, summary nodes | **Next** — see `milestone-16.md` |
 
 Numbers that describe the system today: 320 tests, mypy clean, two golden
 sets (60 questions / 52 chunks; 32 page-labelled / 1,602 chunks), hit@1 0.94
