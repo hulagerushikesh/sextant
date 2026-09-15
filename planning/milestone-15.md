@@ -13,9 +13,9 @@ last, gated on an explicit OK.
 
 | # | Goal | Cost | Done when |
 | --- | --- | --- | --- |
-| A | Identity: `sextant` everywhere | ₹0 | package, CLIs, README, UI title all say sextant; tests green |
-| B | Settle the reranker with data | ₹0 (local CPU) | eval row on a 1.5k-chunk corpus; decision recorded; image slimmed if dropped |
-| C | Docs match the code | ₹0 | README roadmap through 15, links fixed, `learning/` + `planning/` referenced |
+| A | Identity: `sextant` everywhere | ₹0 | **Done 2026-09-15** (`13e5c24`) — package/CLIs/env aliased, UI, localStorage migrated |
+| B | Settle the reranker with data | ₹0 (local CPU) | **Done 2026-09-15** (`bd8eec6`) — it stays; `eval/golden-large.jsonl`, `learning/reranker-decision.md` |
+| C | Docs match the code | ₹0 | **Done 2026-09-15** — README roadmap 0–15, env table, `CLAUDE.md` with standing rules |
 | D | Go live behind the gate | **≈₹135/day while up** — ask first | `https://agenticrag.hulage.in/health` → `healthy` through Basic auth; one cited `/query` proof |
 | E | Ops floor | ₹0–small | uptime check, non-root container, start/stop wrapper, snapshot restore tested once |
 
@@ -39,8 +39,16 @@ directory removed.
 
 ## B — Reranker decision (free, local CPU — kill when done)
 
-The README says reranking ties fusion on 52 chunks and "changed the top hit"
-on a 1,568-chunk corpus. That is a hypothesis, not a result.
+**Outcome:** kept. The store already held the 144-page survey (1,550
+chunks), so no download or re-embedding was needed; the harness grew
+`--store`/`--golden` and page-level grading instead. Rerank leads hit@1
+0.926 vs 0.889 and nDCG@5 0.931 vs 0.904 (one question in 27 — small) and
+is the only stage with a usable abstention score (5/5 unanswerable blocked
+at `min_score` 0.01, 0/27 answerable lost). Both misses are table-row hops,
+a chunking finding for later. Plan as written:
+
+The README said reranking ties fusion on 52 chunks and "changed the top hit"
+on a 1,568-chunk corpus. That was a hypothesis, not a result.
 
 1. Ingest arXiv 2303.18223 (144 pp, the Phase 4 fixture) into an isolated
    store (`AGENTICRAG_CHROMA_DIR` in the scratchpad — never the live

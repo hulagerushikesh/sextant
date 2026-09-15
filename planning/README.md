@@ -16,7 +16,7 @@ product.
 Operational runbooks stay next to what they operate: [`../deploy/README.md`](../deploy/README.md)
 (GCP + Caddy), [`../eval/README.md`](../eval/README.md) (golden set + metrics).
 
-## Status (2026-09-14)
+## Status (2026-09-15)
 
 | Phase | What | State |
 | --- | --- | --- |
@@ -24,11 +24,12 @@ Operational runbooks stay next to what they operate: [`../deploy/README.md`](../
 | 9–12 | Index Lab: flat/HNSW/IVF-PQ from scratch, FAISS reference, two-stage rerank, live `AGENTICRAG_ANN_INDEX` switch | Done |
 | 13 | Production deploy: prod compose, Caddy edge, preflight, GCP provisioned, image built on VM | **Parked** — needs DNS A record + `set-secrets.sh` from the owner |
 | 14 | Product-grade UI: ⌘K palette, shortcuts, empty states, onboarding, skeletons, toasts | Done |
-| 15 | Ship + prove + rename | **Next** — see `milestone-15.md` |
+| 15 | Ship + prove + rename | **In progress** — A, B, C done 2026-09-15; D (go-live) and E (ops) open — see `milestone-15.md` |
 
-Numbers that describe the system today: 318 tests, mypy clean, 60-question
-golden set, hit@1 0.94 (rrf) on the committed corpus, ~$0.003/query on
-`gemini-3.1-flash-lite`, 22 docs / 1,602 chunks in the local store.
+Numbers that describe the system today: 320 tests, mypy clean, two golden
+sets (60 questions / 52 chunks; 32 page-labelled / 1,602 chunks), hit@1 0.94
+and 0.93 for the full pipeline, ~$0.003/query on `gemini-3.1-flash-lite`,
+22 docs / 1,602 chunks in the local store. Package is `sextant` 0.7.0.
 
 ## Cost position
 
@@ -53,7 +54,8 @@ API calls) happens without an explicit OK on the amount.
    start|stop` wrapper until usage justifies always-on.
 2. **Keep or release the static IP while parked** — ₹600/mo for an address no
    DNS record points at yet. Decided 2026-09-14: keep.
-3. **Reranker** — evidence says it does not earn its place at 52 chunks; unproven
-   at 1,568. Milestone 15 settles it with data before the image is slimmed.
+3. ~~**Reranker**~~ — settled 2026-09-15: it stays. Only stage with a
+   calibrated abstention score; leads ranking at 1,602 chunks. See
+   `../learning/reranker-decision.md`.
 4. **Make the repo public** — requires stripping `ACME_EMAIL` from
    `deploy/env.example` and a final secret sweep of history.

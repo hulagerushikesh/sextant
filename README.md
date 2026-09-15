@@ -1,13 +1,17 @@
-# Agentic RAG
+# sextant
 
 A retrieval system built on the Model Context Protocol. The knowledge base is a
 real MCP server — it runs as its own process and works in any MCP client, not
 just this app. A FastAPI agent server discovers its tools over MCP, hands them to
-Claude alongside web search, and lets the model decide what to retrieve.
+the model alongside web search, and lets the model decide what to retrieve.
+Every retrieval stage is there because a measurement said so.
+
+Formerly *AgenticRAG*; renamed in 0.7. The `agenticrag-*` commands and
+`AGENTICRAG_*` variables still work as aliases for one release.
 
 ## Honest status
 
-The name finally describes the behaviour: the model chooses its own tools.
+The model chooses its own tools, and the numbers below are reproducible.
 
 | Capability | State |
 | --- | --- |
@@ -22,6 +26,10 @@ The name finally describes the behaviour: the model chooses its own tools.
 | Tests, types, structured logging, rate limits, Docker | Working |
 | Multi-turn conversation with stable citation labels | Working |
 | Interface: inline citations, agent trace, drag-and-drop upload | Working |
+| Index Lab: flat / HNSW / IVF-PQ from scratch, FAISS reference, live switch | Working |
+| Daily spend cap, per-query cost, cheapest model that runs the loop | Working |
+| Command palette, keyboard-first, empty states, onboarding | Working |
+| Production stack: Caddy TLS + Basic-auth gate, prod compose, preflight | Built, verified locally; VM provisioned, parked |
 
 Study material lives in [`learning/`](learning/) (a levelled path from
 foundations to the research papers) and project status, cost and the next
@@ -42,7 +50,7 @@ never built and are kept for history only.
 It has no dependency on the FastAPI app. Verified against MCP Inspector:
 
 ```bash
-npx @modelcontextprotocol/inspector --cli .venv/bin/agenticrag-kb --method tools/list
+npx @modelcontextprotocol/inspector --cli .venv/bin/sextant-kb --method tools/list
 ```
 
 To mount it in Claude Desktop, add this to
@@ -53,7 +61,7 @@ app. No `cwd` is needed — the console script resolves the package on its own.
 {
   "mcpServers": {
     "knowledge-base": {
-      "command": "/absolute/path/to/AgenticRAG/.venv/bin/agenticrag-kb"
+      "command": "/absolute/path/to/sextant/.venv/bin/sextant-kb"
     }
   }
 }
@@ -126,7 +134,7 @@ never separated from what produced it.
 ## Evaluation
 
 ```bash
-./.venv/bin/agenticrag-eval
+./.venv/bin/sextant-eval
 ```
 
 60 labelled questions over a committed 21-document corpus, graded per
@@ -145,21 +153,24 @@ Two results worth stating plainly, because one of them is unflattering.
 hit@1. They fail on different questions, which is the whole argument for
 running both.
 
-**Reranking does not, on this corpus.** It ties fusion on hit@1 and MRR and
-gains 0.001 on nDCG@5. At 52 chunks fusion already ranks correctly and the
-cross-encoder has nothing to fix. It did change the top hit on a 1,568-chunk
-corpus, so it is unproven at this scale rather than useless — but the honest
-reading is that the pipeline currently carries a 90 MB model and most of its
-latency for a stage this evidence cannot justify.
+**Reranking does not, on this corpus — and does on a larger one.** At 52
+chunks it ties fusion on hit@1 and MRR and gains 0.001 on nDCG@5; fusion
+already ranks correctly and the cross-encoder has nothing to fix. On a
+1,602-chunk store (a 144-page PDF, 32 page-labelled questions,
+`eval/golden-large.jsonl`) it leads on hit@1 0.926 vs 0.889 and nDCG@5 0.931
+vs 0.904, and it is the only stage whose score is calibrated enough to
+abstain on: 0.000 on every off-corpus question, ~0.95 on in-corpus ones,
+where RRF's rank reciprocals separate by 0.003. That is why it stays.
+The full argument is in [`learning/reranker-decision.md`](learning/reranker-decision.md).
 
-`agenticrag-eval --check` compares against the committed baseline and fails on
+`sextant-eval --check` compares against the committed baseline and fails on
 any drop over 0.02. That gate runs in CI on every push, and it has been tested
 by injecting a regression to confirm it fires.
 
 ## Operating it
 
 ```bash
-pytest tests/ -q          # 257 tests, ~70s (two models load once)
+pytest tests/ -q          # 320 tests, ~140s (two models load once)
 mypy mcp_server tools eval tests
 ruff check .
 pre-commit install
@@ -168,7 +179,7 @@ pre-commit install
 **Request ids.** Every response carries `X-Request-ID`, and every log line
 caused by that request carries it too. A caller-supplied id is honoured, so a
 trace can span the browser, this server and whatever sits in front of it. Set
-`AGENTICRAG_LOG_FORMAT=json` for one JSON object per line.
+`SEXTANT_LOG_FORMAT=json` for one JSON object per line.
 
 **Cost.** Each `/query` response reports `usage.cost_usd`. A six-turn agent loop
 is only a decision you can make if you can see what it cost.
@@ -182,12 +193,18 @@ appear in `/docs` and are rejected before a handler runs.
 | Variable | Default | |
 | --- | --- | --- |
 | `GEMINI_API_KEY` | — | Required for generation and web search; retrieval works without it |
-| `AGENTICRAG_MODEL` | `gemini-3.7-flash` | `gemini-3.1-pro-preview` for quality |
-| `AGENTICRAG_CHROMA_DIR` | `./chroma_db` | Where the collection lives |
-| `AGENTICRAG_LOG_FORMAT` | `text` | `json` for structured logs |
-| `AGENTICRAG_LOG_LEVEL` | `INFO` | |
-| `AGENTICRAG_RATE_LIMIT` | `20` | Requests per window, `0` disables |
-| `AGENTICRAG_RATE_WINDOW` | `60` | Window in seconds |
+| `SEXTANT_MODEL` | `gemini-3.1-flash-lite` | Cheapest model that runs the tool loop; `gemini-3.7-flash` for stronger synthesis |
+| `SEXTANT_CHROMA_DIR` | `./chroma_db` | Where the collection lives |
+| `SEXTANT_ANN_INDEX` | `chroma` | `flat` / `hnsw` / `ivfpq` / `ivfpq_rerank` to route live dense retrieval through the hand-written indexes |
+| `SEXTANT_WEB_SEARCH` | off | `on` offers Google Search grounding by default (billed per grounded request) |
+| `SEXTANT_DAILY_BUDGET_USD` | `0` (off) | Hard per-UTC-day spend cap; `/query` returns 429 once hit |
+| `SEXTANT_ALLOWED_ORIGINS` | `http://localhost:3000` | CORS allowlist, comma-separated |
+| `SEXTANT_LOG_FORMAT` | `text` | `json` for structured logs |
+| `SEXTANT_LOG_LEVEL` | `INFO` | |
+| `SEXTANT_RATE_LIMIT` | `20` | Requests per window, `0` disables |
+| `SEXTANT_RATE_WINDOW` | `60` | Window in seconds |
+
+Every variable also answers to its `AGENTICRAG_` spelling.
 
 ## Setup
 
@@ -244,11 +261,11 @@ stdio subprocess and owns its lifetime.
 Index files — PDF, Markdown or plain text:
 
 ```bash
-./.venv/bin/agenticrag-ingest ~/papers/survey.pdf --category paper
+./.venv/bin/sextant-ingest ~/papers/survey.pdf --category paper
 ```
 
 ```bash
-./.venv/bin/agenticrag-ingest ~/notes -r
+./.venv/bin/sextant-ingest ~/notes -r
 ```
 
 File loading is a command rather than an MCP tool on purpose: a `kb_ingest_file`
@@ -300,17 +317,22 @@ tools/vector_db/
   chunking.py        Token-aware splitting with overlap and exact char offsets
   embeddings.py      The embedding backend, and the token budget it implies
   retrieval.py       BM25, reciprocal rank fusion, cross-encoder reranking
-  ingest_cli.py      `agenticrag-ingest` — index files from disk
+  ann/               flat, HNSW, IVF-PQ (+rerank) in NumPy; FAISS reference; benchmark
+  ingest_cli.py      `sextant-ingest` — index files from disk
+tools/settings.py    `SEXTANT_*` env names, with `AGENTICRAG_*` fallback
 chroma_db/           Persistent vector store (gitignored)
 eval/
   corpus/            21 committed documents — the fixed evaluation corpus
   golden.jsonl       60 labelled questions, 50 answerable and 10 not
+  golden-large.jsonl 32 page-labelled questions over a 144-page PDF
   metrics.py         hit@1, recall@k, MRR, nDCG@k
-  harness.py         `agenticrag-eval` — grades every retrieval mode
-  judge.py           `agenticrag-judge` — faithfulness and abstention
+  harness.py         `sextant-eval` — grades every retrieval mode
+  judge.py           `sextant-judge` — faithfulness and abstention
   baseline.json      Committed results; the CI gate compares against these
-tests/               257 tests: chunking, retrieval, agent loop, API, regressions
-learning/            Study path + measured notes (ANN comparison)
+  baseline-large.json Results on the 1,602-chunk store (reranker decision)
+tests/               320 tests: chunking, retrieval, ANN, agent loop, API, regressions
+deploy/              Caddyfile, prod Dockerfile for the edge, deploy.sh, GCP runbook
+learning/            Study path + measured notes (ANN comparison, reranker decision)
 planning/            Status, cost, milestone plans, trackers, archived docs
 ```
 
@@ -350,7 +372,7 @@ and inline citations cannot resolve at all.
 page numbers. The first version of this panel read files in JavaScript, which
 silently limited it to formats a browser can read as text — so PDFs, the format
 people actually have, were refused with a note to go and run a terminal command.
-`POST /upload` takes the bytes, runs the same loaders `agenticrag-ingest` uses,
+`POST /upload` takes the bytes, runs the same loaders `sextant-ingest` uses,
 and hands the knowledge base text plus a list of page and section spans. It is
 data over the protocol, not a path: a `kb_ingest_file` tool would give every
 client that mounts the server the ability to read arbitrary local files.
@@ -398,9 +420,6 @@ corpus was live, the sources were real, and the prose was hardcoded.
 - `ruff format` is not enforced. Line length is already checked by the linter,
   and adopting a formatter would rewrite sixteen files whose wrapping was chosen
   for readability.
-- `docker compose config` validates, but the images have not been built here —
-  the Docker daemon was not running. That is the one thing not verified by
-  execution.
 - Conversations are per-browser. There is no account, no sync and no export;
   clearing site data clears them.
 - A follow-up cannot re-read a passage from two turns ago without searching for
@@ -414,7 +433,7 @@ corpus was live, the sources were real, and the prose was hardcoded.
   equations as inline code instead.
 - A web source's title is the site's domain and its link is a Google redirect.
   That is the shape of the grounding metadata, not a choice.
-- The judge and the agent now share one model family, so `agenticrag-judge`
+- The judge and the agent now share one model family, so `sextant-judge`
   grades Gemini's answers with Gemini. Same-family grading is a known bias; the
   deterministic citation check is unaffected by it, and is the half that catches
   the failure that matters most.
@@ -467,6 +486,23 @@ needed a conversion layer between the protocol's contract and the model's.
 7. **Interface** — chat history, inline citation links, richer agent trace
    *(done)*
 8. **Gemini** — generation ported from the Anthropic SDK to `google-genai` *(done)*
+9. **Index Lab** — flat, HNSW and IVF-PQ written from scratch and measured on
+   the real corpus; finding: exact search wins at personal scale
+   (`learning/ann-comparison.md`) *(done)*
+10. **Real-corpus proof + two-stage rerank** — IVF-PQ's recall ceiling broken
+    by exact re-scoring at unchanged hot memory *(done)*
+11. **FAISS reference column** — the pure-Python constant factor measured,
+    10–280× *(done)*
+12. **Live index switch** — `SEXTANT_ANN_INDEX` routes production dense
+    retrieval through any of them *(done)*
+13. **Production** — prod compose, Caddy TLS + Basic-auth gate, preflight,
+    daily spend cap, GCP VM provisioned and image built; edge verified
+    locally against a stub API *(built; go-live parked on DNS + secrets)*
+14. **Product-grade interface** — ⌘K palette, keyboard map, empty states,
+    onboarding, skeletons, toasts *(done)*
+15. **Ship, prove, rename** — `sextant` everywhere; reranker settled with
+    data on 1,602 chunks (it stays); docs match the code; go-live; ops floor
+    *(in progress — see `planning/milestone-15.md`)*
 
 ### On web search
 
