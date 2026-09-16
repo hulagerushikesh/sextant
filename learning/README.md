@@ -400,7 +400,10 @@ level-6-style experiment, zero cloud cost; the open ones are scheduled as
    jargon)? One function in `retrieval.py`, one eval row.
 3. RAPTOR-style summaries vs flat chunks for "overview" questions — the
    starter prompts in `Opening.jsx` are exactly this class.
-4. Swap MiniLM → bge-small: recall delta vs re-ingest cost vs image size.
+4. ~~Swap MiniLM → bge-small: recall delta vs re-ingest cost vs image
+   size.~~ Done — [`embedder-swap.md`](embedder-swap.md): +0.09 dense
+   hit@1 on the survey, −0.04 on the handbook, rerank unmoved; not
+   switched, opt-in via `SEXTANT_EMBEDDER`.
 5. IVF-PQ at 100k synthetic vectors: the point where the memory story turns
    into a latency story.
 

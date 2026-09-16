@@ -18,9 +18,25 @@ from __future__ import annotations
 import logging
 from typing import Protocol
 
+from tools import settings
+
 logger = logging.getLogger(__name__)
 
 LOCAL_MODEL = "all-MiniLM-L6-v2"
+EMBEDDER_ENV = settings.env_name("EMBEDDER")
+
+# Some retrieval models were trained with an instruction in front of the
+# *query* and nothing in front of the passage; embedding both sides the same
+# way costs them accuracy. Per model, because the string is part of the model.
+QUERY_PREFIXES = {
+    "BAAI/bge-small-en-v1.5": "Represent this sentence for searching relevant passages: ",
+    "BAAI/bge-base-en-v1.5": "Represent this sentence for searching relevant passages: ",
+}
+
+
+def configured_model() -> str:
+    """The embedding model this process should use (`SEXTANT_EMBEDDER`)."""
+    return settings.getenv("EMBEDDER", LOCAL_MODEL) or LOCAL_MODEL
 
 
 class EmbeddingsUnavailable(RuntimeError):
@@ -34,7 +50,10 @@ class Embedder(Protocol):
     max_tokens: int
 
     def encode(self, texts: list[str]) -> list[list[float]]:
-        """Embed a batch of texts."""
+        """Embed a batch of passages."""
+
+    def encode_query(self, text: str) -> list[float]:
+        """Embed one query -- the model's query-side instruction, if any, applied."""
 
     def count_tokens(self, text: str) -> int:
         """Tokens this text will cost when embedded."""
@@ -57,6 +76,7 @@ class LocalEmbedder:
 
         self._model = SentenceTransformer(model_name)
         self.name = model_name
+        self.query_prefix = QUERY_PREFIXES.get(model_name, "")
         # The model's own limit, not a number picked by hand. Everything past it
         # is discarded without warning, so the chunker treats it as a hard wall.
         limit = self._model.max_seq_length
@@ -71,6 +91,9 @@ class LocalEmbedder:
 
     def encode(self, texts: list[str]) -> list[list[float]]:
         return self._model.encode(texts, show_progress_bar=False).tolist()
+
+    def encode_query(self, text: str) -> list[float]:
+        return self.encode([self.query_prefix + text])[0]
 
     def count_tokens(self, text: str) -> int:
         # add_special_tokens=False: [CLS]/[SEP] are the chunker's headroom, not
@@ -89,12 +112,13 @@ class LocalEmbedder:
 def get_embedder() -> Embedder:
     """The embedder for this process.
 
-    One backend today. The roadmap called for moving to an API embedding model
-    (Voyage or OpenAI) to drop torch and ~900 MB of virtualenv, and this is the
-    seam where that would go -- but it would save nothing yet, because the
-    cross-encoder reranker in `retrieval.py` pulls torch in regardless. Phase 5's
-    golden set is what should decide whether an API model retrieves better;
-    adding a second, unmeasured backend before then is how you get a fallback
-    nobody can justify. See the difflib path this repo used to have.
+    One backend today, any sentence-transformers model by name. The roadmap
+    called for moving to an API embedding model (Voyage or OpenAI) to drop
+    torch and ~900 MB of virtualenv, and this is the seam where that would go
+    -- but it would save nothing yet, because the cross-encoder reranker in
+    `retrieval.py` pulls torch in regardless. The golden sets decide which
+    model is the default (`learning/embedder-swap.md`); a store remembers the
+    model that built it and refuses another, because two 384-dimensional
+    models mixed in one index fail silently, not loudly.
     """
-    return LocalEmbedder()
+    return LocalEmbedder(configured_model())

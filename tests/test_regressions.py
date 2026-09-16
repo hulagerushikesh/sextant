@@ -7,6 +7,8 @@ wrong stays visible, and so nobody quietly reintroduces one.
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import pytest
 
 from tools.vector_db.vector_search import (
@@ -44,6 +46,49 @@ class TestScoresMeanWhatTheySay:
 
     def test_a_fresh_collection_is_cosine(self, kb):
         assert kb._configured_space() == DISTANCE_SPACE == "cosine"
+
+    def test_a_store_remembers_its_embedding_model(self, kb):
+        # Stamped on first write, so a later process cannot mix vectors from a
+        # different model into it. Both MiniLM and bge-small are 384-d, so
+        # nothing else would catch that.
+        assert kb.collection.metadata["embedding_model"] == kb.embedder.name
+
+    def test_a_store_from_another_model_is_refused(self, tmp_path, monkeypatch):
+        import chromadb
+
+        store = tmp_path / "other"
+        client = chromadb.PersistentClient(path=str(store))
+        collection = client.get_or_create_collection(
+            name="documents",
+            configuration={"hnsw": {"space": "cosine"}},
+            metadata={"embedding_model": "some-other/model"},
+        )
+        collection.add(ids=["x"], embeddings=cast(Any, [[0.0] * 384]), documents=["x"])
+        del client
+
+        monkeypatch.setenv(PERSIST_DIR_ENV, str(store))
+        with pytest.raises(KnowledgeBaseUnavailable) as caught:
+            KnowledgeBase()
+        message = str(caught.value)
+        assert "some-other/model" in message and "SEXTANT_EMBEDDER" in message
+
+    def test_a_pre_stamp_store_is_taken_to_be_minilm(self, tmp_path, monkeypatch):
+        """Every store that existed before the stamp was built with MiniLM."""
+        import chromadb
+
+        from tools.vector_db.embeddings import LOCAL_MODEL
+
+        store = tmp_path / "old"
+        client = chromadb.PersistentClient(path=str(store))
+        collection = client.get_or_create_collection(
+            name="documents", configuration={"hnsw": {"space": "cosine"}}
+        )
+        collection.add(ids=["x"], embeddings=cast(Any, [[0.0] * 384]), documents=["x"])
+        del client
+
+        monkeypatch.setenv(PERSIST_DIR_ENV, str(store))
+        kb = KnowledgeBase()
+        assert kb.collection.metadata["embedding_model"] == LOCAL_MODEL
 
 
 class TestTheStoreOverrideReachesTheServer:
