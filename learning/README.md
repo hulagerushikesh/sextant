@@ -407,8 +407,12 @@ level-6-style experiment, zero cloud cost; the open ones are scheduled as
    Done — [`agent-loop.md`](agent-loop.md): it did not (0.722 = single
    search); one prompt bullet takes it to 0.778 with no extra turns; the
    rest are label over-specification or q48, which needs question 2.
-3. RAPTOR-style summaries vs flat chunks for "overview" questions — the
-   starter prompts in `Opening.jsx` are exactly this class.
+3. ~~RAPTOR-style summaries vs flat chunks for "overview" questions — the
+   starter prompts in `Opening.jsx` are exactly this class.~~ Done —
+   [`summary-chunks.md`](summary-chunks.md): one level, opt-in; short
+   documents already retrieve their overview, summaries buy rerank
+   hit@1 and cost dense recall, and the starter prompt is a listing
+   question no summary tree answers.
 4. ~~Swap MiniLM → bge-small: recall delta vs re-ingest cost vs image
    size.~~ Done — [`embedder-swap.md`](embedder-swap.md): +0.09 dense
    hit@1 on the survey, −0.04 on the handbook, rerank unmoved; not

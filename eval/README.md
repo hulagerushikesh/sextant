@@ -19,8 +19,8 @@ grading never touches whatever you have actually ingested.
 | Path | |
 | --- | --- |
 | `corpus/` | 21 committed Markdown documents, ~5,000 words |
-| `golden.jsonl` | 60 labelled questions over `corpus/` |
-| `golden-large.jsonl` | 38 page-labelled questions over a 144-page PDF (see below) |
+| `golden.jsonl` | 65 labelled questions over `corpus/` |
+| `golden-large.jsonl` | 39 questions over a 144-page PDF, 38 page-labelled (see below) |
 | `metrics.py` | hit@1, recall@k, MRR, nDCG@k — pure functions, tested in `tests/` |
 | `harness.py` | runs the golden set against each retrieval mode |
 | `judge.py` | faithfulness, relevance and abstention, scored by the model |
@@ -28,11 +28,12 @@ grading never touches whatever you have actually ingested.
 
 ## The two splits
 
-**50 answerable** questions, each labelled with the documents that contain the
+**55 answerable** questions, each labelled with the documents that contain the
 answer. Graded on ranking. The kinds are mixed on purpose: paraphrase questions
 that share no vocabulary with the source, exact-term questions naming an error
-code or a parameter, short keyword queries, and multi-hop questions needing two
-documents.
+code or a parameter, short keyword queries, multi-hop questions needing two
+documents, and five `global` questions about what a document or a pair of
+documents is for (Milestone 16, experiment 5).
 
 **10 unanswerable** questions the corpus provably cannot answer. Graded on
 whether the system declines. This is the only split where the right answer is
@@ -185,6 +186,23 @@ Grading against a reference measures paraphrase distance, not support.
 
 The harness has been run end to end with both model calls stubbed, so the
 machinery is verified; the judge's actual opinions are not.
+
+## Summary chunks (Milestone 16, experiment 5)
+
+```bash
+SEXTANT_CHROMA_DIR=/tmp/with-overviews \
+  ./.venv/bin/sextant-ingest --summaries eval/corpus/*.md --category handbook
+./.venv/bin/sextant-eval --store /tmp/with-overviews
+```
+
+One model-written overview per document, stored as a chunk (`kind:
+summary`) in the same index. Measured against the five `global` questions
+and the rest: global hit@5 was already 1.0 without them — a short
+document's first chunk is its overview — so the pre-registered bar could
+not be met; what they buy is rank (global rerank hit@1 0.6 → 1.0, local
++0.02) at the cost of dense recall@5 (−0.07 alone, crowding). Opt-in; the
+committed baseline is built without them. Full table in
+[`learning/summary-chunks.md`](../learning/summary-chunks.md).
 
 ## Agent-level retrieval
 

@@ -1,51 +1,51 @@
 {
   "k_primary": 5,
   "k_wide": 10,
-  "questions": 60,
+  "questions": 65,
   "modes": {
     "dense": {
-      "hit@1": 0.86,
-      "recall@3": 0.89,
-      "recall@5": 0.97,
-      "mrr": 0.9063,
-      "ndcg@5": 0.9001,
+      "hit@1": 0.8727,
+      "recall@3": 0.8758,
+      "recall@5": 0.9545,
+      "mrr": 0.9148,
+      "ndcg@5": 0.8945,
       "scored_by": "cosine"
     },
     "lexical": {
-      "hit@1": 0.8,
-      "recall@3": 0.92,
-      "recall@5": 0.95,
-      "mrr": 0.8803,
-      "ndcg@5": 0.8788,
+      "hit@1": 0.7818,
+      "recall@3": 0.8758,
+      "recall@5": 0.9212,
+      "mrr": 0.8639,
+      "ndcg@5": 0.8506,
       "scored_by": "bm25"
     },
     "rrf": {
-      "hit@1": 0.94,
-      "recall@3": 0.95,
-      "recall@5": 0.98,
-      "mrr": 0.97,
-      "ndcg@5": 0.9534,
+      "hit@1": 0.9091,
+      "recall@3": 0.9212,
+      "recall@5": 0.9727,
+      "mrr": 0.95,
+      "ndcg@5": 0.9315,
       "scored_by": "rrf"
     },
     "rerank": {
-      "hit@1": 0.94,
-      "recall@3": 0.96,
-      "recall@5": 0.97,
-      "mrr": 0.97,
-      "ndcg@5": 0.9506,
+      "hit@1": 0.9091,
+      "recall@3": 0.9485,
+      "recall@5": 0.9636,
+      "mrr": 0.9545,
+      "ndcg@5": 0.9376,
       "scored_by": "cross-encoder"
     }
   },
   "separation": {
     "dense": {
       "answerable_min": 0.2642,
-      "answerable_mean": 0.4945,
+      "answerable_mean": 0.4946,
       "unanswerable_max": 0.4867,
       "unanswerable_mean": 0.3563
     },
     "lexical": {
       "answerable_min": 4.7121,
-      "answerable_mean": 10.8104,
+      "answerable_mean": 10.5776,
       "unanswerable_max": 9.8409,
       "unanswerable_mean": 5.8488
     },
@@ -57,30 +57,30 @@
     },
     "rerank": {
       "answerable_min": 0.0001,
-      "answerable_mean": 0.8244,
+      "answerable_mean": 0.7774,
       "unanswerable_max": 0.973,
       "unanswerable_mean": 0.1353
     }
   },
   "threshold_sweep": {
     "0.01": {
-      "answerable_lost": 2,
-      "unanswerable_blocked": 8
-    },
-    "0.1": {
       "answerable_lost": 3,
       "unanswerable_blocked": 8
     },
+    "0.1": {
+      "answerable_lost": 6,
+      "unanswerable_blocked": 8
+    },
     "0.3": {
-      "answerable_lost": 8,
+      "answerable_lost": 11,
       "unanswerable_blocked": 8
     },
     "0.5": {
-      "answerable_lost": 9,
+      "answerable_lost": 13,
       "unanswerable_blocked": 9
     },
     "0.9": {
-      "answerable_lost": 13,
+      "answerable_lost": 17,
       "unanswerable_blocked": 9
     }
   }
