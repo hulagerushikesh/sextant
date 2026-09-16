@@ -30,3 +30,9 @@
 {"id":"L30","kind":"unanswerable","answerable":false,"question":"What is the boiling point of ethanol at sea level?","expect":null}
 {"id":"L31","kind":"unanswerable","answerable":false,"question":"How do you configure a Cloudflare DNS A record with the proxy disabled?","expect":null}
 {"id":"L32","kind":"unanswerable","answerable":false,"question":"What happens in the Calvin cycle of photosynthesis?","expect":null}
+{"id":"L33","kind":"table","answerable":true,"relevant_pages":{"llm-survey-2303.18223":[23]},"question":"How many layers and attention heads does BLOOM have, and which position embedding does it use?","expect":"70 layers, 112 heads, ALiBi position embedding."}
+{"id":"L34","kind":"table","answerable":true,"relevant_pages":{"llm-survey-2303.18223":[23]},"question":"Which model in the model-card table is a prefix decoder, and what normalization does it use?","expect":"GLM-130B; post DeepNorm."}
+{"id":"L35","kind":"table","answerable":true,"relevant_pages":{"llm-survey-2303.18223":[13]},"question":"How large is the C4 corpus and where does its data come from?","expect":"800GB, CommonCrawl (April 2019)."}
+{"id":"L36","kind":"table","answerable":true,"relevant_pages":{"llm-survey-2303.18223":[23]},"question":"What is the training complexity of Mamba compared with a Transformer?","expect":"Mamba O(TH(N^2 + H)) versus Transformer O(TH(T + H))."}
+{"id":"L37","kind":"table","answerable":true,"relevant_pages":{"llm-survey-2303.18223":[33]},"question":"How many GPUs and how many hours does full tuning of LLaMA 65B take?","expect":"16 A800 GPUs, 11.2 hours (batch size 2 per device)."}
+{"id":"L38","kind":"table","answerable":true,"relevant_pages":{"llm-survey-2303.18223":[29]},"question":"Which optimizer and peak learning rate did PaLM 540B use for pre-training?","expect":"Adafactor, 1e-2, inverse square root decay, no warmup."}

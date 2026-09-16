@@ -24,7 +24,13 @@ run is asked for first, with its estimate.
 
 ## Experiments
 
-### 1 · Table-aware chunking — ₹0
+### 1 · Table-aware chunking — ₹0 — **done, shipped** (2026-09-16)
+
+Result: large set rerank hit@1 0.818 → 0.909, recall@5 0.909 → 0.985,
+6/6 new table questions hit, handbook flat; L25 still misses (multi-hop,
+now experiment 2's). One row per chunk failed the CI gate on dense
+(crowding); shipped at ≤120 tokens of rows per chunk. Note:
+[`learning/table-chunking.md`](../learning/table-chunking.md).
 
 **Hypothesis.** A table row is a record, not prose. Chunking each row (or
 each small run of rows) with the table's header prepended makes "which
@@ -42,12 +48,15 @@ Tables 3, 6, 7, 9 of the survey). Re-grade both sets.
 **Decision.** Ship if L25/L26 and ≥4/6 new table questions hit at k=5 and
 the handbook set does not drop by more than the 0.02 gate. If prose
 metrics fall, tables get their own chunks but stay in the same index —
-no second index.
+no second index. *(Outcome: L26 and 6/6 hit, L25 did not — shipped on
+the intent, deviation recorded in the note.)*
 
 ### 2 · Grade the agent, not just the retriever — ~$0.30, ask first
 
 **Hypothesis.** The agent already resolves multi-hop by searching twice;
-the misses are a `kb.search()` artefact and vanish end to end. Or it
+the misses are a `kb.search()` artefact and vanish end to end. (L25 is
+the live example after experiment 1: the PaLM row ranks 10th behind
+three RoPE prose pages that answer the question's other half.) Or it
 doesn't, and the prompt needs a decomposition nudge.
 
 **Change.** `eval/agent_harness.py` (new, `sextant-eval-agent`): run each
