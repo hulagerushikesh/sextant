@@ -25,12 +25,37 @@ import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
+from tools import settings
 from tools.vector_db.tables import TableSpan, table_rows
 
 # Well under the 256-token wall so the chunk plus its special tokens always fit,
-# with room for the token count below being an approximation.
+# with room for the token count below being an approximation. Measured against
+# 150, 300 and 400 in `learning/chunk-size.md`: 150 ranks better through the
+# reranker but crowds dense retrieval on small corpora; 300+ loses the tail of
+# every chunk to MiniLM's window.
 DEFAULT_TARGET_TOKENS = 200
 DEFAULT_OVERLAP_TOKENS = 40
+CHUNK_TOKENS_ENV = settings.env_name("CHUNK_TOKENS")
+
+
+def configured_chunk_sizes() -> tuple[int, int]:
+    """(target, overlap) for this process: `SEXTANT_CHUNK_TOKENS`, or the defaults.
+
+    One knob. Overlap follows at a fifth of the target, which is the ratio the
+    defaults use and the one the sweep held fixed.
+    """
+    raw = settings.getenv("CHUNK_TOKENS")
+    if raw is None:
+        return DEFAULT_TARGET_TOKENS, DEFAULT_OVERLAP_TOKENS
+    try:
+        target = int(raw)
+    except ValueError as e:
+        raise ValueError(f"{CHUNK_TOKENS_ENV} must be an integer, got {raw!r}") from e
+    if target < 2 * MIN_CHUNK_TOKENS:
+        raise ValueError(
+            f"{CHUNK_TOKENS_ENV} must be at least {2 * MIN_CHUNK_TOKENS}, got {target}"
+        )
+    return target, target // 5
 
 # Rows are packed under one copy of their header until they reach this many
 # tokens. One row per chunk is the purest form of the idea, but a dozen

@@ -28,7 +28,7 @@ Operational runbooks stay next to what they operate: [`../deploy/README.md`](../
 | 13 | Production deploy: prod compose, Caddy edge, preflight, GCP provisioned, image built on VM | **Live** 2026-09-15 at `agenticrag.hulage.in` (Basic-auth gate); VM run on demand |
 | 14 | Product-grade UI: ⌘K palette, shortcuts, empty states, onboarding, skeletons, toasts | Done |
 | 15 | Ship + prove + rename | **Done** 2026-09-15 — A–E; snapshot drill skipped. `go-live-proof.md` |
-| 16 | Retrieval research: table chunking, agent-level eval, chunk size, embedder swap, summary nodes | **In progress** — 2 of 5 done (table chunking shipped, +0.09 hit@1; bge-small measured, not switched); see `milestone-16.md` |
+| 16 | Retrieval research: table chunking, agent-level eval, chunk size, embedder swap, summary nodes | **In progress** — 3 of 5 done (table chunking shipped, +0.09 hit@1; bge-small and chunk size measured, defaults kept); PDF extractor moved to PyMuPDF; see `milestone-16.md` |
 
 Numbers that describe the system today: 320 tests, mypy clean, two golden
 sets (60 questions / 52 chunks; 32 page-labelled / 1,602 chunks), hit@1 0.94

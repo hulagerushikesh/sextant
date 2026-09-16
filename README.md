@@ -112,7 +112,11 @@ not assumed: a query about that document's final sentence scored `-0.0156`
 against the whole document and `0.9438` against the sentence alone. Storing
 documents whole did not make retrieval coarse, it made most of every long
 document unreachable. Chunks are sized from the embedder's own tokenizer, so the
-budget moves if the model does.
+budget moves if the model does. The size itself was swept — 150/200/300/400
+with two embedders, [`learning/chunk-size.md`](learning/chunk-size.md): bigger
+chunks lose through dilution even with a 512-token model, 150 ranks slightly
+better through the reranker at the cost of crowding dense retrieval, and 200
+stays.
 
 **Why tables are chunked differently.** A table row is a record whose meaning
 lives in the header; packed into a 200-token chunk with fifteen siblings,
@@ -206,6 +210,7 @@ appear in `/docs` and are rejected before a handler runs.
 | `GEMINI_API_KEY` | — | Required for generation and web search; retrieval works without it |
 | `SEXTANT_MODEL` | `gemini-3.1-flash-lite` | Cheapest model that runs the tool loop; `gemini-3.7-flash` for stronger synthesis |
 | `SEXTANT_CHROMA_DIR` | `./chroma_db` | Where the collection lives |
+| `SEXTANT_CHUNK_TOKENS` | `200` | Chunk target in the embedder's tokens (overlap follows at a fifth); refused past the embedder's window. Sweep in [`learning/chunk-size.md`](learning/chunk-size.md) |
 | `SEXTANT_EMBEDDER` | `all-MiniLM-L6-v2` | Any sentence-transformers model; a store remembers the model that built it and refuses another (see [`learning/embedder-swap.md`](learning/embedder-swap.md)) |
 | `SEXTANT_ANN_INDEX` | `chroma` | `flat` / `hnsw` / `ivfpq` / `ivfpq_rerank` to route live dense retrieval through the hand-written indexes |
 | `SEXTANT_WEB_SEARCH` | off | `on` offers Google Search grounding by default (billed per grounded request) |

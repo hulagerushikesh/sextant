@@ -73,7 +73,14 @@ already does the job and the retriever-level miss is not a product miss.
 If not, one prompt change ("if the question has two parts, search for each")
 and re-run; ship only if it moves recall without adding turns elsewhere.
 
-### 3 · Chunk size without the 256 ceiling — ₹0
+### 3 · Chunk size without the 256 ceiling — ₹0 — **done, 200 stays** (2026-09-16)
+
+Result: 150 wins rerank hit@1 on both sets (+0.03 / +0.04) but fails the
+CI gate on dense/RRF (crowding, −0.06 / −0.04 handbook alone); 300/400
+lose for both embedders — dilution, not truncation. `SEXTANT_CHUNK_TOKENS`
+shipped as a knob with an embedder-window guard. Follow-up candidate for
+M17: per-document cap on candidates, which would likely unlock 150. Note:
+[`learning/chunk-size.md`](../learning/chunk-size.md).
 
 **Hypothesis.** With a 512-token embedder (experiment 4) the 200/40
 chunking is a leftover. (Experiment 4 did not switch the default, so this
@@ -86,7 +93,8 @@ MiniLM and with the experiment-4 embedder.
 
 **Decision.** Keep 200 unless a size wins on both sets by ≥ 0.03 hit@1.
 Record the curve either way; it is the first chunk-size measurement in
-this repo.
+this repo. *(Outcome: 150 met this on rerank but broke the CI gate on the
+ablations; the gate is the stricter criterion and won.)*
 
 ### 4 · Embedder swap: MiniLM → bge-small-en-v1.5 — ₹0 — **done, not switched** (2026-09-16)
 
