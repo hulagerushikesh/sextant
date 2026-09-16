@@ -41,7 +41,11 @@ ANN_BACKEND_ENV = settings.env_name("ANN_INDEX")
 # Variables the subprocess needs but MCP's stdio client would otherwise strip.
 # Both spellings of each: a `.env` written before the rename still says
 # AGENTICRAG_*, and the subprocess resolves the same fallback order.
-_FORWARDED_ENV = settings.env_names("CHROMA_DIR") + settings.env_names("ANN_INDEX")
+_FORWARDED_ENV = (
+    settings.env_names("CHROMA_DIR")
+    + settings.env_names("ANN_INDEX")
+    + settings.env_names("EMBEDDER")
+)
 
 
 def kb_server() -> StdioServerParameters:

@@ -55,6 +55,9 @@ because each one was learned the expensive way.
   chunks. To empty the store: `rm chroma_db/chroma.sqlite3` and restart.
 - faiss + torch OpenMP: `server.py` must import faiss before anything that
   pulls torch, or the KB subprocess segfaults (exit 139).
+- A Chroma collection is stamped with the embedding model that built it and
+  refuses to open under another (`SEXTANT_EMBEDDER`). MiniLM and bge-small
+  are both 384-d, so without the stamp a mismatch would be silent.
 - MCP stdio strips the environment: new `SEXTANT_*` knobs the KB needs must
   be added to `_FORWARDED_ENV` in `mcp_host.py` or they silently no-op.
 - Docker Compose interpolates `$` in `env_file` — bcrypt hashes need

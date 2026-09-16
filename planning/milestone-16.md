@@ -76,7 +76,8 @@ and re-run; ship only if it moves recall without adding turns elsewhere.
 ### 3 · Chunk size without the 256 ceiling — ₹0
 
 **Hypothesis.** With a 512-token embedder (experiment 4) the 200/40
-chunking is a leftover. Larger chunks may help hit@1 (more context per
+chunking is a leftover. (Experiment 4 did not switch the default, so this
+sweep runs both embedders: bge might win at sizes MiniLM cannot embed.) Larger chunks may help hit@1 (more context per
 hit) or hurt (dilution, the 0.94 → 0.44 effect measured in Phase 4).
 
 **Change.** None to code: `target_tokens` and `overlap_tokens` are already
@@ -87,7 +88,13 @@ MiniLM and with the experiment-4 embedder.
 Record the curve either way; it is the first chunk-size measurement in
 this repo.
 
-### 4 · Embedder swap: MiniLM → bge-small-en-v1.5 — ₹0, one ~130 MB download, ask first
+### 4 · Embedder swap: MiniLM → bge-small-en-v1.5 — ₹0 — **done, not switched** (2026-09-16)
+
+Result: dense hit@1 +0.091 on the survey, −0.04 on the handbook; rule
+needed both. Rerank unchanged either way. Cosine calibration did not
+travel. `SEXTANT_EMBEDDER`, the per-model query prefix and the store
+guard shipped; default stays MiniLM. Note:
+[`learning/embedder-swap.md`](../learning/embedder-swap.md).
 
 **Hypothesis.** bge-small (384-d, 512-token window, higher MTEB retrieval
 score) lifts dense hit@1 on paraphrase questions and gives a cosine scale
@@ -103,7 +110,7 @@ model).
 **Measure.** Both sets, all four modes; dense-only separation table.
 
 **Decision.** Switch the default if dense hit@1 gains ≥ 0.03 on both sets
-and rerank does not regress; the image grows ~130 MB and every existing
+and rerank does not regress *(outcome: one set only — not switched)*; the image grows ~130 MB and every existing
 store must re-ingest, so the note states that cost plainly. If cosine
 separation exceeds the reranker's, revisit `learning/reranker-decision.md`
 — that is the "what would change the decision" clause coming due.

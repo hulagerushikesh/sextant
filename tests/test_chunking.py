@@ -144,3 +144,32 @@ class TestPacking:
         assert len(chunk_text(document, counter, target_tokens=80)) > len(
             chunk_text(document, counter, target_tokens=200)
         )
+
+
+class TestEmbedderConfiguration:
+    """The embedding model is a setting, and its query instruction goes with it."""
+
+    def test_default_model_is_minilm_with_no_query_prefix(self, embedder, monkeypatch):
+        from tools.vector_db.embeddings import LOCAL_MODEL, configured_model
+
+        monkeypatch.delenv("SEXTANT_EMBEDDER", raising=False)
+        monkeypatch.delenv("AGENTICRAG_EMBEDDER", raising=False)
+        assert configured_model() == LOCAL_MODEL
+        assert embedder.query_prefix == ""
+
+    def test_env_selects_the_model(self, monkeypatch):
+        from tools.vector_db.embeddings import configured_model
+
+        monkeypatch.setenv("SEXTANT_EMBEDDER", "BAAI/bge-small-en-v1.5")
+        assert configured_model() == "BAAI/bge-small-en-v1.5"
+
+    def test_query_prefix_is_applied_to_queries_only(self, embedder):
+        # Without a prefix the two paths must agree exactly; with one they must
+        # not, which is the whole point of having a separate query path.
+        text = "how is process noise tuned"
+        assert embedder.encode_query(text) == embedder.encode([text])[0]
+        embedder.query_prefix = "Represent this sentence: "
+        try:
+            assert embedder.encode_query(text) != embedder.encode([text])[0]
+        finally:
+            embedder.query_prefix = ""
