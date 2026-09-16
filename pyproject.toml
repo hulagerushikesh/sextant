@@ -18,7 +18,8 @@ dependencies = [
 
     # Protocol
     "mcp[cli]>=2.0",
-    "pypdf>=5.0",
+    "pymupdf>=1.26",  # PDF text; reads layout instead of guessing word spacing (AGPL)
+    "pypdf>=5.0",     # fallback extractor when the MuPDF wheel is unavailable
 
     # Retrieval
     "chromadb>=1.0",
