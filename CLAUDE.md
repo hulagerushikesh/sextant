@@ -68,5 +68,10 @@ because each one was learned the expensive way.
 - `gemini-2.5-flash-lite` passes a one-shot probe and fails the tool loop
   (400 "tool call context circulation"); `gemini-3.1-flash-lite` is the
   cheapest model that actually runs it.
+- `FunctionCallingConfigMode.NONE` does not stop gemini-3.1-flash-lite from
+  calling a tool: the turn ends `MALFORMED_FUNCTION_CALL` with no text. The
+  agent's turn cap uses a user-role note (`LAST_TURN_NOTE`) instead.
+- `sextant-eval-agent` spends money (~$0.04 / 29 questions); `sextant-eval`
+  does not. Only the latter is in the gate.
 - Browser-pane synthetic key presses don't fire the app's key handlers; test
   shortcuts by dispatching `KeyboardEvent`s from `javascript_tool`.

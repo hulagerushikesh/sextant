@@ -107,6 +107,11 @@ Choosing a tool:
 user's own documents. Phrase the query as a full question or a descriptive \
 sentence, not two keywords -- matching is on meaning, and short queries rank \
 badly.
+- A question with two parts -- "which X does A use, and how does X work" -- \
+is two searches. Run one for each part before answering, rather than one query \
+that names both: the passage that answers the first half is rarely the one that \
+answers the second. If the passages you have cover only part of the question, \
+search for the missing part before saying the documents do not cover it.
 - If it comes back empty, or the passages do not actually answer what was \
 asked, decide what to do next rather than giving up: search again with \
 different wording if the first phrasing was poor, or use web search if the \
@@ -146,6 +151,10 @@ have. If the passages you retrieve do not answer the question, say that the \
 documents do not cover it -- do not answer from your own knowledge, and do not \
 tell the user to search the web themselves as though that were part of the \
 answer."""
+
+LAST_TURN_NOTE = """That was the last search available for this question. Answer \
+now from the passages you already have; if none of them answer it, say the \
+documents do not cover it."""
 
 NO_KB_NOTE = """
 
@@ -434,7 +443,6 @@ async def run(
         # it, and with it the streamed deltas and the pre-numbered passages.
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
     )
-
     registry = SourceRegistry()
     if prior_sources:
         registry.restore(prior_sources)
@@ -462,7 +470,9 @@ async def run(
         turn_input = turn_output = 0
 
         stream = await client.models.generate_content_stream(
-            model=MODEL, contents=contents, config=config
+            model=MODEL,
+            contents=contents,
+            config=config,
         )
         async for chunk in stream:
             candidate = (chunk.candidates or [None])[0]
@@ -576,6 +586,18 @@ async def run(
             )
 
         contents.append(types.Content(role="user", parts=results))
+        if turns == MAX_TURNS - 1:
+            # The next turn is the last one allowed. Told as a user message,
+            # because that is what it is: the runner reporting that the budget
+            # is spent. Without it a model still searching at the cap ends the
+            # loop with function calls and no text, and the user sees an empty
+            # answer -- seen once in six runs of the multi-hop set
+            # (`learning/agent-loop.md`). Forbidding calls through
+            # `FunctionCallingConfigMode.NONE` was tried first: on
+            # gemini-3.1-flash-lite the model attempts the call anyway and the
+            # turn ends MALFORMED_FUNCTION_CALL with no text, which is the same
+            # empty answer by another route.
+            contents.append(types.Content(role="user", parts=[types.Part(text=LAST_TURN_NOTE)]))
         if len(registry) > known_sources:
             known_sources = len(registry)
             yield {"type": "sources", "sources": registry.as_json()}
