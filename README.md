@@ -206,6 +206,7 @@ appear in `/docs` and are rejected before a handler runs.
 | `GEMINI_API_KEY` | — | Required for generation and web search; retrieval works without it |
 | `SEXTANT_MODEL` | `gemini-3.1-flash-lite` | Cheapest model that runs the tool loop; `gemini-3.7-flash` for stronger synthesis |
 | `SEXTANT_CHROMA_DIR` | `./chroma_db` | Where the collection lives |
+| `SEXTANT_EMBEDDER` | `all-MiniLM-L6-v2` | Any sentence-transformers model; a store remembers the model that built it and refuses another (see [`learning/embedder-swap.md`](learning/embedder-swap.md)) |
 | `SEXTANT_ANN_INDEX` | `chroma` | `flat` / `hnsw` / `ivfpq` / `ivfpq_rerank` to route live dense retrieval through the hand-written indexes |
 | `SEXTANT_WEB_SEARCH` | off | `on` offers Google Search grounding by default (billed per grounded request) |
 | `SEXTANT_DAILY_BUDGET_USD` | `0` (off) | Hard per-UTC-day spend cap; `/query` returns 429 once hit |

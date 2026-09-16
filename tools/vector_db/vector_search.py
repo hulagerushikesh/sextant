@@ -40,7 +40,12 @@ from tools.vector_db.chunking import (
     DEFAULT_TARGET_TOKENS,
     chunk_text,
 )
-from tools.vector_db.embeddings import EmbeddingsUnavailable, get_embedder
+from tools.vector_db.embeddings import (
+    EMBEDDER_ENV,
+    LOCAL_MODEL,
+    EmbeddingsUnavailable,
+    get_embedder,
+)
 from tools.vector_db.loaders import LoadedDocument, Locator, load_path
 from tools.vector_db.retrieval import (
     BM25Index,
@@ -213,6 +218,7 @@ class KnowledgeBase:
                 "this code reports dense scores as cosine similarity. Delete "
                 f"{self.persist_dir} and re-ingest."
             )
+        self._check_embedding_model()
 
         self.reranker = CrossEncoderReranker()
         self._bm25: BM25Index | None = None
@@ -240,6 +246,35 @@ class KnowledgeBase:
             self.embedder.name,
             self.persist_dir,
         )
+
+    def _check_embedding_model(self) -> None:
+        """Refuse a store whose vectors came from a different embedding model.
+
+        Two models can share a dimension (MiniLM and bge-small are both 384-d),
+        so a mismatch does not error -- every query just scores against
+        vectors from another space and retrieval quietly degrades. The model
+        name is stamped on the collection when it is first written to; a
+        store from before the stamp existed is assumed to be MiniLM, the only
+        model there was.
+        """
+        stored = (self.collection.metadata or {}).get("embedding_model")
+        if stored is None:
+            if self.collection.count() == 0:
+                return  # stamped on first write, when the model is certain
+            stored = LOCAL_MODEL
+            self._stamp_embedding_model(stored)
+        if stored != self.embedder.name:
+            raise KnowledgeBaseUnavailable(
+                f"The collection at {self.persist_dir} was embedded with '{stored}', but "
+                f"this process is configured for '{self.embedder.name}'. Point "
+                f"{EMBEDDER_ENV} at the model that built the store, or re-ingest into "
+                "a new directory."
+            )
+
+    def _stamp_embedding_model(self, name: str) -> None:
+        metadata = dict(self.collection.metadata or {})
+        metadata["embedding_model"] = name
+        self.collection.modify(metadata=metadata)
 
     def _configured_space(self) -> str | None:
         """Read the collection's actual distance space, or None if unreported."""
@@ -399,7 +434,7 @@ class KnowledgeBase:
 
     def _dense(self, query: str) -> tuple[list[str], dict[str, float]]:
         """Vector search: ids in rank order, plus their cosine similarities."""
-        embedding = self.embedder.encode([query])[0]
+        embedding = self.embedder.encode_query(query)
         if self._ann_backend != "chroma":
             return self._ann_dense(embedding)
         raw = self.collection.query(
@@ -563,6 +598,8 @@ class KnowledgeBase:
             return self._ingest_failure("Nothing to store: all documents were empty")
 
         try:
+            if (self.collection.metadata or {}).get("embedding_model") is None:
+                self._stamp_embedding_model(self.embedder.name)
             embeddings = self.embedder.encode(texts)
             # upsert, not add: re-ingesting the same id replaces it rather than
             # raising, which is what you want when re-running an ingest script.
@@ -689,7 +726,7 @@ class KnowledgeBase:
 
         # The query is embedded with the same encoder the corpus was, so the
         # comparison runs in the space the vectors actually live in.
-        query_vector = self.embedder.encode([query])[0]
+        query_vector = self.embedder.encode_query(query)
         result = compare_query(ids, vectors, query_vector, k=k, hnsw=hnsw, ivfpq=ivfpq)
 
         # Attach the human-readable title and text to each id so the frontend can
