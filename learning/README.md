@@ -403,6 +403,10 @@ level-6-style experiment, zero cloud cost; the open ones are scheduled as
    [`chunk-size.md`](chunk-size.md): bigger loses for both embedders,
    150 helps the reranker and hurts dense through crowding; 200 stays and
    a per-document candidate cap is the next question.
+2c. ~~Does the agent loop already resolve multi-hop by searching twice?~~
+   Done — [`agent-loop.md`](agent-loop.md): it did not (0.722 = single
+   search); one prompt bullet takes it to 0.778 with no extra turns; the
+   rest are label over-specification or q48, which needs question 2.
 3. RAPTOR-style summaries vs flat chunks for "overview" questions — the
    starter prompts in `Opening.jsx` are exactly this class.
 4. ~~Swap MiniLM → bge-small: recall delta vs re-ingest cost vs image
