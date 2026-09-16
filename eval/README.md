@@ -72,7 +72,9 @@ now settled the other way.
 ## Results at 1,602 chunks
 
 `golden-large.jsonl`: 32 questions over *A Survey of Large Language Models*
-(arXiv 2303.18223, 144 pages, 1,550 chunks) sitting in a store beside the 21
+(arXiv 2303.18223, 144 pages, 1,550 chunks at the time; the pinned file is
+now v19, md5 `b0facc450634ab588d0cd82c8be15ace`, extracted with PyMuPDF —
+see [`learning/pdf-extraction.md`](../learning/pdf-extraction.md)) sitting in a store beside the 21
 handbook documents (52 chunks, acting as distractors). One PDF is one document,
 so these questions label **pages** and the harness grades page hits; two
 multi-hop questions label two pages each. Kinds: 10 exact-term, 11 paraphrase,
@@ -134,6 +136,7 @@ of one-row-per-chunk in [`learning/table-chunking.md`](../learning/table-chunkin
 | --- | --- | --- | --- | --- | --- | --- |
 | before | 0.818 | 0.864 | 0.909 | 0.881 | 0.861 | L25 L26 L33 L38 |
 | after | **0.909** | **0.939** | **0.985** | **0.947** | **0.944** | L25 |
+| after, v19 via PyMuPDF (`baseline-large.json`) | **0.909** | **0.955** | **0.985** | **0.946** | **0.952** | L25 |
 
 The handbook set is unchanged on rerank (0.94 / 0.97) and within the 0.02
 gate on every ablation. `baseline.json` and `baseline-large.json` are the

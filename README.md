@@ -325,7 +325,7 @@ mcp_server/
 tools/vector_db/
   server.py          The MCP server (stdio) — the reusable artifact
   vector_search.py   Orchestration: chunk on ingest, hybrid search on query
-  loaders.py         PDF / Markdown / text → text plus page and section spans
+  loaders.py         PDF (PyMuPDF; lines rebuilt from span baselines; pypdf fallback), Markdown, text → text plus page, section and table spans
   chunking.py        Token-aware splitting with overlap and exact char offsets
   tables.py          Finds tables (PDF captions, Markdown pipes) for row chunks
   embeddings.py      The embedding backend, and the token budget it implies

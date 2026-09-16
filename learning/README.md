@@ -23,8 +23,9 @@ library folklore, and the numbers are the curriculum.
 | 8 | Interface craft: SSE clients, keyboard-first, motion | `frontend/src/` |
 | 9 | Research frontier: the papers | this file, §9 |
 
-Companion notes in this folder, both examples of the level-6 method done
-properly: [`ann-comparison.md`](ann-comparison.md) — the measured HNSW vs
+Companion notes in this folder, all examples of the level-6 method done
+properly ([`pdf-extraction.md`](pdf-extraction.md) is the smallest: a
+bake-off of three extractors with one table and one decision): [`ann-comparison.md`](ann-comparison.md) — the measured HNSW vs
 IVF-PQ study; [`reranker-decision.md`](reranker-decision.md) — the experiment
 that settled whether the cross-encoder stays.
 
