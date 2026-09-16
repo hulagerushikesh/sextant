@@ -399,6 +399,10 @@ level-6-style experiment, zero cloud cost; the open ones are scheduled as
    crowded dense retrieval.
 2. Does HyDE help on a technical personal corpus, or hurt (hallucinated
    jargon)? One function in `retrieval.py`, one eval row.
+2b. ~~Is 200 tokens the right chunk size, or MiniLM's?~~ Done —
+   [`chunk-size.md`](chunk-size.md): bigger loses for both embedders,
+   150 helps the reranker and hurts dense through crowding; 200 stays and
+   a per-document candidate cap is the next question.
 3. RAPTOR-style summaries vs flat chunks for "overview" questions — the
    starter prompts in `Opening.jsx` are exactly this class.
 4. ~~Swap MiniLM → bge-small: recall delta vs re-ingest cost vs image

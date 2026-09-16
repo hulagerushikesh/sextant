@@ -36,9 +36,9 @@ from typing import Any, Literal, cast
 
 from tools import settings
 from tools.vector_db.chunking import (
-    DEFAULT_OVERLAP_TOKENS,
-    DEFAULT_TARGET_TOKENS,
+    CHUNK_TOKENS_ENV,
     chunk_text,
+    configured_chunk_sizes,
 )
 from tools.vector_db.embeddings import (
     EMBEDDER_ENV,
@@ -219,6 +219,16 @@ class KnowledgeBase:
                 f"{self.persist_dir} and re-ingest."
             )
         self._check_embedding_model()
+
+        # Chunk sizes are a setting so a corpus can be re-ingested at another
+        # size without a code change; the embedder's window is still the wall.
+        self.target_tokens, self.overlap_tokens = configured_chunk_sizes()
+        if self.target_tokens > self.embedder.max_tokens:
+            raise KnowledgeBaseUnavailable(
+                f"{CHUNK_TOKENS_ENV}={self.target_tokens} exceeds the embedder's window "
+                f"({self.embedder.name}: {self.embedder.max_tokens} tokens); the tail of "
+                "every chunk would be embedded as nothing."
+            )
 
         self.reranker = CrossEncoderReranker()
         self._bm25: BM25Index | None = None
@@ -568,7 +578,11 @@ class KnowledgeBase:
 
         for document in documents:
             chunks = chunk_text(
-                document.text, self.embedder.count_tokens, tables=document.tables
+                document.text,
+                self.embedder.count_tokens,
+                target_tokens=self.target_tokens,
+                overlap_tokens=self.overlap_tokens,
+                tables=document.tables,
             )
             if not chunks:
                 logger.warning("%s produced no chunks -- empty after stripping", document.doc_id)
@@ -762,8 +776,8 @@ class KnowledgeBase:
             "embedding_model": self.embedder.name,
             "embedding_max_tokens": self.embedder.max_tokens,
             "chunking": {
-                "target_tokens": DEFAULT_TARGET_TOKENS,
-                "overlap_tokens": DEFAULT_OVERLAP_TOKENS,
+                "target_tokens": self.target_tokens,
+                "overlap_tokens": self.overlap_tokens,
             },
             "retrieval": "dense + BM25, fused with RRF, reranked by cross-encoder",
             "dense_backend": self._ann_backend,

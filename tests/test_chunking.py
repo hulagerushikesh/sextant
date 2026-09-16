@@ -173,3 +173,39 @@ class TestEmbedderConfiguration:
             assert embedder.encode_query(text) != embedder.encode([text])[0]
         finally:
             embedder.query_prefix = ""
+
+
+class TestChunkSizeConfiguration:
+    """Chunk size is a setting; the embedder's window is still the wall."""
+
+    def test_defaults_without_the_variable(self, monkeypatch):
+        from tools.vector_db.chunking import configured_chunk_sizes
+
+        monkeypatch.delenv("SEXTANT_CHUNK_TOKENS", raising=False)
+        monkeypatch.delenv("AGENTICRAG_CHUNK_TOKENS", raising=False)
+        assert configured_chunk_sizes() == (DEFAULT_TARGET_TOKENS, 40)
+
+    def test_overlap_follows_the_target(self, monkeypatch):
+        from tools.vector_db.chunking import configured_chunk_sizes
+
+        monkeypatch.setenv("SEXTANT_CHUNK_TOKENS", "150")
+        assert configured_chunk_sizes() == (150, 30)
+
+    def test_garbage_and_fragments_are_refused(self, monkeypatch):
+        from tools.vector_db.chunking import configured_chunk_sizes
+
+        monkeypatch.setenv("SEXTANT_CHUNK_TOKENS", "lots")
+        with pytest.raises(ValueError):
+            configured_chunk_sizes()
+        monkeypatch.setenv("SEXTANT_CHUNK_TOKENS", "10")
+        with pytest.raises(ValueError):
+            configured_chunk_sizes()
+
+    def test_a_target_past_the_embedder_window_is_refused_at_startup(self, monkeypatch, tmp_path):
+        from tools.vector_db.vector_search import KnowledgeBase, KnowledgeBaseUnavailable
+
+        monkeypatch.setenv("SEXTANT_CHROMA_DIR", str(tmp_path / "store"))
+        monkeypatch.setenv("SEXTANT_CHUNK_TOKENS", "400")  # MiniLM's window is 256
+        with pytest.raises(KnowledgeBaseUnavailable) as caught:
+            KnowledgeBase()
+        assert "256" in str(caught.value)
