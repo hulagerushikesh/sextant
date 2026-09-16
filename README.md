@@ -118,6 +118,13 @@ chunks lose through dilution even with a 512-token model, 150 ranks slightly
 better through the reranker at the cost of crowding dense retrieval, and 200
 stays.
 
+**Why summaries are opt-in.** `sextant-ingest --summaries` adds one
+model-written overview chunk per document. Measured on this corpus it moves
+the reranked pipeline's hit@1 up (+0.02 local, 0.6 → 1.0 on "which
+document…" questions) and dense recall@5 down (−0.07, crowding), and a
+short document's first chunk already is its overview — so it is a flag, not
+the default. [`learning/summary-chunks.md`](learning/summary-chunks.md).
+
 **Why tables are chunked differently.** A table row is a record whose meaning
 lives in the header; packed into a 200-token chunk with fifteen siblings,
 "PaLM · RoPE · SwiGLU" was diluted past retrieval (two measured misses on the
@@ -152,20 +159,20 @@ never separated from what produced it.
 ./.venv/bin/sextant-eval
 ```
 
-60 labelled questions over a committed 21-document corpus, graded per
+65 labelled questions over a committed 21-document corpus, graded per
 configuration. Full method and results in [`eval/README.md`](eval/README.md).
 
 | mode | hit@1 | recall@3 | MRR | nDCG@5 |
 | --- | --- | --- | --- | --- |
-| dense (vectors only) | 0.860 | 0.900 | 0.906 | 0.906 |
-| lexical (BM25 only) | 0.820 | 0.910 | 0.892 | 0.888 |
-| rrf (fused) | 0.940 | 0.950 | 0.970 | 0.949 |
-| rerank (full pipeline) | 0.940 | 0.960 | 0.970 | 0.951 |
+| dense (vectors only) | 0.873 | 0.876 | 0.915 | 0.894 |
+| lexical (BM25 only) | 0.782 | 0.876 | 0.864 | 0.851 |
+| rrf (fused) | 0.909 | 0.921 | 0.950 | 0.931 |
+| rerank (full pipeline) | 0.909 | 0.949 | 0.955 | 0.938 |
 
 Two results worth stating plainly, because one of them is unflattering.
 
-**Fusion earns its place.** Hybrid beats either retriever alone by 8 points of
-hit@1. They fail on different questions, which is the whole argument for
+**Fusion earns its place.** Hybrid beats either retriever alone by 4–13 points
+of hit@1. They fail on different questions, which is the whole argument for
 running both.
 
 **Reranking does not, on this corpus — and does on a larger one.** At 52
@@ -285,6 +292,10 @@ Index files — PDF, Markdown or plain text:
 ./.venv/bin/sextant-ingest ~/notes -r
 ```
 
+```bash
+./.venv/bin/sextant-ingest ~/papers -r --summaries   # + one overview chunk per document; needs GEMINI_API_KEY
+```
+
 File loading is a command rather than an MCP tool on purpose: a `kb_ingest_file`
 tool would hand every client that mounts this server the ability to read
 arbitrary paths. Indexing a corpus is something a person does deliberately.
@@ -333,6 +344,7 @@ tools/vector_db/
   loaders.py         PDF (PyMuPDF; lines rebuilt from span baselines; pypdf fallback), Markdown, text → text plus page, section and table spans
   chunking.py        Token-aware splitting with overlap and exact char offsets
   tables.py          Finds tables (PDF captions, Markdown pipes) for row chunks
+  summaries.py       One model-written overview per document, stored as a chunk (`sextant-ingest --summaries`, opt-in)
   embeddings.py      The embedding backend, and the token budget it implies
   retrieval.py       BM25, reciprocal rank fusion, cross-encoder reranking
   ann/               flat, HNSW, IVF-PQ (+rerank) in NumPy; FAISS reference; benchmark
@@ -341,15 +353,15 @@ tools/settings.py    `SEXTANT_*` env names, with `AGENTICRAG_*` fallback
 chroma_db/           Persistent vector store (gitignored)
 eval/
   corpus/            21 committed documents — the fixed evaluation corpus
-  golden.jsonl       60 labelled questions, 50 answerable and 10 not
-  golden-large.jsonl 32 page-labelled questions over a 144-page PDF
+  golden.jsonl       65 labelled questions, 55 answerable and 10 not
+  golden-large.jsonl 39 questions over a 144-page PDF, 38 page-labelled
   metrics.py         hit@1, recall@k, MRR, nDCG@k
   harness.py         `sextant-eval` — grades every retrieval mode
   judge.py           `sextant-judge` — faithfulness and abstention
   agent_harness.py   `sextant-eval-agent` — grades what the loop retrieved
   baseline.json      Committed results; the CI gate compares against these
   baseline-large.json Results on the 1,602-chunk store (reranker decision)
-tests/               372 tests: chunking, retrieval, ANN, agent loop, API, regressions
+tests/               380 tests: chunking, retrieval, ANN, agent loop, API, regressions
 deploy/              Caddyfile, prod Dockerfile for the edge, deploy.sh, GCP runbook
 learning/            Study path + measured notes (ANN comparison, reranker decision)
 planning/            Status, cost, milestone plans, trackers, archived docs

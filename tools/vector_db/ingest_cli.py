@@ -23,6 +23,7 @@ from tools.vector_db.loaders import (
     TEXT_SUFFIXES,
     UnsupportedDocument,
 )
+from tools.vector_db.summaries import SummariesUnavailable, summarise
 from tools.vector_db.vector_search import KnowledgeBase, KnowledgeBaseUnavailable
 
 SUPPORTED = PDF_SUFFIXES | MARKDOWN_SUFFIXES | TEXT_SUFFIXES
@@ -43,26 +44,38 @@ def _expand(paths: list[str], recursive: bool) -> list[Path]:
     return files
 
 
-async def _ingest(files: list[Path], category: str) -> int:
+async def _ingest(files: list[Path], category: str, summaries: bool = False) -> int:
     kb = KnowledgeBase()
     failures = 0
 
     for path in files:
         try:
-            result = await kb.add_file(str(path), category=category)
+            if summaries:
+                # Read first, summarise, then store text and overview together.
+                # One model call per document; the chunks themselves never
+                # touch the model.
+                document = await kb.load_file(str(path), category=category)
+                summary = await summarise(document.text, document.title)
+                result = await kb.add_document(document, summary=summary)
+            else:
+                result = await kb.add_file(str(path), category=category)
         except UnsupportedDocument as e:
             print(f"  skip  {path.name}: {e}")
             failures += 1
             continue
 
         if result.get("success"):
-            print(f"  ok    {path.name}: {result['chunks_added']} chunks")
+            note = " (+ overview)" if summaries else ""
+            print(f"  ok    {path.name}: {result['chunks_added']} chunks{note}")
         else:
             print(f"  fail  {path.name}: {result.get('message')}")
             failures += 1
 
     stats = await kb.health_check()
-    print(f"\ncollection: {stats['documents']} documents, {stats['collection_size']} chunks")
+    print(
+        f"\ncollection: {stats['documents']} documents, {stats['collection_size']} chunks, "
+        f"{stats['summaries']} with an overview"
+    )
     return failures
 
 
@@ -76,7 +89,17 @@ def main() -> None:
     parser.add_argument("-r", "--recursive", action="store_true", help="descend into directories")
     parser.add_argument("-c", "--category", default="general", help="tag stored chunks")
     parser.add_argument("-v", "--verbose", action="store_true", help="show loader logging")
+    parser.add_argument(
+        "--summaries",
+        action="store_true",
+        help="also store one model-written overview chunk per document (needs GEMINI_API_KEY)",
+    )
     args = parser.parse_args()
+    if args.summaries:
+        # The key lives in .env like the agent's; the CLI does not otherwise read it.
+        from dotenv import load_dotenv
+
+        load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
     logging.basicConfig(
         level=logging.INFO if args.verbose else logging.WARNING,
@@ -90,8 +113,8 @@ def main() -> None:
 
     print(f"Indexing {len(files)} file(s)...")
     try:
-        failures = asyncio.run(_ingest(files, args.category))
-    except KnowledgeBaseUnavailable as e:
+        failures = asyncio.run(_ingest(files, args.category, args.summaries))
+    except (KnowledgeBaseUnavailable, SummariesUnavailable) as e:
         sys.exit(str(e))
     if failures:
         sys.exit(f"{failures} file(s) failed")

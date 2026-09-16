@@ -54,6 +54,7 @@ from tools.vector_db.retrieval import (
     RerankerUnavailable,
     reciprocal_rank_fusion,
 )
+from tools.vector_db.summaries import SUMMARY_KIND, summary_chunk_id, summary_text
 
 logger = logging.getLogger(__name__)
 
@@ -571,10 +572,33 @@ class KnowledgeBase:
         # embedding starts, so the load belongs on the thread too.
         return self._store([load_path(path, category=category)])
 
-    def _store(self, documents: list[LoadedDocument]) -> dict[str, Any]:
+    async def load_file(self, path: str, category: str = "general") -> LoadedDocument:
+        """Load a file without storing it -- for callers that want to read it
+        first, like `sextant-ingest --summaries`, which sends the text to a
+        model before `add_document` stores it with the summary."""
+        return await asyncio.to_thread(load_path, path, category=category)
+
+    async def add_document(
+        self, document: LoadedDocument, summary: str | None = None
+    ) -> dict[str, Any]:
+        """Store a loaded document, with an optional model-written summary.
+
+        The summary becomes one more chunk of the document (`kind: summary`,
+        id `<doc>#summary`) in the same collection, ranked by the same three
+        stages as every other chunk. See `summaries.py` for why.
+        """
+        async with self._write_lock:
+            return await asyncio.to_thread(
+                self._store, [document], {document.doc_id: summary} if summary else {}
+            )
+
+    def _store(
+        self, documents: list[LoadedDocument], summaries: dict[str, str] | None = None
+    ) -> dict[str, Any]:
         ids: list[str] = []
         texts: list[str] = []
         metadatas: list[dict[str, Any]] = []
+        summaries = summaries or {}
 
         for document in documents:
             chunks = chunk_text(
@@ -607,6 +631,29 @@ class KnowledgeBase:
                 meta.update(document.locate(chunk.char_start))
                 # Chroma rejects None-valued metadata outright.
                 metadatas.append({k: v for k, v in meta.items() if v is not None})
+
+            summary = summaries.get(document.doc_id)
+            if summary:
+                text = summary_text(document.title, summary)
+                ids.append(summary_chunk_id(document.doc_id))
+                texts.append(text)
+                metadatas.append(
+                    {
+                        "document_id": document.doc_id,
+                        "title": document.title,
+                        "source": document.source,
+                        "category": document.category,
+                        # After the last real chunk, so anything that orders a
+                        # document's chunks puts the overview at the end rather
+                        # than in the middle of the text.
+                        "chunk_index": len(chunks),
+                        "char_start": 0,
+                        "char_end": 0,
+                        "tokens": self.embedder.count_tokens(text),
+                        "kind": SUMMARY_KIND,
+                        "section": "Overview",
+                    }
+                )
 
         if not ids:
             return self._ingest_failure("Nothing to store: all documents were empty")
@@ -767,9 +814,9 @@ class KnowledgeBase:
 
     def _health_check_sync(self) -> dict[str, Any]:
         stored = self.collection.get(include=["metadatas"])
-        documents = {
-            (meta or {}).get("document_id") for meta in (stored.get("metadatas") or [])
-        }
+        metadatas = [meta or {} for meta in (stored.get("metadatas") or [])]
+        documents = {meta.get("document_id") for meta in metadatas}
+        summaries = sum(1 for meta in metadatas if meta.get("kind") == SUMMARY_KIND)
         return {
             "status": "healthy",
             "database": "chromadb",
@@ -785,6 +832,9 @@ class KnowledgeBase:
             "collection": self.collection_name,
             "collection_size": self.collection.count(),
             "documents": len(documents - {None}),
+            # Documents that carry a model-written overview chunk. Zero unless
+            # ingested with `--summaries`.
+            "summaries": summaries,
             "persist_dir": str(self.persist_dir),
             "timestamp": datetime.now().isoformat(),
         }
