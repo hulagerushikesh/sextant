@@ -45,6 +45,7 @@ _FORWARDED_ENV = (
     settings.env_names("CHROMA_DIR")
     + settings.env_names("ANN_INDEX")
     + settings.env_names("EMBEDDER")
+    + settings.env_names("CHUNK_TOKENS")
 )
 
 
