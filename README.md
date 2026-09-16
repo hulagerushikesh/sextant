@@ -346,9 +346,10 @@ eval/
   metrics.py         hit@1, recall@k, MRR, nDCG@k
   harness.py         `sextant-eval` — grades every retrieval mode
   judge.py           `sextant-judge` — faithfulness and abstention
+  agent_harness.py   `sextant-eval-agent` — grades what the loop retrieved
   baseline.json      Committed results; the CI gate compares against these
   baseline-large.json Results on the 1,602-chunk store (reranker decision)
-tests/               344 tests: chunking, retrieval, ANN, agent loop, API, regressions
+tests/               372 tests: chunking, retrieval, ANN, agent loop, API, regressions
 deploy/              Caddyfile, prod Dockerfile for the edge, deploy.sh, GCP runbook
 learning/            Study path + measured notes (ANN comparison, reranker decision)
 planning/            Status, cost, milestone plans, trackers, archived docs

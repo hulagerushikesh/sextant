@@ -186,6 +186,24 @@ Grading against a reference measures paraphrase distance, not support.
 The harness has been run end to end with both model calls stubbed, so the
 machinery is verified; the judge's actual opinions are not.
 
+## Agent-level retrieval
+
+```bash
+./.venv/bin/sextant-eval-agent --kinds multihop --sample 20 --store chroma_db --out run.json
+./.venv/bin/sextant-eval-agent --kinds multihop --dry-run   # list the questions, spend nothing
+```
+
+Everything above is one `kb.search()` per question. The product lets the
+model choose the query and search again, so `sextant-eval-agent` runs the
+real loop (real model, real MCP subprocess, web search off) and grades
+what every `kb_search` in it returned: **recall@first** (the model's own
+first query) and **recall@union** (everything any search retrieved), plus
+searches, turns and cost per question. Multi-hop questions are the point:
+under the shipped prompt the loop searched once and answered half, and one
+prompt bullet is what changed that. Results and the two product findings it
+surfaced are in [`learning/agent-loop.md`](../learning/agent-loop.md).
+Costs about $0.04 for 29 questions, so it is not in the CI gate.
+
 ## What this does not measure
 
 The corpus and the questions were written together. This grades the retrieval

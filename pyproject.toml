@@ -30,6 +30,7 @@ dependencies = [
 sextant-kb = "tools.vector_db.server:main"
 sextant-ingest = "tools.vector_db.ingest_cli:main"
 sextant-eval = "eval.harness:main"
+sextant-eval-agent = "eval.agent_harness:main"
 sextant-judge = "eval.judge:main"
 # Pre-rename names, kept for one release so existing shells, MCP client
 # configs and the VM runbook keep working. Remove in 0.8.

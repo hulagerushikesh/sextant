@@ -389,6 +389,22 @@ class TestSafetyRails:
         assert events[-1]["truncated"] is True
         assert len(client.models.requests) == agent.MAX_TURNS
 
+    async def test_the_last_permitted_turn_is_told_it_is_the_last(self, host):
+        # Otherwise a model still searching at the cap ends with calls and no
+        # text, and the user sees an empty answer.
+        _, client = await collect("q", host, [search_turn() for _ in range(agent.MAX_TURNS)])
+        last = client.models.requests[-1]["contents"]
+        assert last[-1].role == "user"
+        assert last[-1].parts[0].text == agent.LAST_TURN_NOTE
+        assert last[-2].parts[0].function_response is not None
+        # And only then: the note is not in any earlier request.
+        for request in client.models.requests[:-1]:
+            assert all(
+                part.text != agent.LAST_TURN_NOTE
+                for content in request["contents"]
+                for part in content.parts
+            )
+
     async def test_max_tokens_is_reported_as_truncated(self, host):
         events, _ = await collect(
             "q", host, [answer_turn("Half an ans", finish=types.FinishReason.MAX_TOKENS)]

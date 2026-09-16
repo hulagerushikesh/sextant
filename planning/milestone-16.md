@@ -51,7 +51,19 @@ metrics fall, tables get their own chunks but stay in the same index —
 no second index. *(Outcome: L26 and 6/6 hit, L25 did not — shipped on
 the intent, deviation recorded in the note.)*
 
-### 2 · Grade the agent, not just the retriever — ~$0.30, ask first
+### 2 · Grade the agent, not just the retriever — $0.14 — **done, prompt shipped** (2026-09-16)
+
+Result: the loop does not search twice on its own — multi-hop recall@union
+0.722 under the shipped prompt, equal to recall@first, three runs. One
+decomposition bullet: 0.778 in three of three runs (L25 recovered every
+time, its first query now ranks the PaLM row first), no turns added to
+any other kind; shipped. The three left: two are answered correctly from
+one document (labels over-specify), one (q48) is unreachable by this
+retriever at any phrasing. Side findings: the `min_score` floor sends the
+model into 3–6-search loops on questions the harness passes, and at the
+turn cap the answer could be empty — fixed with a last-turn note.
+`sextant-eval-agent` (`eval/agent_harness.py`) is the re-run path. Note:
+[`learning/agent-loop.md`](../learning/agent-loop.md).
 
 **Hypothesis.** The agent already resolves multi-hop by searching twice;
 the misses are a `kb.search()` artefact and vanish end to end. (L25 is
@@ -71,7 +83,9 @@ rest, both sets. ~30 questions × 2–3 turns × $0.003 ≈ $0.30.
 **Decision.** If multi-hop recall@union ≥ 0.9, record that the loop
 already does the job and the retriever-level miss is not a product miss.
 If not, one prompt change ("if the question has two parts, search for each")
-and re-run; ship only if it moves recall without adding turns elsewhere.
+and re-run; ship only if it moves recall without adding turns elsewhere. *(Outcome: 0.722, not met; the prompt change moved it to 0.778
+with no turns added elsewhere and shipped; 0.9 is not reachable by
+prompting on this set — see the note.)*
 
 ### 3 · Chunk size without the 256 ceiling — ₹0 — **done, 200 stays** (2026-09-16)
 
