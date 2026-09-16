@@ -137,7 +137,17 @@ store must re-ingest, so the note states that cost plainly. If cosine
 separation exceeds the reranker's, revisit `learning/reranker-decision.md`
 — that is the "what would change the decision" clause coming due.
 
-### 5 · Summary nodes for global questions (RAPTOR-lite) — ~$0.10, ask first
+### 5 · Summary nodes for global questions (RAPTOR-lite) — $0.07 — **done, opt-in** (2026-09-16)
+
+Result: the premise failed — global hit@5 was already 1.0 on this corpus
+(a short document's first chunk is its overview), so the rule could not
+be met. Summaries buy rank through the reranker (global hit@1 0.6 → 1.0,
+local +0.02 on both stores) and cost dense recall@5 (−0.07 alone;
+crowding, third time). `sextant-ingest --summaries` ships as opt-in; no
+tree. The starter question "what topics do my documents cover" is a
+listing question, not a retrieval one — `kb_list` is the M17 candidate
+it argues for. Note:
+[`learning/summary-chunks.md`](../learning/summary-chunks.md).
 
 **Hypothesis.** One model-written summary per document, stored as a
 chunk tagged `level: summary`, makes "what topics do my documents cover"
@@ -151,13 +161,15 @@ in the same index. Golden: 6 new "global" questions across both sets.
 **Decision.** Ship as opt-in if global questions go from ≤ 0.3 to ≥ 0.8
 hit@5 and local questions do not move. Not the full RAPTOR tree — one
 level is the cheapest version of the idea and the eval says whether the
-tree is worth building.
+tree is worth building. *(Outcome: control was already 1.0 hit@5; the tree is not
+worth building here, the flag stays as measured.)*
 
 ## Order and dependencies
 
 1 → 4 → 3 (chunk size only makes sense once the embedder is chosen) →
 2 → 5. Experiments 1, 3 are free; 4 is one download; 2 and 5 are the
 paid ones and come last so the free results shape their questions.
+*(All five done 2026-09-16; total model spend $0.21 of the $1 budget.)*
 
 ## Also in this milestone (small, product)
 
