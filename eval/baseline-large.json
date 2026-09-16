@@ -4,61 +4,61 @@
   "questions": 38,
   "modes": {
     "dense": {
-      "hit@1": 0.697,
-      "recall@3": 0.8636,
-      "recall@5": 0.8788,
-      "mrr": 0.8018,
-      "ndcg@5": 0.7997,
+      "hit@1": 0.7273,
+      "recall@3": 0.9091,
+      "recall@5": 0.9091,
+      "mrr": 0.8377,
+      "ndcg@5": 0.8337,
       "scored_by": "cosine"
     },
     "lexical": {
-      "hit@1": 0.8485,
-      "recall@3": 0.9394,
-      "recall@5": 0.9545,
-      "mrr": 0.9091,
-      "ndcg@5": 0.9087,
+      "hit@1": 0.8182,
+      "recall@3": 0.9697,
+      "recall@5": 0.9697,
+      "mrr": 0.8889,
+      "ndcg@5": 0.9074,
       "scored_by": "bm25"
     },
     "rrf": {
-      "hit@1": 0.7879,
-      "recall@3": 0.9394,
-      "recall@5": 0.9394,
-      "mrr": 0.8822,
-      "ndcg@5": 0.8767,
+      "hit@1": 0.8788,
+      "recall@3": 0.9545,
+      "recall@5": 0.9848,
+      "mrr": 0.9318,
+      "ndcg@5": 0.935,
       "scored_by": "rrf"
     },
     "rerank": {
       "hit@1": 0.9091,
-      "recall@3": 0.9394,
+      "recall@3": 0.9545,
       "recall@5": 0.9848,
-      "mrr": 0.947,
-      "ndcg@5": 0.9441,
+      "mrr": 0.9455,
+      "ndcg@5": 0.9517,
       "scored_by": "cross-encoder"
     }
   },
   "separation": {
     "dense": {
-      "answerable_min": 0.358,
-      "answerable_mean": 0.5683,
-      "unanswerable_max": 0.2584,
-      "unanswerable_mean": 0.2176
+      "answerable_min": 0.3733,
+      "answerable_mean": 0.5686,
+      "unanswerable_max": 0.2732,
+      "unanswerable_mean": 0.2243
     },
     "lexical": {
-      "answerable_min": 8.4826,
-      "answerable_mean": 19.7359,
-      "unanswerable_max": 11.6104,
-      "unanswerable_mean": 8.6078
+      "answerable_min": 8.6238,
+      "answerable_mean": 19.8491,
+      "unanswerable_max": 11.6118,
+      "unanswerable_mean": 8.6171
     },
     "rrf": {
-      "answerable_min": 0.0301,
-      "answerable_mean": 0.0324,
-      "unanswerable_max": 0.0299,
-      "unanswerable_mean": 0.0214
+      "answerable_min": 0.0298,
+      "answerable_mean": 0.0325,
+      "unanswerable_max": 0.0289,
+      "unanswerable_mean": 0.0211
     },
     "rerank": {
       "answerable_min": 0.0615,
-      "answerable_mean": 0.9483,
-      "unanswerable_max": 0.0,
+      "answerable_mean": 0.9452,
+      "unanswerable_max": 0.0001,
       "unanswerable_mean": 0.0
     }
   },
@@ -80,7 +80,7 @@
       "unanswerable_blocked": 5
     },
     "0.9": {
-      "answerable_lost": 3,
+      "answerable_lost": 4,
       "unanswerable_blocked": 5
     }
   }

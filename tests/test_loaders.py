@@ -121,3 +121,71 @@ class TestLocate:
 
     def test_an_offset_past_the_end_resolves_to_nothing(self, document):
         assert document.locate(500) == {}
+
+
+class TestPdfExtraction:
+    """MuPDF gives cells one per line; the loader puts a row back together."""
+
+    @pytest.fixture
+    def pdf_file(self, tmp_path):
+        import pymupdf
+
+        path = tmp_path / "paper.pdf"
+        with pymupdf.open() as doc:
+            page = doc.new_page()
+            page.insert_text((72, 72), "TABLE 1: Numbers for two models.", fontsize=10)
+            page.insert_text((72, 90), "Model", fontsize=10)
+            page.insert_text((160, 90), "Size", fontsize=10)
+            page.insert_text((220, 90), "Layers", fontsize=10)
+            page.insert_text((72, 104), "Alpha [1]", fontsize=10)
+            page.insert_text((160, 104), "7B", fontsize=10)
+            page.insert_text((220, 104), "32", fontsize=10)
+            page.insert_text((72, 118), "Beta [2]", fontsize=10)
+            page.insert_text((160, 118), "13B", fontsize=10)
+            page.insert_text((220, 118), "40", fontsize=10)
+            page.insert_text((72, 150), "Epsilon is set to 10", fontsize=10)
+            page.insert_text((165, 146), "-8", fontsize=6)  # superscript, above baseline
+            page.insert_text((178, 150), "in every run described here.", fontsize=10)
+            second = doc.new_page()
+            second.insert_text((72, 72), "Second page prose about results.", fontsize=10)
+            doc.set_metadata({"title": "Two Model Paper"})
+            doc.save(str(path))
+        return path
+
+    def test_cells_on_one_baseline_become_one_line(self, pdf_file):
+        document = load_path(pdf_file)
+        assert "Model Size Layers" in document.text
+        assert "Alpha [1] 7B 32" in document.text
+        assert "Beta [2] 13B 40" in document.text
+
+    def test_superscript_joins_its_own_line(self, pdf_file):
+        document = load_path(pdf_file)
+        (line,) = [ln for ln in document.text.split("\n") if "Epsilon" in ln]
+        assert "-8" in line and line.endswith("in every run described here.")
+
+    def test_pages_and_tables_are_located(self, pdf_file):
+        document = load_path(pdf_file)
+        pages = [loc for loc in document.locators if loc.kind == "page"]
+        assert [loc.label for loc in pages] == [1, 2]
+        assert document.locate(document.text.index("Second page"))["page"] == 2
+        (table,) = [loc for loc in document.locators if loc.kind == "table"]
+        assert table.label.endswith("Model Size Layers")
+        assert document.text[table.start : table.end].startswith("Alpha [1]")
+
+    def test_title_comes_from_metadata(self, pdf_file):
+        assert load_path(pdf_file).title == "Two Model Paper"
+
+    def test_pypdf_fallback_still_reads_the_file(self, pdf_file, monkeypatch):
+        import builtins
+
+        real_import = builtins.__import__
+
+        def no_mupdf(name, *args, **kwargs):
+            if name == "pymupdf":
+                raise ImportError("simulated: wheel unavailable")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", no_mupdf)
+        document = load_path(pdf_file)
+        assert "Second page prose" in document.text
+        assert [loc.label for loc in document.locators if loc.kind == "page"] == [1, 2]
