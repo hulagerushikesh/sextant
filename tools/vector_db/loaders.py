@@ -6,6 +6,10 @@ extracting text -- it is recording *where in the file* each stretch of text came
 from. Every loader returns one flat string plus a list of locators over it, and
 `locate()` maps a character offset back to a page or a section heading. That is
 what lets a chunk spanning a page break still say which page it starts on.
+
+Loaders also mark the tables they can see (`tables.py`), as "table" locators
+whose label is the text a row chunk should be prefixed with. The chunker turns
+those into one chunk per row; nothing else about the text changes.
 """
 
 from __future__ import annotations
@@ -15,6 +19,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from tools.vector_db.tables import TableSpan, find_markdown_tables, find_pdf_tables
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +37,10 @@ class UnsupportedDocument(RuntimeError):
 
 @dataclass(frozen=True)
 class Locator:
-    """A named region of the document: one page, or one section."""
+    """A named region of the document: one page, one section, or one table."""
 
-    kind: str  # "page" | "section"
-    label: Any  # int for pages, str for sections
+    kind: str  # "page" | "section" | "table"
+    label: Any  # int for pages, str for sections, the row prefix for tables
     start: int
     end: int
 
@@ -54,11 +60,22 @@ class LoadedDocument:
         """Which page and section the given character offset falls in."""
         found: dict[str, Any] = {}
         for locator in self.locators:
+            if locator.kind == "table":
+                continue  # a place to cite is a page or a section, not a table
             if locator.start <= offset < locator.end:
                 # Later locators of the same kind win, so a nested section
                 # heading beats the chapter it sits under.
                 found[locator.kind] = locator.label
         return found
+
+    @property
+    def tables(self) -> list[TableSpan]:
+        """The table regions, in the form the chunker takes."""
+        return [
+            TableSpan(loc.start, loc.end, str(loc.label))
+            for loc in self.locators
+            if loc.kind == "table"
+        ]
 
 
 def load_path(path: str | Path, category: str = "general") -> LoadedDocument:
@@ -104,6 +121,12 @@ def _load_pdf(path: Path, category: str) -> LoadedDocument:
         if not text:
             continue
         locators.append(Locator("page", number, offset, offset + len(text)))
+        # Tables are found page by page: pypdf breaks a table that continues
+        # onto the next page anyway, and the header is reprinted there.
+        for table in find_pdf_tables(text):
+            locators.append(
+                Locator("table", table.context, offset + table.start, offset + table.end)
+            )
         parts.append(text)
         offset += len(text) + 2  # the "\n\n" joining pages
 
@@ -125,6 +148,10 @@ def _load_markdown(path: Path, category: str) -> LoadedDocument:
     locators = [
         Locator("section", label, start, headings[i + 1][0] if i + 1 < len(headings) else len(text))
         for i, (start, label) in enumerate(headings)
+    ]
+    locators += [
+        Locator("table", table.context, table.start, table.end)
+        for table in find_markdown_tables(text)
     ]
 
     return LoadedDocument(

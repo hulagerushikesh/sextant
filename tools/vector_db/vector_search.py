@@ -134,7 +134,7 @@ def _locators(doc: dict[str, Any], length: int) -> list[Locator]:
             if not isinstance(item, dict):
                 continue
             kind, label = item.get("kind"), item.get("label")
-            if kind not in ("page", "section") or label is None:
+            if kind not in ("page", "section", "table") or label is None:
                 continue
             start = int(item.get("start", 0))
             end = int(item.get("end", length))
@@ -532,7 +532,9 @@ class KnowledgeBase:
         metadatas: list[dict[str, Any]] = []
 
         for document in documents:
-            chunks = chunk_text(document.text, self.embedder.count_tokens)
+            chunks = chunk_text(
+                document.text, self.embedder.count_tokens, tables=document.tables
+            )
             if not chunks:
                 logger.warning("%s produced no chunks -- empty after stripping", document.doc_id)
                 continue
@@ -549,6 +551,7 @@ class KnowledgeBase:
                     "char_start": chunk.char_start,
                     "char_end": chunk.char_end,
                     "tokens": chunk.tokens,
+                    "kind": chunk.kind,
                 }
                 # A chunk is attributed to wherever it *starts*, so one that runs
                 # across a page break cites the page a reader would turn to.

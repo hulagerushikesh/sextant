@@ -391,8 +391,11 @@ read them; start with the one marked ★.
 level-6-style experiment, zero cloud cost; the open ones are scheduled as
 `planning/milestone-16.md`):
 1. ~~At what corpus size does the cross-encoder start beating RRF alone?~~
-   Done — [`reranker-decision.md`](reranker-decision.md). Follow-up it
-   raised: tables embed badly; try a row-per-chunk loader and re-grade L25/L26.
+   Done — [`reranker-decision.md`](reranker-decision.md). ~~Follow-up it
+   raised: tables embed badly; try a row-per-chunk loader and re-grade
+   L25/L26.~~ Done — [`table-chunking.md`](table-chunking.md): rows under
+   a header, +0.09 hit@1 on the survey set, and why one row per chunk
+   crowded dense retrieval.
 2. Does HyDE help on a technical personal corpus, or hurt (hallucinated
    jargon)? One function in `retrieval.py`, one eval row.
 3. RAPTOR-style summaries vs flat chunks for "overview" questions — the

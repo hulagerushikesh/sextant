@@ -228,7 +228,9 @@ def check_against_baseline(reports: list[dict[str, Any]]) -> int:
                 continue
             delta = value - previous.get(metric, value)
             flag = ""
-            if delta < -REGRESSION_TOLERANCE:
+            # A drop of exactly the tolerance is at the gate, not past it; the
+            # epsilon keeps 0.97 - 0.99 from reading as -0.020000000000000018.
+            if delta < -REGRESSION_TOLERANCE - 1e-9:
                 flag = "  REGRESSION"
                 regressions.append(f"{report['mode']}.{metric} {delta:+.4f}")
             if abs(delta) > 1e-9:
