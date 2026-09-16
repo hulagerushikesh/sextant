@@ -20,7 +20,7 @@ grading never touches whatever you have actually ingested.
 | --- | --- |
 | `corpus/` | 21 committed Markdown documents, ~5,000 words |
 | `golden.jsonl` | 60 labelled questions over `corpus/` |
-| `golden-large.jsonl` | 32 page-labelled questions over a 144-page PDF (see below) |
+| `golden-large.jsonl` | 38 page-labelled questions over a 144-page PDF (see below) |
 | `metrics.py` | hit@1, recall@k, MRR, nDCG@k — pure functions, tested in `tests/` |
 | `harness.py` | runs the golden set against each retrieval mode |
 | `judge.py` | faithfulness, relevance and abstention, scored by the model |
@@ -76,7 +76,8 @@ now settled the other way.
 handbook documents (52 chunks, acting as distractors). One PDF is one document,
 so these questions label **pages** and the harness grades page hits; two
 multi-hop questions label two pages each. Kinds: 10 exact-term, 11 paraphrase,
-3 keyword, 3 multi-hop, 5 unanswerable. Measured 2026-09-15.
+3 keyword, 3 multi-hop, 5 unanswerable (the six `table` questions came
+later, see below). Measured 2026-09-15.
 
 | mode | hit@1 | recall@3 | recall@5 | MRR | nDCG@5 |
 | --- | --- | --- | --- | --- | --- |
@@ -119,6 +120,25 @@ target and its tokens ("PaLM RoPE SwiGLU") are diluted by 15 other rows.
 and retrieve one. A single embedding of a two-part question lands between its
 two halves. The fix is not in the retriever: the agent can search twice, and
 Phase 3 gave it the loop to do so.
+
+## Results with table-aware chunking (Milestone 16, experiment 1)
+
+Six table-row questions (L33–L38, kind `table`) were added to
+`golden-large.jsonl`, making 38, and the loader now marks tables so the
+chunker emits a few rows at a time under one copy of the header
+(`tools/vector_db/tables.py`). Same mixed store, control against treatment,
+rerank mode. Measured 2026-09-16; full sweep and the dense-crowding failure
+of one-row-per-chunk in [`learning/table-chunking.md`](../learning/table-chunking.md).
+
+| large set, 38 q | hit@1 | recall@3 | recall@5 | MRR | nDCG@5 | misses |
+| --- | --- | --- | --- | --- | --- | --- |
+| before | 0.818 | 0.864 | 0.909 | 0.881 | 0.861 | L25 L26 L33 L38 |
+| after | **0.909** | **0.939** | **0.985** | **0.947** | **0.944** | L25 |
+
+The handbook set is unchanged on rerank (0.94 / 0.97) and within the 0.02
+gate on every ablation. `baseline.json` and `baseline-large.json` are the
+"after" numbers. L26 — the table-and-formula multi-hop — now hits; L25
+still needs two searches, which is experiment 2.
 
 ## Setting min_score
 

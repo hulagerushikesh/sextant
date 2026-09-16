@@ -97,9 +97,10 @@ Documents are split into overlapping chunks, indexed twice, and reranked.
 
 ```
 file ──▶ loader ──▶ chunker ──▶ embed ──▶ ChromaDB (cosine)
-         page and   ~200 tokens          │
-         section    40 overlap           │
-         spans                           ▼
+         page,      ~200 tokens          │
+         section,   40 overlap;          │
+         table      table rows           │
+         spans      under header         ▼
 query ─────────────────────────┬──▶ dense top-30 ─┐
                                │                  ├─▶ RRF ─▶ cross-encoder ─▶ top-k
                                └──▶ BM25 top-30 ──┘
@@ -112,6 +113,16 @@ against the whole document and `0.9438` against the sentence alone. Storing
 documents whole did not make retrieval coarse, it made most of every long
 document unreachable. Chunks are sized from the embedder's own tokenizer, so the
 budget moves if the model does.
+
+**Why tables are chunked differently.** A table row is a record whose meaning
+lives in the header; packed into a 200-token chunk with fifteen siblings,
+"PaLM · RoPE · SwiGLU" was diluted past retrieval (two measured misses on the
+survey set). Loaders mark the tables they can see — `TABLE n:` captions in PDF
+text, pipe tables in Markdown — and the chunker emits a few rows at a time
+under one copy of the caption and header, spans still pointing at the rows
+alone. Six table questions went from 4/6 to 6/6 at k=5 and large-set hit@1
+rose 0.06; [`learning/table-chunking.md`](learning/table-chunking.md) has the
+tables, including the one-row-per-chunk version that crowded dense top-5.
 
 **Why both retrievers.** Embeddings match meaning and lose exact tokens; BM25
 does the opposite. On the 144-page paper used to test this, the best passage for
@@ -315,6 +326,7 @@ tools/vector_db/
   vector_search.py   Orchestration: chunk on ingest, hybrid search on query
   loaders.py         PDF / Markdown / text → text plus page and section spans
   chunking.py        Token-aware splitting with overlap and exact char offsets
+  tables.py          Finds tables (PDF captions, Markdown pipes) for row chunks
   embeddings.py      The embedding backend, and the token budget it implies
   retrieval.py       BM25, reciprocal rank fusion, cross-encoder reranking
   ann/               flat, HNSW, IVF-PQ (+rerank) in NumPy; FAISS reference; benchmark
@@ -330,7 +342,7 @@ eval/
   judge.py           `sextant-judge` — faithfulness and abstention
   baseline.json      Committed results; the CI gate compares against these
   baseline-large.json Results on the 1,602-chunk store (reranker decision)
-tests/               320 tests: chunking, retrieval, ANN, agent loop, API, regressions
+tests/               344 tests: chunking, retrieval, ANN, agent loop, API, regressions
 deploy/              Caddyfile, prod Dockerfile for the edge, deploy.sh, GCP runbook
 learning/            Study path + measured notes (ANN comparison, reranker decision)
 planning/            Status, cost, milestone plans, trackers, archived docs
