@@ -63,7 +63,11 @@ because each one was learned the expensive way.
   refuses to open under another (`SEXTANT_EMBEDDER`). MiniLM and bge-small
   are both 384-d, so without the stamp a mismatch would be silent.
 - MCP stdio strips the environment: new `SEXTANT_*` knobs the KB needs must
-  be added to `_FORWARDED_ENV` in `mcp_host.py` or they silently no-op.
+  be added to `_FORWARDED_ENV` in `mcp_host.py` or they silently no-op
+  (`test_every_retrieval_knob_crosses_the_process_boundary` pins the latest).
+- Results are capped at 2 chunks per document (`SEXTANT_MAX_PER_DOCUMENT`,
+  dense + rerank only, score-guarded). Set it to `0` for any experiment's
+  control, or dense numbers will not match notes written before 2026-09-17.
 - Docker Compose interpolates `$` in `env_file` — bcrypt hashes need
   `format: raw` (already set in `docker-compose.prod.yml`).
 - `gemini-2.5-flash-lite` passes a one-shot probe and fails the tool loop

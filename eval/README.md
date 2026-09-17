@@ -144,6 +144,15 @@ gate on every ablation. `baseline.json` and `baseline-large.json` are the
 "after" numbers. L26 — the table-and-formula multi-hop — now hits; L25
 still needs two searches, which is experiment 2.
 
+## Per-document cap
+
+The returned list holds each document to `SEXTANT_MAX_PER_DOCUMENT` (2)
+chunks when a competitive document is waiting, under cosine and
+cross-encoder scores only. `baseline.json` dense recall@5 0.955 → 0.973
+from this; rerank unchanged. Three rounds and the survey-set question a
+hard cap lost are in [`../learning/candidate-cap.md`](../learning/candidate-cap.md).
+Re-run any experiment's control with `SEXTANT_MAX_PER_DOCUMENT=0`.
+
 ## Setting min_score
 
 The summary gap between splits says no threshold exists — answerable scores go
