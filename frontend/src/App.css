@@ -307,6 +307,8 @@
 .answer-para + .answer-para,
 .answer-list + .answer-para,
 .answer-para + .answer-list,
+.answer-table-wrap + .answer-para,
+.answer-table-wrap + .answer-list,
 .answer-heading {
   margin-top: 0.85em;
 }
@@ -322,6 +324,40 @@
   display: flex;
   flex-direction: column;
   gap: 0.3em;
+}
+
+/* Wide tables scroll inside their own box; the thread never scrolls sideways. */
+.answer-table-wrap {
+  margin-top: 0.85em;
+  overflow-x: auto;
+}
+
+.answer-table {
+  border-collapse: collapse;
+  font-family: var(--sans);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+  min-width: 100%;
+}
+
+.answer-table th,
+.answer-table td {
+  padding: 0.4em 0.7em;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--rule);
+}
+
+.answer-table th {
+  font-weight: 620;
+  background: var(--sunken);
+  border-bottom-width: 2px;
+  white-space: nowrap;
+}
+
+.answer-table tbody tr:last-child td {
+  border-bottom: 0;
 }
 
 .answer code {

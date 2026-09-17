@@ -174,11 +174,12 @@ paid ones and come last so the free results shape their questions.
 ## Also in this milestone (small, product)
 
 - Ship the composer fix already on `main` the next time the VM is up.
-- Render markdown tables in answers (`Answer.jsx` is deliberately not a
-  markdown parser; a table is the one block it cannot show — add just
-  that block).
-- Export a conversation as Markdown from the palette (the "no export"
-  known issue; ~40 lines).
+- ~~Render markdown tables in answers~~ — done 2026-09-17: a GFM table
+  block in `Answer.jsx` (rule row required, so a streaming header renders
+  as prose until the rule lands; citations work inside cells).
+- ~~Export a conversation as Markdown from the palette~~ — done
+  2026-09-17: `frontend/src/export.js`, questions as headings, answers
+  verbatim, numbered source list, spend footer.
 
 ## Out of scope
 
