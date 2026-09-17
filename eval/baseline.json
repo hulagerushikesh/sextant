@@ -5,10 +5,10 @@
   "modes": {
     "dense": {
       "hit@1": 0.8727,
-      "recall@3": 0.8758,
-      "recall@5": 0.9545,
+      "recall@3": 0.8848,
+      "recall@5": 0.9727,
       "mrr": 0.9148,
-      "ndcg@5": 0.8945,
+      "ndcg@5": 0.9044,
       "scored_by": "cosine"
     },
     "lexical": {
