@@ -15,7 +15,7 @@
 #   deploy/deploy.sh vm-host logs       # tail the stack
 #   deploy/deploy.sh vm-host down       # stop the stack (containers only)
 #   deploy/deploy.sh vm-host status     # is the VM up? what does it cost?
-#   deploy/deploy.sh vm-host stop       # park the VM (disks + IP + images kept)
+#   deploy/deploy.sh vm-host stop       # park the VM (disks + images kept)
 #   deploy/deploy.sh vm-host start      # unpark it -- asks first, it costs
 #
 # status/stop/start go through gcloud, not ssh. The instance, zone and
@@ -74,12 +74,25 @@ case "$CMD" in
     if [ "$state" = "TERMINATED" ]; then echo "$INSTANCE already stopped"; exit 0; fi
     echo ">> stopping $INSTANCE (containers restart on their own at next start) ..."
     "${GC[@]}" stop "$INSTANCE" --zone="$ZONE" --quiet
-    echo ">> stopped. Disks, images, .env and the reserved IP are all kept."
+    echo ">> stopped. Disks, images and .env are kept; see README on the external IP."
     ;;
   start)
     vm_target
     read -r state _ _ <<<"$(vm_status)"
     if [ "$state" = "RUNNING" ]; then echo "$INSTANCE already running"; exit 0; fi
+    # The static IP was released on 2026-09-17 (it billed ~₹640/month while the
+    # VM sat stopped). Starting a VM with no external address gives a box
+    # nothing can reach, so refuse until one is attached -- and do not attach
+    # one here, because reserving an address is itself a meter.
+    if [ -z "$("${GC[@]}" describe "$INSTANCE" --zone="$ZONE" \
+        --format='value(networkInterfaces[0].accessConfigs[0].name)' 2>/dev/null)" ]; then
+      echo "$INSTANCE has no external IP (released to save cost). Reattach one first:"
+      echo "  gcloud compute addresses create agenticrag-ip --region=\${ZONE%-*} --project=$PROJECT"
+      echo "  gcloud compute instances add-access-config $INSTANCE --zone=$ZONE --project=$PROJECT \\"
+      echo "    --access-config-name=external-nat --address=\$(gcloud compute addresses describe agenticrag-ip --region=\${ZONE%-*} --project=$PROJECT --format='get(address)')"
+      echo "then point DNS at the new address (deploy/README.md B3) and run start again."
+      exit 1
+    fi
     # This is the one command here that turns a meter on. Say so, and wait.
     echo "Starting $INSTANCE bills $VM_COST_PER_HOUR per hour until it is stopped again."
     if [ "${3:-}" != "--yes" ]; then

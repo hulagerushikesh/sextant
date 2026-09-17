@@ -54,8 +54,11 @@ API calls) happens without an explicit OK on the amount.
 
 1. ~~**Run policy once live**~~ — decided 2026-09-15: on demand.
    `deploy.sh HOST start|stop`; stop after each testing session.
-2. **Keep or release the static IP while parked** — ₹600/mo for an address no
-   DNS record points at yet. Decided 2026-09-14: keep.
+2. ~~**Keep or release the static IP while parked**~~ — reversed 2026-09-17:
+   released. A ₹22 day on a stopped VM traced to the idle IP (~₹21/day, the
+   largest line); nothing pointed at it. Re-reserve the day the VM goes live
+   (`deploy/README.md`, "Parking the VM"). Parked cost is now disks only,
+   ~₹270/mo.
 3. ~~**Reranker**~~ — settled 2026-09-15: it stays. Only stage with a
    calibrated abstention score; leads ranking at 1,602 chunks. See
    `../learning/reranker-decision.md`.

@@ -33,7 +33,8 @@ because each one was learned the expensive way.
 
 - **Ask before anything that turns on a meter** — VM start/resize, new cloud
   resources, paid builds, bulk model calls — and state the ₹ amount. The VM
-  is ~₹135/day running; it is parked (stopped) by default.
+  is ~₹135/day running; it is parked (stopped) by default, with **no external
+  IP** since 2026-09-17 — `deploy.sh start` refuses until one is reattached.
 - GCP billing account is INR: budget amounts are rupees (`1700` ≈ $20).
 - Kill CPU-heavy local jobs (eval runs, model loads) at the end of a session.
 
