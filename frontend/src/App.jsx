@@ -11,6 +11,7 @@ import Toast, { useToast } from './components/Toast'
 import Trace from './components/Trace'
 import Usage from './components/Usage'
 import { blank, loadAll, remove, saveAll, upsert } from './conversations'
+import { download, fileName, toMarkdown } from './export'
 import { storageKey } from './storage'
 import { money, readLifetime, record, resetLifetime, seedFrom, totals } from './usage'
 
@@ -332,6 +333,11 @@ export default function App() {
   const stop = useCallback(() => abortRef.current?.abort(), [])
 
   const lastAnswer = [...messages].reverse().find((m) => m.role === 'assistant' && m.text)
+  const exportConversation = useCallback(() => {
+    const current = saved.find((c) => c.id === activeId) || { ...blank(), messages, sources }
+    download(fileName(current), toMarkdown({ ...current, messages, sources }))
+    showToast('Conversation exported')
+  }, [saved, activeId, messages, sources, showToast])
   const copyAnswer = useCallback(
     async (text) => {
       try {
@@ -390,6 +396,8 @@ export default function App() {
       run: () => setWebSearch((on) => !on),
     })
     list.push({ id: 'focus', group: 'Conversation', label: 'Focus the question box', keys: ['/'], run: focusComposer })
+    if (messages.length && !streaming)
+      list.push({ id: 'export', group: 'Conversation', label: 'Export as Markdown', hint: '.md, with sources', keywords: 'download save file', run: exportConversation })
     if (messages.length)
       list.push({ id: 'delete', group: 'Conversation', label: 'Delete this conversation', keywords: 'remove', run: () => discard(activeId) })
 

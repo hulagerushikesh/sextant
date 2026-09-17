@@ -28,7 +28,7 @@ The model chooses its own tools, and the numbers below are reproducible.
 | Interface: inline citations, agent trace, drag-and-drop upload | Working |
 | Index Lab: flat / HNSW / IVF-PQ from scratch, FAISS reference, live switch | Working |
 | Daily spend cap, per-query cost, cheapest model that runs the loop | Working |
-| Command palette, keyboard-first, empty states, onboarding | Working |
+| Command palette, keyboard-first, empty states, onboarding, Markdown export | Working |
 | Production stack: Caddy TLS + Basic-auth gate, prod compose, preflight | Built, verified locally; VM provisioned, parked |
 
 Study material lives in [`learning/`](learning/) (a levelled path from
@@ -451,8 +451,8 @@ corpus was live, the sources were real, and the prose was hardcoded.
 - `ruff format` is not enforced. Line length is already checked by the linter,
   and adopting a formatter would rewrite sixteen files whose wrapping was chosen
   for readability.
-- Conversations are per-browser. There is no account, no sync and no export;
-  clearing site data clears them.
+- Conversations are per-browser. There is no account and no sync; clearing
+  site data clears them. "Export as Markdown" in the palette is the way out.
 - A follow-up cannot re-read a passage from two turns ago without searching for
   it again. Deliberate — see `conversation.py` — but it means an unusually
   specific follow-up may retrieve rather than remember.
