@@ -260,13 +260,14 @@ The box `.env` and `/data` are never touched by a redeploy.
 ## Parking the VM (cost)
 
 Running, the VM bills ~₹135/day whether or not anyone uses it. When the
-site is not needed, stop the instance — disks, the reserved IP, the built
-images and `.env` all survive a stop. Only the meters change:
+site is not needed, stop the instance — disks, the built images and `.env`
+all survive a stop. Only the meters change:
 
 | State | ₹/month (approx.) |
 | --- | --- |
 | running e2-standard-2 | 4,100 + 300 (IP) + 270 (disks) |
-| stopped | 600 (idle IP bills ~2× in-use) + 270 (disks) |
+| stopped, IP reserved | 640 (an idle IP bills ~2× in-use) + 270 (disks) |
+| stopped, IP released (**current state**, since 2026-09-17) | 270 (disks) |
 
 ```bash
 deploy/deploy.sh HOST status    # RUNNING / TERMINATED, and what is billing
@@ -280,8 +281,23 @@ deploy/deploy.sh HOST           # only if the tree changed; the containers
 `HOST` is the config-ssh alias (`agenticrag.us-central1-a.<project>`); the
 lifecycle commands read instance, zone and project out of it.
 
-The static IP does not change across stop/start, so DNS stays valid.
-Releasing the IP saves the ₹600 but changes the address and the DNS record.
+**The static IP is released.** It was 35.226.228.218; while the VM was
+parked it was the largest line on the bill (~₹21/day) for an address no DNS
+record pointed at. The instance now has no external access config at all,
+and `deploy.sh start` refuses to start it until one is attached. To go
+live again:
+
+```bash
+gcloud compute addresses create agenticrag-ip --region="$REGION"
+gcloud compute instances add-access-config agenticrag --zone="$ZONE" \
+  --access-config-name=external-nat \
+  --address="$(gcloud compute addresses describe agenticrag-ip --region="$REGION" --format='get(address)')"
+```
+
+then B3 (DNS to the new address) and `deploy.sh HOST start`. Reserving the
+address turns the ₹640/month back on the moment it exists, so do it the
+same day the VM starts, not before. The old firewall rules, disks and
+`.env` on the box are untouched.
 
 ---
 
