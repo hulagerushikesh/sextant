@@ -125,6 +125,16 @@ class TestTheStoreOverrideReachesTheServer:
         monkeypatch.delenv(PERSIST_DIR_ENV, raising=False)
         assert kb_server().env is None
 
+    def test_every_retrieval_knob_crosses_the_process_boundary(self, monkeypatch):
+        # A knob the KB reads but the host does not forward is a silent no-op
+        # in the app while working in every test and CLI.
+        from mcp_server.mcp_host import kb_server
+        from tools.vector_db.vector_search import MAX_PER_DOCUMENT_ENV
+
+        monkeypatch.delenv(PERSIST_DIR_ENV, raising=False)
+        monkeypatch.setenv(MAX_PER_DOCUMENT_ENV, "0")
+        assert kb_server().env == {MAX_PER_DOCUMENT_ENV: "0"}
+
 
 class TestLongDocumentsAreReachable:
     """Phase 4: documents were stored whole, and the embedder truncates at 256

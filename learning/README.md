@@ -23,11 +23,23 @@ library folklore, and the numbers are the curriculum.
 | 8 | Interface craft: SSE clients, keyboard-first, motion | `frontend/src/` |
 | 9 | Research frontier: the papers | this file, §9 |
 
-Companion notes in this folder, all examples of the level-6 method done
-properly ([`pdf-extraction.md`](pdf-extraction.md) is the smallest: a
-bake-off of three extractors with one table and one decision): [`ann-comparison.md`](ann-comparison.md) — the measured HNSW vs
-IVF-PQ study; [`reranker-decision.md`](reranker-decision.md) — the experiment
-that settled whether the cross-encoder stays.
+## Notes — experiments done the level-6 way
+
+Each is one hypothesis, one change, both golden sets, a rule written before
+the numbers, and a decision. Read them in this order; each later one
+depends on a number in an earlier one.
+
+| Note | Question | Decision |
+| --- | --- | --- |
+| [`pdf-extraction.md`](pdf-extraction.md) | Which PDF extractor keeps table rows and headings intact? | PyMuPDF, lines rebuilt from span baselines |
+| [`ann-comparison.md`](ann-comparison.md) | Flat vs HNSW vs IVF-PQ on this corpus — where does ANN start paying? | Exact search until ~100k vectors |
+| [`reranker-decision.md`](reranker-decision.md) | Does the cross-encoder earn its place at 1,602 chunks? | Stays — only calibrated abstention score, leads ranking |
+| [`table-chunking.md`](table-chunking.md) | M16 exp 1 — can a table row be found on its own? | Shipped: rows under their header, +0.09 hit@1 |
+| [`agent-loop.md`](agent-loop.md) | M16 exp 2 — does the agent search twice for two-part questions? | No (0.722); one prompt bullet → 0.778, shipped |
+| [`chunk-size.md`](chunk-size.md) | M16 exp 3 — is 200 tokens the content's size or MiniLM's? | 200 stays; bigger loses, 150 helps rerank and hurts dense |
+| [`embedder-swap.md`](embedder-swap.md) | M16 exp 4 — MiniLM → bge-small? | Not switched; opt-in `SEXTANT_EMBEDDER` |
+| [`summary-chunks.md`](summary-chunks.md) | M16 exp 5 — one overview chunk per document for global questions? | Opt-in `--summaries`; wins rank, cost dense recall |
+| [`candidate-cap.md`](candidate-cap.md) | M17 exp 1 — was the dense loss in exps 1, 3, 5 crowding? | Yes; shipped, cap 2 with a score guard, dense only |
 
 ---
 
@@ -401,8 +413,10 @@ level-6-style experiment, zero cloud cost; the open ones are scheduled as
    jargon)? One function in `retrieval.py`, one eval row.
 2b. ~~Is 200 tokens the right chunk size, or MiniLM's?~~ Done —
    [`chunk-size.md`](chunk-size.md): bigger loses for both embedders,
-   150 helps the reranker and hurts dense through crowding; 200 stays and
-   a per-document candidate cap is the next question.
+   150 helps the reranker and hurts dense through crowding; 200 stays.
+   ~~A per-document candidate cap is the next question.~~ Done —
+   [`candidate-cap.md`](candidate-cap.md): crowding confirmed, cap 2 with
+   a score guard shipped, dense recall@5 back on every store.
 2c. ~~Does the agent loop already resolve multi-hop by searching twice?~~
    Done — [`agent-loop.md`](agent-loop.md): it did not (0.722 = single
    search); one prompt bullet takes it to 0.778 with no extra turns; the

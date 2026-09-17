@@ -111,6 +111,21 @@ RERANK_DEPTH = 25
 # Re-derive with: sextant-eval
 DEFAULT_MIN_SCORE = 0.01
 
+# At most this many chunks of one document in the returned list, with the
+# chunks it cuts backfilling the remaining slots in score order -- so a corpus
+# of one document gets exactly what it would have without the cap. Milestone 16
+# lost dense recall@5 three times to the same crowding (a found document's
+# siblings filling the slots a second document needed); `0` turns it off.
+# Measured in `learning/candidate-cap.md`.
+MAX_PER_DOCUMENT_ENV = settings.env_name("MAX_PER_DOCUMENT")
+MAX_PER_DOCUMENT = int(settings.getenv("MAX_PER_DOCUMENT", "2") or 0)
+
+# A document over the cap keeps its slot unless the next document waiting
+# scores at least this fraction of it. Dense siblings that crowd a list score
+# within a few percent of the chunk they push out; the chunks a hard cap let in
+# under the cross-encoder scored a thirtieth of the page they displaced.
+MIN_DISPLACE_RATIO = 0.5
+
 # Retrieval modes. Only "rerank" is meant for production use; the other three
 # exist because `eval/harness.py` has to be able to ablate the pipeline, and a
 # claim that reranking helps is worth nothing without the run that shows it.
@@ -393,19 +408,60 @@ class KnowledgeBase:
             return [], "none"
 
         order = sorted(range(len(candidates)), key=lambda i: scores[i], reverse=True)
+        # An RRF score is a rank artefact with no meaning on a 0-1 scale, so
+        # thresholding it would repeat exactly the mistake this project
+        # already made once with l2 distances.
+        if scored_by == "cross-encoder":
+            order = [i for i in order if scores[i] >= min_score]
 
-        hits: list[dict[str, Any]] = []
-        for i in order:
-            # An RRF score is a rank artefact with no meaning on a 0-1 scale, so
-            # thresholding it would repeat exactly the mistake this project
-            # already made once with l2 distances.
-            if scored_by == "cross-encoder" and scores[i] < min_score:
-                continue
-            candidate = candidates[i]
-            hits.append(self._hit(candidate, scores[i], scored_by, dense_scores.get(candidate.id)))
-            if len(hits) >= limit:
+        # Only where a score is a relevance and not a rank: the guard inside
+        # compares magnitudes, and an RRF or BM25 score has none to compare.
+        if scored_by in ("cosine", "cross-encoder"):
+            chosen = self._diversify(order, [c.id for c in candidates], scores, limit)
+        else:
+            chosen = order[:limit]
+        return [
+            self._hit(candidates[i], scores[i], scored_by, dense_scores.get(candidates[i].id))
+            for i in chosen
+        ], scored_by
+
+    def _diversify(
+        self, order: list[int], ids: list[str], scores: list[float], limit: int
+    ) -> list[int]:
+        """The first `limit` of `order`, holding each document to MAX_PER_DOCUMENT.
+
+        Two passes: take while the document is under the cap, then fill what is
+        left from the ones that were skipped, still in score order. The second
+        pass is what makes the cap safe -- it can only reorder, never return
+        fewer hits than the uncapped list would. A chunk over the cap is only
+        skipped when the document that would take its place is competitive
+        (MIN_DISPLACE_RATIO); a cap that hands a slot to a chunk scoring zero
+        is not diversity, it is noise.
+        """
+        cap = MAX_PER_DOCUMENT
+        if cap <= 0:
+            return order[:limit]
+        document = {
+            i: self._corpus.get(ids[i], ("", {}))[1].get("document_id", ids[i]) for i in order
+        }
+        chosen: list[int] = []
+        skipped: list[int] = []
+        per_document: dict[str, int] = {}
+        for position, i in enumerate(order):
+            if len(chosen) >= limit:
                 break
-        return hits, scored_by
+            if per_document.get(document[i], 0) >= cap:
+                challenger = next(
+                    (j for j in order[position + 1 :] if per_document.get(document[j], 0) < cap),
+                    None,
+                )
+                if challenger is not None and scores[challenger] >= MIN_DISPLACE_RATIO * scores[i]:
+                    skipped.append(i)
+                    continue
+            per_document[document[i]] = per_document.get(document[i], 0) + 1
+            chosen.append(i)
+        chosen.extend(skipped[: limit - len(chosen)])
+        return chosen
 
     def _rank(
         self,

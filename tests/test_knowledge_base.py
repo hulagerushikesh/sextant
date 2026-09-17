@@ -7,6 +7,7 @@ import time
 
 import pytest
 
+from tools.vector_db import vector_search
 from tools.vector_db.vector_search import RETRIEVAL_MODES, KnowledgeBase
 
 
@@ -100,6 +101,41 @@ class TestThreshold:
         # shape of the l2-distance bug this project already shipped once.
         result = await kb.search("kalman", limit=5, min_score=0.5, mode="rrf")
         assert result["results"]
+
+
+class TestPerDocumentCap:
+    """`_diversify` on its own: the ranking is given, only the slots move."""
+
+    # Ranked ids: three chunks of `a`, then one of `b`, then one of `c`.
+    ids = ["a#0", "a#1", "a#2", "b#0", "c#0"]
+    order = [0, 1, 2, 3, 4]
+    scores = [0.9, 0.8, 0.7, 0.6, 0.5]
+
+    def kb(self):
+        stub = KnowledgeBase.__new__(KnowledgeBase)
+        stub._corpus = {i: ("", {"document_id": i.split("#")[0]}) for i in self.ids}
+        return stub
+
+    def test_a_capped_document_yields_its_slots_to_the_next_documents(self, monkeypatch):
+        monkeypatch.setattr(vector_search, "MAX_PER_DOCUMENT", 1)
+        chosen = self.kb()._diversify(self.order, self.ids, self.scores, 3)
+        assert [self.ids[i] for i in chosen] == ["a#0", "b#0", "c#0"]
+
+    def test_what_the_cap_cuts_backfills_in_score_order(self, monkeypatch):
+        # Two slots left after the other documents are in; the cut chunks of
+        # `a` take them, still in rank order, so nothing is ever lost.
+        monkeypatch.setattr(vector_search, "MAX_PER_DOCUMENT", 1)
+        chosen = self.kb()._diversify(self.order, self.ids, self.scores, 5)
+        assert [self.ids[i] for i in chosen] == ["a#0", "b#0", "c#0", "a#1", "a#2"]
+
+    def test_a_single_document_corpus_is_unchanged(self, monkeypatch):
+        monkeypatch.setattr(vector_search, "MAX_PER_DOCUMENT", 2)
+        chosen = self.kb()._diversify([0, 1, 2], self.ids, self.scores, 3)
+        assert [self.ids[i] for i in chosen] == ["a#0", "a#1", "a#2"]
+
+    def test_zero_means_off(self, monkeypatch):
+        monkeypatch.setattr(vector_search, "MAX_PER_DOCUMENT", 0)
+        assert self.kb()._diversify(self.order, self.ids, self.scores, 3) == [0, 1, 2]
 
 
 class TestConcurrency:

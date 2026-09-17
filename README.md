@@ -121,9 +121,20 @@ stays.
 **Why summaries are opt-in.** `sextant-ingest --summaries` adds one
 model-written overview chunk per document. Measured on this corpus it moves
 the reranked pipeline's hit@1 up (+0.02 local, 0.6 → 1.0 on "which
-document…" questions) and dense recall@5 down (−0.07, crowding), and a
-short document's first chunk already is its overview — so it is a flag, not
-the default. [`learning/summary-chunks.md`](learning/summary-chunks.md).
+document…" questions), and a short document's first chunk already is its
+overview — so it is a flag, not the default. It also cost dense recall@5
+(−0.07, crowding) until the per-document cap below removed that.
+[`learning/summary-chunks.md`](learning/summary-chunks.md).
+
+**Why at most two chunks per document.** Three experiments lost dense
+recall@5 the same way: siblings of the document already found filled the
+five slots the second document needed. The returned list now holds each
+document to two chunks — but only when the document that would take the
+slot is competitive (at least half the score), and only where a score is a
+relevance (cosine, cross-encoder), not a rank (BM25, RRF). A hard cap
+without the guard pushed a survey page out for two chunks scoring 0.000.
+Dense recall@5 +0.02 to +0.07 depending on the store, reranked pipeline
+unchanged. [`learning/candidate-cap.md`](learning/candidate-cap.md).
 
 **Why tables are chunked differently.** A table row is a record whose meaning
 lives in the header; packed into a 200-token chunk with fifteen siblings,
@@ -164,7 +175,7 @@ configuration. Full method and results in [`eval/README.md`](eval/README.md).
 
 | mode | hit@1 | recall@3 | MRR | nDCG@5 |
 | --- | --- | --- | --- | --- |
-| dense (vectors only) | 0.873 | 0.876 | 0.915 | 0.894 |
+| dense (vectors only) | 0.873 | 0.885 | 0.915 | 0.904 |
 | lexical (BM25 only) | 0.782 | 0.876 | 0.864 | 0.851 |
 | rrf (fused) | 0.909 | 0.921 | 0.950 | 0.931 |
 | rerank (full pipeline) | 0.909 | 0.949 | 0.955 | 0.938 |
@@ -219,6 +230,7 @@ appear in `/docs` and are rejected before a handler runs.
 | `SEXTANT_CHROMA_DIR` | `./chroma_db` | Where the collection lives |
 | `SEXTANT_CHUNK_TOKENS` | `200` | Chunk target in the embedder's tokens (overlap follows at a fifth); refused past the embedder's window. Sweep in [`learning/chunk-size.md`](learning/chunk-size.md) |
 | `SEXTANT_EMBEDDER` | `all-MiniLM-L6-v2` | Any sentence-transformers model; a store remembers the model that built it and refuses another (see [`learning/embedder-swap.md`](learning/embedder-swap.md)) |
+| `SEXTANT_MAX_PER_DOCUMENT` | `2` | Chunks of one document in a result list; `0` turns the cap off. Measured in [`learning/candidate-cap.md`](learning/candidate-cap.md) |
 | `SEXTANT_ANN_INDEX` | `chroma` | `flat` / `hnsw` / `ivfpq` / `ivfpq_rerank` to route live dense retrieval through the hand-written indexes |
 | `SEXTANT_WEB_SEARCH` | off | `on` offers Google Search grounding by default (billed per grounded request) |
 | `SEXTANT_DAILY_BUDGET_USD` | `0` (off) | Hard per-UTC-day spend cap; `/query` returns 429 once hit |
@@ -361,7 +373,7 @@ eval/
   agent_harness.py   `sextant-eval-agent` — grades what the loop retrieved
   baseline.json      Committed results; the CI gate compares against these
   baseline-large.json Results on the 1,602-chunk store (reranker decision)
-tests/               380 tests: chunking, retrieval, ANN, agent loop, API, regressions
+tests/               385 tests: chunking, retrieval, ANN, agent loop, API, regressions
 deploy/              Caddyfile, prod Dockerfile for the edge, deploy.sh, GCP runbook
 learning/            Study path + measured notes (ANN comparison, reranker decision)
 planning/            Status, cost, milestone plans, trackers, archived docs
