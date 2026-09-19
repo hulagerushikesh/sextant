@@ -142,7 +142,7 @@ class TestAnswerOne:
         offered = {
             t.name for t in client.models.requests[0]["config"].tools[0].function_declarations
         }
-        assert offered == {"kb_search", "kb_stats"}
+        assert offered == {"kb_search", "kb_list", "kb_stats"}
         assert len(client.models.requests[0]["config"].tools) == 1
 
 

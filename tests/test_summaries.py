@@ -118,6 +118,18 @@ class TestStoredSummary:
         assert hits[wanted]["section"] == "Overview"
         assert hits[wanted]["page"] is None
 
+    async def test_the_listing_carries_the_overview_not_as_a_chunk(self, kb, kalman_overview):
+        document, _, _ = kalman_overview
+        listing = await kb.list_documents()
+        kalman = next(d for d in listing["documents"] if d["document_id"] == document.doc_id)
+        assert kalman["overview"] == KALMAN_SUMMARY
+        # The overview is not counted as a chunk of text, and the lead is still
+        # the document's own opening, not the overview's.
+        assert kalman["lead"].startswith("# Kalman Filter")
+        assert kalman["chunks"] == (await kb.health_check())["collection_size"] - 1 - sum(
+            d["chunks"] for d in listing["documents"] if d["document_id"] != document.doc_id
+        )
+
     async def test_without_a_summary_add_document_stores_only_the_text(self, kb, corpus_dir: Path):
         document = load_path(str(corpus_dir / "hungarian.md"), category="test")
         before = (await kb.health_check())["collection_size"]

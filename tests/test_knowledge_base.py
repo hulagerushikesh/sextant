@@ -103,6 +103,24 @@ class TestThreshold:
         assert result["results"]
 
 
+class TestListing:
+    async def test_every_document_is_listed_with_its_opening(self, kb):
+        listing = await kb.list_documents()
+        by_id = {d["document_id"]: d for d in listing["documents"]}
+        assert listing["count"] == len(by_id) >= 2
+        kalman = by_id["kalman"]
+        assert kalman["title"] == "Kalman Filter"
+        assert kalman["chunks"] >= 1
+        assert kalman["lead"].startswith("# Kalman Filter")
+        assert kalman["overview"] is None
+        assert kalman["pages"] is None
+
+    async def test_listing_is_ordered_by_category_then_title(self, kb):
+        listing = await kb.list_documents()
+        keys = [(d["category"], d["title"].lower()) for d in listing["documents"]]
+        assert keys == sorted(keys)
+
+
 class TestPerDocumentCap:
     """`_diversify` on its own: the ranking is given, only the slots move."""
 
