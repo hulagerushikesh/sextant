@@ -9,6 +9,10 @@ Every retrieval stage is there because a measurement said so.
 Formerly *AgenticRAG*; renamed in 0.7. The `agenticrag-*` commands and
 `AGENTICRAG_*` variables still work as aliases for one release.
 
+Started as [SudhanshuR37/AgenticRAG](https://github.com/SudhanshuR37/AgenticRAG)
+with Sudhanshu Randive; rebuilt from the ground up in September 2026 as the
+MCP-native system described here. MIT licensed — see [`LICENSE`](LICENSE).
+
 ## Honest status
 
 The model chooses its own tools, and the numbers below are reproducible.
