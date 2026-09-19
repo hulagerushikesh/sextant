@@ -105,15 +105,27 @@ nothing down (dense +0.029), rerank hit@1 identical on every store.
 **Shipped as default 2**; `baseline.json` regenerated. Note:
 [`../learning/candidate-cap.md`](../learning/candidate-cap.md).
 
-### 2 · `kb_list` tool — needs a key, asked for first
+### 2 · `kb_list` tool — built ₹0 (2026-09-19); measurement needs a key
 
 "What topics do my documents cover?" is a listing, not a retrieval;
-experiment 5 showed no chunk answers it at any level of a summary tree. A
-tool returning titles, overviews (when `--summaries` was used) and chunk
-counts, offered to the agent beside `kb_search` and `kb_stats`, with the
-opening prompts re-pointed at it. Measured with the agent harness on the
-five `global` questions plus the starter prompts. Deferred until a key
-exists; estimate ~$0.05.
+experiment 5 showed no chunk answers it at any level of a summary tree.
+
+**Built.** `KnowledgeBase.list_documents()` → per document: title,
+category, chunk count, page count, the model-written overview when
+`--summaries` was used, and the first 240 characters of its opening either
+way. `kb_list` on the MCP server; offered to the agent beside `kb_search`
+and `kb_stats`; rendered to the model as one block per document; one
+prompt bullet says a question about the collection is a listing, answered
+by title, with no labels to cite. Verified over real stdio against the
+local store: 22 documents, pages and leads correct. The starter prompts
+already ask exactly this and need no change.
+
+**Still to measure** (~$0.05, asked for first): the agent harness on the
+five `global` questions plus the three starter prompts — does the model
+reach for `kb_list` unprompted, and does the answer name the documents?
+Hypothesis: it will, because the tool description says when; rule: ship
+the prompt bullet as is if ≥ 4 of 5 global questions call `kb_list` first,
+otherwise strengthen the bullet and re-run once.
 
 ## Also in this milestone
 

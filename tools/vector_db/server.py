@@ -172,6 +172,24 @@ async def kb_stats() -> dict[str, Any]:
 
 @mcp.tool(
     description=(
+        "List every document in the knowledge base with its title, category, "
+        "size and what it is about: a model-written overview where one exists, "
+        "and its opening lines either way. Use this for questions about the "
+        "collection itself -- what the documents cover, which ones there are, "
+        "which to read first -- rather than kb_search, which finds passages "
+        "inside documents and has nothing to match a question about the whole."
+    )
+)
+async def kb_list() -> dict[str, Any]:
+    """Every document and what it is about; a listing, not a search."""
+    try:
+        return await _store().list_documents()
+    except KnowledgeBaseUnavailable as e:
+        return {"status": "unavailable", "error": str(e), "documents": [], "count": 0}
+
+
+@mcp.tool(
+    description=(
         "Benchmark approximate-nearest-neighbour indexes over the current "
         "corpus. Builds hand-written HNSW and IVF-PQ indexes across a parameter "
         "sweep and measures each against exact search: recall@k, query-latency "

@@ -39,11 +39,12 @@ never built and are kept for history only.
 
 ## The MCP server
 
-`tools/vector_db/server.py` exposes three tools over stdio:
+`tools/vector_db/server.py` exposes four tools over stdio:
 
 | Tool | Does |
 | --- | --- |
 | `kb_search` | Semantic search over the corpus, ranked, with source and page |
+| `kb_list` | Every document with its title, size and what it is about — a listing, for "what do my documents cover?" |
 | `kb_ingest` | Embed and store documents; re-using an id replaces it |
 | `kb_stats` | Collection size, embedding model, storage path |
 
@@ -75,7 +76,7 @@ for tools. Two tiers with very different execution paths:
 
 | Tier | Runs | Cited by |
 | --- | --- | --- |
-| `kb_search`, `kb_stats` | our MCP subprocess, over stdio | `[n]` labels written into the passage the model reads |
+| `kb_search`, `kb_list`, `kb_stats` | our MCP subprocess, over stdio | `[n]` labels written into the passage the model reads |
 | `google_search` | Google's servers | the API, returned as grounding metadata |
 
 Both land in one numbered list. A knowledge-base passage reaches the model
@@ -373,7 +374,7 @@ eval/
   agent_harness.py   `sextant-eval-agent` — grades what the loop retrieved
   baseline.json      Committed results; the CI gate compares against these
   baseline-large.json Results on the 1,602-chunk store (reranker decision)
-tests/               385 tests: chunking, retrieval, ANN, agent loop, API, regressions
+tests/               392 tests: chunking, retrieval, ANN, agent loop, API, regressions
 deploy/              Caddyfile, prod Dockerfile for the edge, deploy.sh, GCP runbook
 learning/            Study path + measured notes (ANN comparison, reranker decision)
 planning/            Status, cost, milestone plans, trackers, archived docs

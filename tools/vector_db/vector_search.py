@@ -864,6 +864,59 @@ class KnowledgeBase:
         }
         return result
 
+    async def list_documents(self) -> dict[str, Any]:
+        """Every document in the collection, with what it is about.
+
+        "What do my documents cover?" is a listing, not a retrieval: no chunk
+        answers it, at any level of a summary tree (`learning/summary-chunks.md`).
+        Each entry carries the model-written overview when the document was
+        ingested with `--summaries`, and its opening text either way -- for a
+        short document the first chunk already says what it is.
+        """
+        return await asyncio.to_thread(self._list_documents_sync)
+
+    # How much of a document's opening travels with its listing. Enough for a
+    # title and first heading or two; a listing of twenty documents should
+    # still fit in one tool result.
+    LEAD_CHARS = 240
+
+    def _list_documents_sync(self) -> dict[str, Any]:
+        self._ensure_index()
+        by_document: dict[str, dict[str, Any]] = {}
+        for chunk_id, (text, meta) in self._corpus.items():
+            doc_id = meta.get("document_id", chunk_id)
+            entry = by_document.setdefault(
+                doc_id,
+                {
+                    "document_id": doc_id,
+                    "title": meta.get("title", "Untitled document"),
+                    "source": meta.get("source", "unknown"),
+                    "category": meta.get("category", "general"),
+                    "chunks": 0,
+                    "pages": None,
+                    "overview": None,
+                    "lead": None,
+                    "_first": None,
+                },
+            )
+            if meta.get("kind") == SUMMARY_KIND:
+                entry["overview"] = text.split("\n", 1)[-1].strip() if "\n" in text else text
+                continue
+            entry["chunks"] += 1
+            page = meta.get("page")
+            if isinstance(page, int):
+                entry["pages"] = max(entry["pages"] or 0, page)
+            index = meta.get("chunk_index", 0)
+            if entry["_first"] is None or index < entry["_first"]:
+                entry["_first"] = index
+                lead = " ".join(text.split())
+                cut = len(lead) > self.LEAD_CHARS
+                entry["lead"] = lead[: self.LEAD_CHARS] + ("…" if cut else "")
+        documents = sorted(by_document.values(), key=lambda d: (d["category"], d["title"].lower()))
+        for entry in documents:
+            entry.pop("_first")
+        return {"documents": documents, "count": len(documents)}
+
     async def health_check(self) -> dict[str, Any]:
         """Report what the store actually contains."""
         return await asyncio.to_thread(self._health_check_sync)

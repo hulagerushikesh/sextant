@@ -74,6 +74,11 @@ class TestToolDeclaration:
         assert "kb_ingest" in {tool["name"] for tool in host.tools}
         assert "kb_ingest" not in {t["name"] for t in agent.declare_tools(as_host(host))}
 
+    def test_the_listing_tool_is_offered(self, host):
+        # "What do my documents cover?" is answered from a listing, not a
+        # search; the model can only choose the listing if it is declared.
+        assert "kb_list" in {t["name"] for t in agent.declare_tools(as_host(host))}
+
     def test_schemas_pass_through_unchanged(self, host):
         declared = {t["name"]: t for t in agent.declare_tools(as_host(host))}
         assert declared["kb_search"]["description"] == "kb_search description"
@@ -183,6 +188,46 @@ class TestLoop:
             if content.role == "model"
         )
         assert model_turn.parts[0].thought_signature == b"sig"
+
+
+def list_turn():
+    return [call_chunk("kb_list", {}), final_chunk(output_tokens=10)]
+
+
+def tool_text(client: FakeGemini) -> str:
+    """What the model was handed back after its first tool call."""
+    return client.models.requests[1]["contents"][-1].parts[0].function_response.response["result"]
+
+
+class TestListing:
+    """`kb_list` reaches the model as prose, one block per document."""
+
+    async def test_documents_are_rendered_with_overview_or_lead(self, host):
+        host.results["kb_list"] = {
+            "count": 2,
+            "documents": [
+                {"title": "Kalman Filter", "category": "notes", "chunks": 3, "pages": None,
+                 "overview": "Explains predict and update.", "lead": "# Kalman Filter"},
+                {"title": "Survey", "category": "papers", "chunks": 1600, "pages": 144,
+                 "overview": None, "lead": "A Survey of Large Language Models"},
+            ],
+        }
+        _, client = await collect("What do my documents cover?", host, [list_turn(), answer_turn()])
+        sent = tool_text(client)
+        assert sent.startswith("2 document(s):")
+        assert "- Kalman Filter [notes; 3 chunk(s)]\n  Explains predict and update." in sent
+        assert "- Survey [papers; 144 page(s), 1600 chunk(s)]\n  A Survey of Large" in sent
+
+    async def test_an_empty_collection_says_so(self, host):
+        host.results["kb_list"] = {"count": 0, "documents": []}
+        _, client = await collect("q", host, [list_turn(), answer_turn()])
+        assert "empty" in tool_text(client)
+
+    async def test_the_trace_reports_the_document_count(self, host):
+        host.results["kb_list"] = {"count": 2, "documents": [{}, {}]}
+        events, _ = await collect("q", host, [list_turn(), answer_turn()])
+        result = next(e for e in events if e["type"] == "tool_result")
+        assert result["summary"] == {"status": "ok", "documents": 2}
 
 
 class TestTrace:

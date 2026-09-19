@@ -139,7 +139,8 @@ class FakeHost:
         self.results = results or {}
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.error: str | None = None
-        self._names = tools if tools is not None else ["kb_search", "kb_ingest", "kb_stats"]
+        default = ["kb_search", "kb_ingest", "kb_stats", "kb_list"]
+        self._names = tools if tools is not None else default
 
     @property
     def connected(self) -> bool:
