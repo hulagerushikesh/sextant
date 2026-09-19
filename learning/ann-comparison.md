@@ -160,6 +160,11 @@ has no disk tier, so it keeps the full vectors resident and reports that honestl
 in `amortised B/vec` (528 = 16 codes + 512 for the 128-d floats). The number that
 transfers to a real deployment is the hot one.
 
+**At the other end of the scale** the shortlist becomes the whole story: at
+100k vectors the rerank ceiling under `nprobe` alone falls to 0.73, and it is
+`oversample` — a longer shortlist, not more cells — that lifts it back to 0.99.
+Measured in [`ivfpq-100k.md`](ivfpq-100k.md).
+
 **The scale caveat, again.** Rerank only helps when the shortlist holds more than
 `k` good-but-mis-ordered candidates. On a *tiny* corpus it doesn't: at 52 chunks
 the coarse quantizer makes ~52 near-singleton cells, so `nprobe` alone fixes the

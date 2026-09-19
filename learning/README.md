@@ -40,6 +40,7 @@ depends on a number in an earlier one.
 | [`embedder-swap.md`](embedder-swap.md) | M16 exp 4 — MiniLM → bge-small? | Not switched; opt-in `SEXTANT_EMBEDDER` |
 | [`summary-chunks.md`](summary-chunks.md) | M16 exp 5 — one overview chunk per document for global questions? | Opt-in `--summaries`; wins rank, cost dense recall |
 | [`candidate-cap.md`](candidate-cap.md) | M17 exp 1 — was the dense loss in exps 1, 3, 5 crowding? | Yes; shipped, cap 2 with a score guard, dense only |
+| [`ivfpq-100k.md`](ivfpq-100k.md) | §9 item 5 — at 100k vectors, does IVF-PQ's memory win become a latency win? | Not in Python at recall ≥ 0.9; its recall dial at scale is `oversample`, not `nprobe` |
 
 ---
 
@@ -431,8 +432,14 @@ level-6-style experiment, zero cloud cost; the open ones are scheduled as
    size.~~ Done — [`embedder-swap.md`](embedder-swap.md): +0.09 dense
    hit@1 on the survey, −0.04 on the handbook, rerank unmoved; not
    switched, opt-in via `SEXTANT_EMBEDDER`.
-5. IVF-PQ at 100k synthetic vectors: the point where the memory story turns
-   into a latency story.
+5. ~~IVF-PQ at 100k synthetic vectors: the point where the memory story turns
+   into a latency story.~~ Done — [`ivfpq-100k.md`](ivfpq-100k.md): latency
+   parity with flat at ≈100k but only at recall 0.6; the ceiling is PQ
+   ordering, and `oversample` (not `nprobe`) lifts it to 0.99. HNSW crosses
+   flat at ≈25k with recall 1.0. Flat stays.
+6. IVF with an HNSW coarse quantizer at 1M vectors: the point where
+   finding the cells is itself a search problem, and graph and clusters
+   stack instead of compete.
 
 ---
 
