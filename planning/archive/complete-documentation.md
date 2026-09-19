@@ -61,7 +61,7 @@ User Query → Frontend → MCP Client → MCP Server → Tools → Response
 
 1. **Clone and Setup**
 ```bash
-cd /Users/rushikeshhulage/Documents/ProWithSudhanshu/AgenticRAG
+cd AgenticRAG
 ```
 
 2. **Install Dependencies**

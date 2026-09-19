@@ -77,7 +77,7 @@ on a 1,568-chunk corpus. That was a hypothesis, not a result.
 
 Preconditions owned by the project owner, verified before anything starts:
 
-- Cloudflare `A` record `agenticrag` → `35.226.228.218`, proxy **off** (grey
+- Cloudflare `A` record `agenticrag` → the static IP, proxy **off** (grey
   cloud). Verify: `dig +short agenticrag.hulage.in @nicolas.ns.cloudflare.com`.
 - Secrets on the box: `~/agenticrag/set-secrets.sh` run once. Verify (VM up):
   `grep -c '^BASIC_AUTH_HASH=\$2' ~/agenticrag/.env` → `1`.
