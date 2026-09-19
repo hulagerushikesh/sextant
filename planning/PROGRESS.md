@@ -5,6 +5,13 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-09-19
+
+- **`kb_list` tool** — every document with title, size, overview (when
+  summarised) and opening lines; offered to the agent for "what do my
+  documents cover?" questions, which no search answers. Built and
+  verified over stdio; agent-level measurement waits on a key.
+
 ## 2026-09-17
 
 - **Per-document candidate cap** shipped as default 2 — dense recall@5

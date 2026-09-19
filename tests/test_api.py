@@ -140,9 +140,9 @@ class TestIntrospection:
 
     def test_tools_returns_the_discovered_schemas(self, client):
         body = client.get("/tools").json()
-        assert body["count"] == 3
+        assert body["count"] == 4
         assert {tool["name"] for tool in body["tools"]} == {
-            "kb_search", "kb_ingest", "kb_stats"
+            "kb_search", "kb_ingest", "kb_stats", "kb_list"
         }
 
     def test_tools_is_unavailable_when_the_server_is_down(self, monkeypatch):

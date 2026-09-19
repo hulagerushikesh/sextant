@@ -80,7 +80,7 @@ MAX_TURNS = 6
 # and is deliberately withheld here: answering a question must not be able to
 # write to the corpus. The /ingest and /upload endpoints own that path, where a
 # human asked for it.
-READABLE_TOOLS = {"kb_search", "kb_stats"}
+READABLE_TOOLS = {"kb_search", "kb_list", "kb_stats"}
 
 # Web search is off unless asked for. It is the one tier billed per request
 # rather than per token -- $14 per 1,000 grounded requests once the monthly
@@ -116,6 +116,11 @@ search for the missing part before saying the documents do not cover it.
 asked, decide what to do next rather than giving up: search again with \
 different wording if the first phrasing was poor, or use web search if the \
 question is about public, current, or general knowledge.
+- A question about the collection itself -- what the documents cover, which \
+documents there are, which to read first, how they relate -- is a listing, not \
+a search. Use kb_list and answer from the titles and overviews it returns, \
+naming documents by title; a listing has no passage labels to cite. Use \
+kb_search when the question is about something *inside* a document.
 - Do not use web search for a question that is clearly about the user's own \
 material. An answer from the open web is not an answer about their documents.
 
@@ -277,6 +282,29 @@ def _format_kb_result(result: dict[str, Any], registry: SourceRegistry) -> str:
     return "\n\n".join(blocks)
 
 
+def _format_kb_list(result: dict[str, Any]) -> str:
+    """Render `kb_list` output for the model: one block per document.
+
+    Plain text rather than the JSON, so the model reads titles and overviews
+    the way it reads passages, and so an empty collection says so in words.
+    """
+    if result.get("status") == "unavailable":
+        return f"The knowledge base could not be listed: {result.get('error', 'unknown error')}"
+    documents = result.get("documents") or []
+    if not documents:
+        return "The knowledge base is empty -- no documents have been ingested yet."
+    blocks = [f"{len(documents)} document(s):"]
+    for doc in documents:
+        size = f"{doc.get('chunks', 0)} chunk(s)"
+        if doc.get("pages"):
+            size = f"{doc['pages']} page(s), {size}"
+        title = doc.get("title", "Untitled document")
+        header = f"- {title} [{doc.get('category', 'general')}; {size}]"
+        about = doc.get("overview") or doc.get("lead")
+        blocks.append(f"{header}\n  {about}" if about else header)
+    return "\n".join(blocks)
+
+
 def _summarise(name: str, result: dict[str, Any], is_error: bool) -> dict[str, Any]:
     """One line about what a tool gave back, for the trace panel.
 
@@ -297,6 +325,9 @@ def _summarise(name: str, result: dict[str, Any], is_error: bool) -> dict[str, A
         if hits and hits[0].get("score") is not None:
             summary["top_score"] = hits[0]["score"]
         return summary
+    if name == "kb_list":
+        count = result.get("count", len(result.get("documents") or []))
+        return {"status": "ok", "documents": count}
     if name == "kb_stats":
         # `collection_size` counts chunks, not documents -- the two diverged in
         # Phase 4 and the field kept its pre-chunking name.
@@ -323,6 +354,8 @@ async def _execute(name: str, arguments: dict[str, Any], host: MCPHost, registry
     summary = _summarise(name, result, is_error=False)
     if name == "kb_search":
         return _format_kb_result(result, registry), False, summary
+    if name == "kb_list":
+        return _format_kb_list(result), False, summary
     return json.dumps(result, default=str), False, summary
 
 
