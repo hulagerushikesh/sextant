@@ -26,7 +26,7 @@ runs; none is started on a hunch.
 | Per-user upload (multi-corpus) | the app is one corpus per deployment; a hosted version needs `category` to mean a person | design | ₹0 |
 | Request-level index tier (`exact` flat / `fast` hnsw / `lean` ivfpq_rerank) | caller states a budget, server maps to index + params; only meaningful past ~25k chunks, where HNSW overtakes flat (`../learning/ivfpq-100k.md`) | corpus ≥ 25k | ₹0 |
 | IVF with an HNSW coarse quantizer (`IVF_HNSW`) at 1M synthetic | where graph and clusters genuinely combine: HNSW over ~65k centroids for routing, PQ codes for storage; learning path §9 item 6 | — | ₹0, RAM-bound on this laptop |
-| Make the repo public | strip `ACME_EMAIL` from `deploy/env.example`; secret sweep of history | decision | ₹0 |
+| Make the repo public | sweep done 2026-09-19: no key-shaped strings in 28 commits; email, gate username, released IP and a home path scrubbed from tracked files. Left in history: the released IP (6 hits), author email, `node_modules` from the pre-rebuild upstream commit `3a19674` (bloat, not secrets). Still needs: a `LICENSE`, and a call on the GCP project id (`agenticrag-rush`) and upstream lineage in `planning/archive/` | decision: licence, history rewrite or not | ₹0 |
 | Remove `agenticrag-*` command aliases | promised for 0.8 | 0.8 release | ₹0 |
 
 ## Decided against (with the reason, so it is not re-litigated)

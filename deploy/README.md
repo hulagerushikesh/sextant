@@ -174,7 +174,7 @@ deploy/deploy.sh USER@IP logs
 Verify — the gate should challenge, and `/health` should be `healthy`:
 
 ```bash
-curl -u rush:PASSWORD https://agenticrag.hulage.in/health
+curl -u USER:PASSWORD https://agenticrag.hulage.in/health
 # {"status":"healthy","mcp_connected":true,"model_configured":true,...}
 ```
 
@@ -190,7 +190,7 @@ ssh USER@IP 'cd ~/agenticrag && \
   docker compose -f docker-compose.prod.yml restart api'
 
 # A real gated query end to end:
-curl -u rush:PASSWORD -s https://agenticrag.hulage.in/query \
+curl -u USER:PASSWORD -s https://agenticrag.hulage.in/query \
   -H 'content-type: application/json' \
   -d '{"query":"What does the Kalman filter do in tracking?"}' | head
 ```
@@ -232,7 +232,7 @@ The password goes in the console or a local shell, never in a file:
 gcloud monitoring uptime create sextant-health \
   --resource-type=uptime-url --monitored-resource-labels=host=agenticrag.hulage.in \
   --protocol=https --port=443 --path=/health --period=5 --timeout=10 \
-  --username=rush --password="$(read -rsp 'gate password: ' p; echo "$p")" \
+  --username=USER --password="$(read -rsp 'gate password: ' p; echo "$p")" \
   --matcher-content='"status":"healthy"' --matcher-type=contains-string
 # then an alert policy on it (console: Monitoring -> Alerting -> Create,
 # condition "Uptime check failed", notification = your email).
@@ -281,7 +281,7 @@ deploy/deploy.sh HOST           # only if the tree changed; the containers
 `HOST` is the config-ssh alias (`agenticrag.us-central1-a.<project>`); the
 lifecycle commands read instance, zone and project out of it.
 
-**The static IP is released.** It was 35.226.228.218; while the VM was
+**The static IP is released.** The old address is gone; while the VM was
 parked it was the largest line on the bill (~₹21/day) for an address no DNS
 record pointed at. The instance now has no external access config at all,
 and `deploy.sh start` refuses to start it until one is attached. To go
