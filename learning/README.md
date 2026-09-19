@@ -41,6 +41,7 @@ depends on a number in an earlier one.
 | [`summary-chunks.md`](summary-chunks.md) | M16 exp 5 — one overview chunk per document for global questions? | Opt-in `--summaries`; wins rank, cost dense recall |
 | [`candidate-cap.md`](candidate-cap.md) | M17 exp 1 — was the dense loss in exps 1, 3, 5 crowding? | Yes; shipped, cap 2 with a score guard, dense only |
 | [`ivfpq-100k.md`](ivfpq-100k.md) | §9 item 5 — at 100k vectors, does IVF-PQ's memory win become a latency win? | Not in Python at recall ≥ 0.9; its recall dial at scale is `oversample`, not `nprobe` |
+| [`ivf-hnsw-1m.md`](ivf-hnsw-1m.md) | §9 item 6 — at 1M vectors and 65k cells, does an HNSW coarse quantizer pay? | Half: same cells at a quarter of the coarse cost, 1.6–1.8× on the whole query (not 2×); `nlist` past `4√n` costs recall |
 
 ---
 
@@ -437,9 +438,13 @@ level-6-style experiment, zero cloud cost; the open ones are scheduled as
    parity with flat at ≈100k but only at recall 0.6; the ceiling is PQ
    ordering, and `oversample` (not `nprobe`) lifts it to 0.99. HNSW crosses
    flat at ≈25k with recall 1.0. Flat stays.
-6. IVF with an HNSW coarse quantizer at 1M vectors: the point where
+6. ~~IVF with an HNSW coarse quantizer at 1M vectors: the point where
    finding the cells is itself a search problem, and graph and clusters
-   stack instead of compete.
+   stack instead of compete.~~ Done — [`ivf-hnsw-1m.md`](ivf-hnsw-1m.md):
+   at 65k cells the graph finds 99% of brute's cells and cuts the coarse
+   step 3–5×, but the coarse step is under half the query, so the whole
+   query drops 1.6–1.8×, not the 2× claimed; and 65k cells at 1M costs
+   0.05 recall against `4√n`. The trick belongs to 10M+.
 
 ---
 

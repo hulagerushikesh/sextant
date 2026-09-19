@@ -7,6 +7,11 @@ story is the root README.
 
 ## 2026-09-19
 
+- **IVF_HNSW at 1M** (learning §9 item 6, ₹0, ~50 min CPU) — HNSW over
+  65k centroids returns 99% of brute force's cells at a quarter of the
+  coarse cost; whole query 1.6–1.8× faster, not the 2× claimed, because
+  the coarse step was 45% of the query, not most of it. 65k cells at 1M
+  costs 0.05 recall against 4,096. Nothing ships. `learning/ivf-hnsw-1m.md`.
 - **IVF-PQ at 100k** (learning §9 item 5, ₹0, ~45 min CPU) — latency
   parity with flat at ≈100k but recall stalls at 0.73 under `nprobe`;
   `oversample` 32–64 lifts it to 0.91–0.99, so that is the dial at scale.
