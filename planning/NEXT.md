@@ -24,7 +24,8 @@ runs; none is started on a hunch.
 | Prompt caching on the system prompt + tool schemas | ~1,000 input tokens repeated every turn; Gemini bills cached context lower | key | ~$0.02 to measure |
 | `--summaries` as the upload default | cap removed the dense cost (this milestone); only "needs a key at ingest" remains | decision | $0.003 / document at upload |
 | Per-user upload (multi-corpus) | the app is one corpus per deployment; a hosted version needs `category` to mean a person | design | ₹0 |
-| IVF-PQ at 100k synthetic vectors | learning path §9 q5: where memory turns into latency | — | ₹0, ~1 h CPU |
+| Request-level index tier (`exact` flat / `fast` hnsw / `lean` ivfpq_rerank) | caller states a budget, server maps to index + params; only meaningful past ~25k chunks, where HNSW overtakes flat (`../learning/ivfpq-100k.md`) | corpus ≥ 25k | ₹0 |
+| IVF with an HNSW coarse quantizer (`IVF_HNSW`) at 1M synthetic | where graph and clusters genuinely combine: HNSW over ~65k centroids for routing, PQ codes for storage; learning path §9 item 6 | — | ₹0, RAM-bound on this laptop |
 | Make the repo public | strip `ACME_EMAIL` from `deploy/env.example`; secret sweep of history | decision | ₹0 |
 | Remove `agenticrag-*` command aliases | promised for 0.8 | 0.8 release | ₹0 |
 
@@ -43,4 +44,8 @@ runs; none is started on a hunch.
   score; leads at 1,602 chunks. `../learning/reranker-decision.md`.
 - **Cloud Run / scale-out / 24×7 hosting** — embedded Chroma is
   single-writer; run policy is on demand. `milestone-15.md`.
+- **Per-query routing between HNSW and IVF-PQ** — query text carries no
+  signal for it, and holding both resident forfeits IVF-PQ's only win
+  (memory) while HNSW beats it on recall and latency at every size
+  measured. Tier per request, not route per query. `../learning/ivfpq-100k.md`.
 - **Keeping the static IP while parked** — ₹21/day for nothing; released.

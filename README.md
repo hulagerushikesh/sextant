@@ -534,7 +534,9 @@ needed a conversion layer between the protocol's contract and the model's.
    the real corpus; finding: exact search wins at personal scale
    (`learning/ann-comparison.md`) *(done)*
 10. **Real-corpus proof + two-stage rerank** — IVF-PQ's recall ceiling broken
-    by exact re-scoring at unchanged hot memory *(done)*
+    by exact re-scoring at unchanged hot memory *(done)*; at 100k vectors the
+    dial that lifts it is `oversample`, not `nprobe`
+    (`learning/ivfpq-100k.md`) *(done)*
 11. **FAISS reference column** — the pure-Python constant factor measured,
     10–280× *(done)*
 12. **Live index switch** — `SEXTANT_ANN_INDEX` routes production dense

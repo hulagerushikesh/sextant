@@ -7,6 +7,11 @@ story is the root README.
 
 ## 2026-09-19
 
+- **IVF-PQ at 100k** (learning §9 item 5, ₹0, ~45 min CPU) — latency
+  parity with flat at ≈100k but recall stalls at 0.73 under `nprobe`;
+  `oversample` 32–64 lifts it to 0.91–0.99, so that is the dial at scale.
+  HNSW beats flat from ≈25k at recall 1.0. Nothing ships.
+  `learning/ivfpq-100k.md`.
 - **`kb_list` tool** — every document with title, size, overview (when
   summarised) and opening lines; offered to the agent for "what do my
   documents cover?" questions, which no search answers. Built and
