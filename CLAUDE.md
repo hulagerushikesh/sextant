@@ -14,7 +14,7 @@ because each one was learned the expensive way.
 
 ## Git
 
-- `origin` = `github.com/hulagerushikesh/sextant` (private). `upstream` =
+- `origin` = `github.com/hulagerushikesh/sextant` (public since 2026-09-20, MIT). `upstream` =
   the original course repo; **never push there**.
 - Branch first, commit, fast-forward `main`. Autonomous commits are fine once
   an aim is stated; deploying to `main` in production is not autonomous.
@@ -26,8 +26,13 @@ because each one was learned the expensive way.
 - `GEMINI_API_KEY` is the only key the code reads. `.env` is gitignored.
 - Never type credentials. On the VM the owner runs `set-secrets.sh`; the
   gate password and key are never seen by the agent.
-- `deploy/env.example` carries a real `ACME_EMAIL`; strip it before the repo
-  goes public.
+- `deploy/env.example` is placeholders only; keep it that way, the repo is
+  public.
+- Gemini billing is AI Studio **prepay** with a ₹500/month cap: a 402
+  "prepayment credits are depleted" means the balance is empty, not that
+  the key is bad. The owner tops up; nothing to fix in code.
+- `SEXTANT_DAILY_BUDGET_USD=0.60` is set in the local `.env` and belongs on
+  the VM's too; it caps the API server only — eval scripts bypass it.
 
 ## Cost
 
