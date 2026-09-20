@@ -5,6 +5,15 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-09-20
+
+- **`kb_list` measured and its prompt bullet shipped** ($0.034, two agent
+  runs) — the model lists first on 4/5 global questions and 3/3 starters
+  and names every expected document; the "which of my documents cover X"
+  phrasing needed one added sentence. Agent harness records the tool
+  sequence and grades listings by `named`. `learning/kb-list.md`.
+- Repo public; new Gemini key under a ₹500/month prepaid cap.
+
 ## 2026-09-19
 
 - **IVF_HNSW at 1M** (learning §9 item 6, ₹0, ~50 min CPU) — HNSW over

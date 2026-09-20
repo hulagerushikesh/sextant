@@ -65,13 +65,25 @@ class TestRecordingHost:
         assert host.searches[1]["limit"] == 3
         assert host.tools == inner.tools and host.connected
 
-    async def test_other_tools_are_not_recorded(self):
-        host = RecordingHost(FakeHost({"kb_stats": {"documents": 2}}))
+    async def test_other_tools_are_not_searches_but_are_calls(self):
+        host = RecordingHost(FakeHost({"kb_stats": {"documents": 2}, "kb_list": {"documents": []}}))
+        await host.call("kb_list", {})
         await host.call("kb_stats", {})
         assert host.searches == []
+        assert host.calls == ["kb_list", "kb_stats"]
 
 
 class TestGrading:
+    def test_named_credits_titles_from_the_listing_in_the_answer(self):
+        titles = {"alpha": "Alpha Handbook", "beta": "Beta Notes"}
+        grade = grade_record(item(), [], "Read the Alpha Handbook first.", titles)
+        assert grade["searches"] == 0 and grade["recall@union"] == 0.0
+        assert grade["named"] == 0.5
+
+    def test_named_is_one_when_nothing_is_expected(self):
+        grade = grade_record({**item(), "relevant_docs": []}, [], "anything", {})
+        assert grade["named"] == 1.0
+
     def test_union_credits_a_second_search(self):
         searches = [
             {"query": "first", "hits": [hit("alpha#0", "A", "x"), hit("gamma#0", "G", "x")]},

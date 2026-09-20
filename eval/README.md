@@ -225,7 +225,10 @@ model choose the query and search again, so `sextant-eval-agent` runs the
 real loop (real model, real MCP subprocess, web search off) and grades
 what every `kb_search` in it returned: **recall@first** (the model's own
 first query) and **recall@union** (everything any search retrieved), plus
-searches, turns and cost per question. Multi-hop questions are the point:
+the tool sequence, searches, turns and cost per question. A question
+answered from `kb_list` makes no search, so it also grades **named** — the
+share of expected documents whose title appears in the answer
+([`learning/kb-list.md`](../learning/kb-list.md)). Multi-hop questions are the point:
 under the shipped prompt the loop searched once and answered half, and one
 prompt bullet is what changed that. Results and the two product findings it
 surfaced are in [`learning/agent-loop.md`](../learning/agent-loop.md).

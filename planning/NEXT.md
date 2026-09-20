@@ -10,7 +10,7 @@ ships; move it to the bottom section when it is decided against.
 | # | Step | Needs | Cost | State |
 | --- | --- | --- | --- | --- |
 | 1 | Per-document candidate cap | — | ₹0 | **shipped** 2026-09-17, default 2, guarded — [`../learning/candidate-cap.md`](../learning/candidate-cap.md) |
-| 2 | `kb_list` tool: titles, overviews, chunk counts offered to the agent | — | ₹0 | **built** 2026-09-19; measurement (~$0.05, agent harness on 5 global + 3 starter questions) waits on a key |
+| 2 | `kb_list` tool: titles, overviews, chunk counts offered to the agent | — | $0.034 | **shipped** 2026-09-20 — lists first on 4/5 global + 3/3 starters, names 100% of expected docs — [`../learning/kb-list.md`](../learning/kb-list.md) |
 | 3 | Composer fix deploy — already on `main`, not on the VM | VM start: re-reserve IP, `add-access-config`, new key on the VM | ≈₹5.6/hr while up, ~20 min | waiting on go-ahead |
 
 ## Then — candidates, not yet planned

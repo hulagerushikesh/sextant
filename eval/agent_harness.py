@@ -61,17 +61,22 @@ DEFAULT_SAMPLE_SEED = 0
 
 
 class RecordingHost:
-    """An MCPHost that remembers what `kb_search` returned.
+    """An MCPHost that remembers what `kb_search` returned, and every call made.
 
     The agent reports a search as a one-line summary (`hits: 5`) because that is
     what the trace panel needs. Grading needs the hits themselves -- their
     document and page -- so this wraps the real host and keeps every result
     before handing it on unchanged. The loop under test does not know.
+
+    `calls` is the tool sequence in order -- `kb_list` before `kb_search`, or
+    not -- which is what a listing question is graded on.
     """
 
     def __init__(self, inner: Any) -> None:
         self._inner = inner
         self.searches: list[dict[str, Any]] = []
+        self.calls: list[str] = []
+        self.titles: dict[str, str] = {}  # document_id -> title, from kb_list
 
     @property
     def connected(self) -> bool:
@@ -87,6 +92,10 @@ class RecordingHost:
 
     async def call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         result = await self._inner.call(name, arguments)
+        self.calls.append(name)
+        if name == "kb_list":
+            for doc in result.get("documents") or []:
+                self.titles[str(doc.get("document_id"))] = str(doc.get("title") or "")
         if name == "kb_search":
             self.searches.append(
                 {
@@ -120,18 +129,31 @@ async def answer_one(host: Any, question: str) -> dict[str, Any]:
     return {
         "answer": "".join(text).strip(),
         "searches": recorder.searches,
+        "calls": recorder.calls,
+        "titles": recorder.titles,
         "turns": done.get("turns", 0),
         "truncated": done.get("truncated", False),
         "usage": done.get("usage", {}),
     }
 
 
-def grade_record(item: dict[str, Any], searches: list[dict[str, Any]]) -> dict[str, Any]:
+def grade_record(
+    item: dict[str, Any],
+    searches: list[dict[str, Any]],
+    answer: str = "",
+    titles: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """Score one question from the searches the loop made.
 
     Pure: no model, no I/O. A unit is whatever the golden item labels -- a
     document, or a page of one -- so a chunk collapses the same way it does in
     `eval.harness`.
+
+    `named` is the listing grade: the fraction of expected documents whose
+    title (as `kb_list` reported it) appears in the answer. A question answered
+    from the listing makes no search, so the retrieval columns read 0 for it
+    and this column is the one that says whether the answer named the right
+    documents.
     """
     from eval.harness import _relevant, _unit
     from eval.metrics import hit_at_1, recall_at_k
@@ -141,11 +163,16 @@ def grade_record(item: dict[str, Any], searches: list[dict[str, Any]]) -> dict[s
     ranked = [[_unit(hit, by_page) for hit in search["hits"]] for search in searches]
     first = ranked[0] if ranked else []
     union: list[str] = list(dict.fromkeys(unit for units in ranked for unit in units))
+    docs = sorted({unit.split("#p")[0] for unit in relevant})
+    text = answer.lower()
+    known = titles or {}
+    named = [doc for doc in docs if known.get(doc, "").strip() and known[doc].lower() in text]
     return {
         "searches": len(searches),
         "hit@1": hit_at_1(first, relevant),
         "recall@first": recall_at_k(first, relevant, len(first)) if first else 0.0,
         "recall@union": recall_at_k(union, relevant, len(union)) if union else 0.0,
+        "named": (len(named) / len(docs)) if docs else 1.0,
         "queries": [search["query"] for search in searches],
         "expected": sorted(relevant),
         "first": list(dict.fromkeys(first)),
@@ -188,6 +215,7 @@ def summarise(records: list[dict[str, Any]]) -> dict[str, Any]:
             "hit@1": round(sum(g["hit@1"] for g in grades) / n, 4),
             "recall@first": round(sum(g["recall@first"] for g in grades) / n, 4),
             "recall@union": round(sum(g["recall@union"] for g in grades) / n, 4),
+            "named": round(sum(g.get("named", 0.0) for g in grades) / n, 4),
             "searches_per_question": round(sum(g["searches"] for g in grades) / n, 2),
             "searched_twice": sum(1 for g in grades if g["searches"] > 1),
             "turns_per_question": round(sum(row["turns"] for row in rows) / n, 2),
@@ -212,6 +240,7 @@ def print_summary(summary: dict[str, Any]) -> None:
         "hit@1",
         "recall@first",
         "recall@union",
+        "named",
         "searches_per_question",
         "searched_twice",
         "turns_per_question",
@@ -222,6 +251,7 @@ def print_summary(summary: dict[str, Any]) -> None:
         "hit@1": "hit@1",
         "recall@first": "r@first",
         "recall@union": "r@union",
+        "named": "named",
         "searches_per_question": "searches",
         "searched_twice": "2+",
         "turns_per_question": "turns",
@@ -258,7 +288,7 @@ async def run(
     try:
         for item in items:
             produced = await answer_one(host, item["question"])
-            grade = grade_record(item, produced["searches"])
+            grade = grade_record(item, produced["searches"], produced["answer"], produced["titles"])
             records.append(
                 {
                     "id": item["id"],
@@ -267,6 +297,7 @@ async def run(
                     "question": item["question"],
                     "grade": grade,
                     "answer": produced["answer"],
+                    "calls": produced["calls"],
                     "turns": produced["turns"],
                     "truncated": produced["truncated"],
                     "usage": produced["usage"],
@@ -277,7 +308,8 @@ async def run(
                 print(
                     f"  {item['id']:<4} {item['kind']:<10} {mark} "
                     f"first {grade['recall@first']:.2f} union {grade['recall@union']:.2f} "
-                    f"searches {grade['searches']} turns {produced['turns']} "
+                    f"named {grade['named']:.2f} "
+                    f"calls {','.join(produced['calls']) or '-'} turns {produced['turns']} "
                     f"${produced['usage'].get('cost_usd', 0.0):.4f}",
                     flush=True,
                 )
