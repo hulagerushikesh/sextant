@@ -230,6 +230,23 @@ class TestListing:
         assert result["summary"] == {"status": "ok", "documents": 2}
 
 
+class TestBelowFloor:
+    """The sub-floor fallback reaches the model with a warning ahead of it."""
+
+    async def test_the_note_precedes_the_passages_and_names_the_scorer(self, host):
+        host.results["kb_search"]["below_floor"] = True
+        host.results["kb_search"]["scored_by"] = "cosine"
+        _, client = await collect("q", host, [search_turn(), answer_turn()])
+        sent = tool_text(client)
+        assert sent.startswith(agent.BELOW_FLOOR_NOTE)
+        assert "[1] Kalman Filter" in sent
+        assert "cosine score 0.99" in sent
+
+    async def test_an_ordinary_result_carries_no_note(self, host):
+        _, client = await collect("q", host, [search_turn(), answer_turn()])
+        assert agent.BELOW_FLOOR_NOTE not in tool_text(client)
+
+
 class TestTrace:
     """Each call now reports what came back. See `Trace.jsx` for why."""
 
@@ -250,6 +267,14 @@ class TestTrace:
         events, _ = await collect("q", host, [search_turn(), answer_turn()])
         result = next(e for e in events if e["type"] == "tool_result")
         assert result["summary"]["status"] == "empty"
+
+    async def test_a_below_floor_result_is_flagged_in_the_trace(self, host):
+        host.results["kb_search"]["below_floor"] = True
+        host.results["kb_search"]["scored_by"] = "cosine"
+        events, _ = await collect("q", host, [search_turn(), answer_turn()])
+        result = next(e for e in events if e["type"] == "tool_result")
+        assert result["summary"]["below_floor"] is True
+        assert result["summary"]["scored_by"] == "cosine"
 
     async def test_a_failing_tool_reports_the_failure(self):
         events, _ = await collect("q", FakeHost(results={}), [search_turn(), answer_turn()])

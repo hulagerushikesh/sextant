@@ -26,9 +26,11 @@ things are graded from that record:
 Alongside them: searches per question, turns, tokens and cost -- a loop that
 reaches recall 1.0 in five turns has not solved anything.
 
-What is not graded here: the answer text. That is `sextant-judge`, which puts
-a second model on the case. This file keeps to what can be checked without one,
-so the model whose behaviour is under test is the only model in the run.
+The answer text is not graded unless asked: `--judge` puts `sextant-judge`'s
+second model on each answer (faithfulness, relevance, declined), which is what
+the unanswerable split needs -- a question with no answer in the corpus has no
+retrieval grade, only the question of whether the loop declined. Without the
+flag the model whose behaviour is under test is the only model in the run.
 
 This costs money to run and is not part of the CI gate. It exists for an
 experiment (Milestone 16, `learning/agent-loop.md`) and for re-running that
@@ -115,6 +117,7 @@ async def answer_one(host: Any, question: str) -> dict[str, Any]:
 
     recorder = RecordingHost(host)
     text: list[str] = []
+    sources: list[dict[str, Any]] = []
     done: dict[str, Any] = {}
     # Web search forced off: a grounded request is billed per call, and a web
     # hit would make a corpus miss invisible -- exactly the failure this
@@ -126,8 +129,11 @@ async def answer_one(host: Any, question: str) -> dict[str, Any]:
             text = [event["text"]]
         elif event["type"] == "done":
             done = event
+        if event["type"] in ("sources", "done"):
+            sources = event.get("sources") or sources
     return {
         "answer": "".join(text).strip(),
+        "sources": sources,
         "searches": recorder.searches,
         "calls": recorder.calls,
         "titles": recorder.titles,
@@ -158,7 +164,9 @@ def grade_record(
     from eval.harness import _relevant, _unit
     from eval.metrics import hit_at_1, recall_at_k
 
-    relevant = _relevant(item)
+    # An unanswerable question expects nothing, so every retrieval grade is 0
+    # by construction; `summarise` keeps those rows out of the retrieval means.
+    relevant = _relevant(item) if item.get("answerable", True) else set()
     by_page = "relevant_pages" in item
     ranked = [[_unit(hit, by_page) for hit in search["hits"]] for search in searches]
     first = ranked[0] if ranked else []
@@ -169,9 +177,9 @@ def grade_record(
     named = [doc for doc in docs if known.get(doc, "").strip() and known[doc].lower() in text]
     return {
         "searches": len(searches),
-        "hit@1": hit_at_1(first, relevant),
-        "recall@first": recall_at_k(first, relevant, len(first)) if first else 0.0,
-        "recall@union": recall_at_k(union, relevant, len(union)) if union else 0.0,
+        "hit@1": hit_at_1(first, relevant) if relevant else 0.0,
+        "recall@first": recall_at_k(first, relevant, len(first)) if first and relevant else 0.0,
+        "recall@union": recall_at_k(union, relevant, len(union)) if union and relevant else 0.0,
         "named": (len(named) / len(docs)) if docs else 1.0,
         "queries": [search["query"] for search in searches],
         "expected": sorted(relevant),
@@ -185,43 +193,68 @@ def select(
     kinds: list[str] | None,
     sample: int | None,
     seed: int = DEFAULT_SAMPLE_SEED,
+    unanswerable: bool = False,
 ) -> list[dict[str, Any]]:
     """Answerable questions to run: every one of `kinds`, plus `sample` others.
 
     Deterministic for a seed, so a re-run after a prompt change grades the same
-    questions and the difference is the prompt.
+    questions and the difference is the prompt. `unanswerable` adds the whole
+    unanswerable split on top, whatever `kinds` and `sample` say -- it is never
+    sampled, because the abstention question is about every one of them.
     """
     answerable = [item for item in golden if item["answerable"]]
+    extra = [item for item in golden if not item["answerable"]] if unanswerable else []
     if kinds is None and sample is None:
-        return answerable
+        return answerable + extra
     wanted = [item for item in answerable if kinds and item["kind"] in kinds]
     rest = [item for item in answerable if item not in wanted]
     if sample:
         rng = random.Random(seed)
         wanted += sorted(rng.sample(rest, min(sample, len(rest))), key=lambda i: i["id"])
-    return wanted
+    return wanted + extra
 
 
 def summarise(records: list[dict[str, Any]]) -> dict[str, Any]:
-    """Means over the graded questions, split by kind so multi-hop is visible."""
+    """Means over the graded questions, split by kind so multi-hop is visible.
+
+    Retrieval means are over the answerable rows only; an unanswerable row has
+    nothing to retrieve. The judge columns, when the run was judged, keep the
+    two error directions apart the way `eval.judge` does: declining with the
+    answer in hand and answering with nothing in hand are different failures.
+    """
+
+    def mean(rows: list[dict[str, Any]], read: Any) -> float | None:
+        return round(sum(read(row) for row in rows) / len(rows), 4) if rows else None
 
     def block(rows: list[dict[str, Any]]) -> dict[str, Any]:
         n = len(rows)
         if not n:
             return {"questions": 0}
-        grades = [row["grade"] for row in rows]
-        return {
+        answerable = [row for row in rows if row.get("answerable", True)]
+        grades = [row["grade"] for row in answerable]
+        a = len(answerable) or 1
+        out: dict[str, Any] = {
             "questions": n,
-            "hit@1": round(sum(g["hit@1"] for g in grades) / n, 4),
-            "recall@first": round(sum(g["recall@first"] for g in grades) / n, 4),
-            "recall@union": round(sum(g["recall@union"] for g in grades) / n, 4),
-            "named": round(sum(g.get("named", 0.0) for g in grades) / n, 4),
-            "searches_per_question": round(sum(g["searches"] for g in grades) / n, 2),
-            "searched_twice": sum(1 for g in grades if g["searches"] > 1),
+            "hit@1": round(sum(g["hit@1"] for g in grades) / a, 4),
+            "recall@first": round(sum(g["recall@first"] for g in grades) / a, 4),
+            "recall@union": round(sum(g["recall@union"] for g in grades) / a, 4),
+            "named": round(sum(g.get("named", 0.0) for g in grades) / a, 4),
+            "searches_per_question": round(sum(row["grade"]["searches"] for row in rows) / n, 2),
+            "searched_twice": sum(1 for row in rows if row["grade"]["searches"] > 1),
             "turns_per_question": round(sum(row["turns"] for row in rows) / n, 2),
             "truncated": sum(1 for row in rows if row["truncated"]),
             "cost_usd": round(sum(row["usage"].get("cost_usd", 0.0) for row in rows), 4),
         }
+        judged = [row for row in rows if row.get("judge")]
+        if judged:
+            ans = [row for row in judged if row.get("answerable", True)]
+            unans = [row for row in judged if not row.get("answerable", True)]
+            out["faithfulness"] = mean(ans, lambda r: r["judge"]["faithfulness"])
+            out["relevance"] = mean(ans, lambda r: r["judge"]["relevance"])
+            out["false_abstention"] = mean(ans, lambda r: float(r["judge"]["declined"]))
+            out["correct_abstention"] = mean(unans, lambda r: float(r["judge"]["declined"]))
+            out["citations_valid"] = mean(judged, lambda r: float(r["citations"]["valid"]))
+        return out
 
     kinds = sorted({row["kind"] for row in records})
     return {
@@ -257,6 +290,17 @@ def print_summary(summary: dict[str, Any]) -> None:
         "turns_per_question": "turns",
         "cost_usd": "usd",
     }
+    judged = any("faithfulness" in block for block in summary["by_set"].values())
+    if judged:
+        columns += ["faithfulness", "relevance", "false_abstention", "correct_abstention"]
+        short.update(
+            {
+                "faithfulness": "faith",
+                "relevance": "relev",
+                "false_abstention": "f.abst",
+                "correct_abstention": "c.abst",
+            }
+        )
     header = f"{'split':<18}" + "".join(f"{short[c]:>10}" for c in columns)
     print("\n" + header)
     print("-" * len(header))
@@ -268,15 +312,23 @@ def print_summary(summary: dict[str, Any]) -> None:
             continue
         line = f"{name:<18}"
         for column in columns:
-            value = block[column]
-            line += f"{value:>10.3f}" if isinstance(value, float) else f"{value:>10}"
+            value = block.get(column)
+            if value is None:
+                line += f"{'-':>10}"
+            else:
+                line += f"{value:>10.3f}" if isinstance(value, float) else f"{value:>10}"
         print(line)
 
 
 async def run(
-    items: list[dict[str, Any]], progress: bool = True
+    items: list[dict[str, Any]], progress: bool = True, judge: bool = False
 ) -> list[dict[str, Any]]:
-    """Run every item through the agent against whatever store is configured."""
+    """Run every item through the agent against whatever store is configured.
+
+    With `judge`, every answer also goes to `eval.judge.grade_one`: a second
+    model call per question, on the judge's model, so the run costs roughly
+    twice what the loop alone does.
+    """
     from mcp_server.mcp_host import MCPHost
 
     host = MCPHost()
@@ -284,33 +336,58 @@ async def run(
     if not host.connected:
         sys.exit(f"MCP connection failed: {host.error}")
 
+    client = None
+    if judge:
+        import os
+
+        from google import genai
+
+        client = genai.Client(api_key=os.environ["GEMINI_API_KEY"]).aio
+
     records: list[dict[str, Any]] = []
     try:
         for item in items:
             produced = await answer_one(host, item["question"])
             grade = grade_record(item, produced["searches"], produced["answer"], produced["titles"])
-            records.append(
-                {
-                    "id": item["id"],
-                    "set": item["set"],
-                    "kind": item["kind"],
-                    "question": item["question"],
-                    "grade": grade,
-                    "answer": produced["answer"],
-                    "calls": produced["calls"],
-                    "turns": produced["turns"],
-                    "truncated": produced["truncated"],
-                    "usage": produced["usage"],
-                }
-            )
+            record = {
+                "id": item["id"],
+                "set": item["set"],
+                "kind": item["kind"],
+                "answerable": item.get("answerable", True),
+                "question": item["question"],
+                "grade": grade,
+                "answer": produced["answer"],
+                "calls": produced["calls"],
+                "turns": produced["turns"],
+                "truncated": produced["truncated"],
+                "usage": produced["usage"],
+            }
+            verdict = ""
+            if client is not None:
+                from eval.judge import check_citations, grade_one
+
+                judged = await grade_one(
+                    client, item["question"], produced["answer"], produced["sources"]
+                )
+                record["judge"] = judged.model_dump()
+                record["citations"] = check_citations(produced["answer"], produced["sources"])
+                verdict = (
+                    " declined"
+                    if judged.declined
+                    else f" f={judged.faithfulness:.2f} r={judged.relevance:.2f}"
+                )
+            records.append(record)
             if progress:
-                mark = "hit " if grade["recall@union"] >= 1.0 else "MISS"
+                if not record["answerable"]:
+                    mark = "unan"
+                else:
+                    mark = "hit " if grade["recall@union"] >= 1.0 else "MISS"
                 print(
                     f"  {item['id']:<4} {item['kind']:<10} {mark} "
                     f"first {grade['recall@first']:.2f} union {grade['recall@union']:.2f} "
                     f"named {grade['named']:.2f} "
                     f"calls {','.join(produced['calls']) or '-'} turns {produced['turns']} "
-                    f"${produced['usage'].get('cost_usd', 0.0):.4f}",
+                    f"${produced['usage'].get('cost_usd', 0.0):.4f}{verdict}",
                     flush=True,
                 )
     finally:
@@ -352,6 +429,16 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=DEFAULT_SAMPLE_SEED)
     parser.add_argument("--ids", nargs="+", help="run exactly these question ids")
     parser.add_argument(
+        "--unanswerable",
+        action="store_true",
+        help="add the whole unanswerable split (pair with --judge to grade abstention)",
+    )
+    parser.add_argument(
+        "--judge",
+        action="store_true",
+        help="grade every answer with eval.judge as well (a second model call per question)",
+    )
+    parser.add_argument(
         "--store",
         type=Path,
         help="grade an EXISTING Chroma directory instead of rebuilding from corpus/",
@@ -367,7 +454,7 @@ def main() -> None:
         wanted = set(args.ids)
         items = [item for item in golden if item["id"] in wanted]
     else:
-        items = select(golden, args.kinds, args.sample, args.seed)
+        items = select(golden, args.kinds, args.sample, args.seed, args.unanswerable)
 
     print(f"{len(items)} question(s) selected from {len(golden)}:")
     for item in items:
@@ -388,10 +475,10 @@ def main() -> None:
 
             kb = asyncio.run(build_store(KnowledgeBase))
             del kb  # the agent reaches the same store through its own MCP subprocess
-        records = asyncio.run(run(items))
+        records = asyncio.run(run(items, judge=args.judge))
         summary = summarise(records)
         print_summary(summary)
-        misses = [r for r in records if r["grade"]["recall@union"] < 1.0]
+        misses = [r for r in records if r["answerable"] and r["grade"]["recall@union"] < 1.0]
         if misses:
             print("\nNot fully retrieved even across every search:")
             for r in misses:

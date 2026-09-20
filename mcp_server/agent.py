@@ -152,6 +152,13 @@ bold and inline code, and nothing else -- LaTeX, tables and block equations \
 reach the reader as raw source. Write an equation as inline code, like \
 `P = F P F^T + Q`, or describe it in words."""
 
+BELOW_FLOOR_NOTE = """Nothing in the knowledge base scored at or above the \
+relevance floor for this query. The passages below are only the nearest by \
+embedding similarity -- they are the closest thing the collection has, not \
+passages judged relevant, and they may not answer the question at all. Use one \
+only if it actually answers what was asked; otherwise say the documents do not \
+cover it."""
+
 NO_WEB_NOTE = """
 
 Web search is switched off in this session, so the knowledge base is all you \
@@ -274,6 +281,12 @@ def _format_kb_result(result: dict[str, Any], registry: SourceRegistry) -> str:
     # different quantities, and the model should not read one as the other.
     scored_by = result.get("scored_by", "unknown")
     blocks = []
+    if result.get("below_floor"):
+        # The sub-floor fallback: the reranker found nothing relevant and the
+        # store handed back the nearest chunks by embedding instead. Said in
+        # words before the passages, because a cosine of 0.4 reads like a
+        # relevance to a model that was told 0.5 is a genuine match.
+        blocks.append(BELOW_FLOOR_NOTE)
     for hit in hits:
         source = registry.add_kb(hit)
         header = f"[{source.n}] {source.title}"
@@ -327,6 +340,8 @@ def _summarise(name: str, result: dict[str, Any], is_error: bool) -> dict[str, A
         }
         if hits and hits[0].get("score") is not None:
             summary["top_score"] = hits[0]["score"]
+        if result.get("below_floor"):
+            summary["below_floor"] = True
         return summary
     if name == "kb_list":
         count = result.get("count", len(result.get("documents") or []))

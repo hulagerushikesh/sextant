@@ -181,6 +181,11 @@ class TestSelection:
     def test_sample_larger_than_the_pool_takes_everything(self):
         assert len(select(self.golden, ["multihop"], 50)) == 4
 
+    def test_the_unanswerable_split_is_added_whole_never_sampled(self):
+        assert [i["id"] for i in select(self.golden, None, None, unanswerable=True)][-1] == "q5"
+        chosen = select(self.golden, ["multihop"], 1, seed=0, unanswerable=True)
+        assert chosen[-1]["id"] == "q5" and len(chosen) == 3
+
 
 class TestSummary:
     def test_splits_by_kind_and_set(self):
@@ -203,3 +208,51 @@ class TestSummary:
         assert summary["all"]["cost_usd"] == 0.006
         assert summary["by_kind"]["multihop"]["recall@first"] == 0.5
         assert summary["by_set"]["large"]["questions"] == 1
+
+    def test_unanswerable_rows_stay_out_of_the_retrieval_means(self):
+        records = [
+            {
+                "id": "q1", "set": "handbook", "kind": "exact", "answerable": True, "turns": 2,
+                "truncated": False, "usage": {"cost_usd": 0.002},
+                "grade": {"hit@1": 1.0, "recall@first": 1.0, "recall@union": 1.0, "searches": 1},
+            },
+            {
+                "id": "u1", "set": "handbook", "kind": "unanswerable", "answerable": False,
+                "turns": 2, "truncated": False, "usage": {"cost_usd": 0.002},
+                "grade": {"hit@1": 0.0, "recall@first": 0.0, "recall@union": 0.0, "searches": 3},
+            },
+        ]
+        summary = summarise(records)
+        assert summary["all"]["questions"] == 2
+        assert summary["all"]["recall@union"] == 1.0  # not 0.5
+        assert summary["all"]["searches_per_question"] == 2.0  # the loop's work counts
+        assert "faithfulness" not in summary["all"]
+
+    def test_judge_columns_keep_the_two_abstention_errors_apart(self):
+        def row(id, answerable, declined, faith=1.0):
+            return {
+                "id": id, "set": "handbook", "kind": "x", "answerable": answerable, "turns": 2,
+                "truncated": False, "usage": {},
+                "grade": {"hit@1": 1.0, "recall@first": 1.0, "recall@union": 1.0, "searches": 1},
+                "judge": {"faithfulness": faith, "relevance": 1.0, "declined": declined},
+                "citations": {"valid": True},
+            }
+
+        summary = summarise(
+            [row("q1", True, False), row("q2", True, True, 0.0), row("u1", False, True),
+             row("u2", False, False)]
+        )
+        block = summary["all"]
+        assert block["faithfulness"] == 0.5
+        assert block["false_abstention"] == 0.5
+        assert block["correct_abstention"] == 0.5
+        assert block["citations_valid"] == 1.0
+
+    def test_an_unanswerable_item_grades_to_zero_even_when_something_came_back(self):
+        # recall over an empty expected set is vacuously 1.0; that would print
+        # as a hit for a question that has no answer.
+        searches = [{"query": "q", "limit": 5, "hits": [hit("alpha#0", "Alpha", "text")]}]
+        grade = grade_record(item(id="u1", answerable=False, relevant_docs=None), searches)
+        assert grade["recall@first"] == grade["recall@union"] == grade["hit@1"] == 0.0
+        assert grade["expected"] == []
+

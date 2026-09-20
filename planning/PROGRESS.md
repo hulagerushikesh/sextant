@@ -7,6 +7,16 @@ story is the root README.
 
 ## 2026-09-20
 
+- **Floor fallback measured, not shipped** ($0.12) — returning the dense
+  order when nothing clears 0.01, marked `below_floor`, does not help the
+  answerable questions it was built for (q48 is phrasing luck at the floor
+  either way; the dense order picks the wrong config chunk), so by the
+  pre-registered rule the knob stays `none`. What it did: 15/15
+  unanswerable still declined and the loop stopped flailing on them —
+  searches 2.9 → 1.2, cost halved — queued as its own claim. The agent
+  harness gained `--unanswerable` and `--judge` (answers graded in the
+  same run), `SEXTANT_JUDGE_MODEL`, and the trace shows a below-floor
+  result. `learning/floor-fallback.md`.
 - **Sub-floor ordering by dense cosine shipped** (₹0) — chunks the
   cross-encoder scores under the 0.01 floor are ordered by dense
   similarity instead of fusion noise; handbook rerank recall@5 0.964 →
