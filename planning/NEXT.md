@@ -20,7 +20,7 @@ runs; none is started on a hunch.
 
 | Idea | Why it is on the list | Needs | Cost |
 | --- | --- | --- | --- |
-| Keep dense top-1 per document through the rerank cut (q48) | `../learning/hyde.md`: dense already finds both of q48's documents; the cross-encoder drops one. Candidate-side, not query-side | pre-register | ₹0 |
+| Dense fallback under the floor: when nothing clears 0.01, return the dense order marked as such instead of nothing | `../learning/subfloor-order.md`: q47/q48 are now ordered right but still filtered out for the agent; the unanswerable split would get passages too, so this is graded by the agent harness + judge, not `sextant-eval` | key | ~$0.10 |
 | Prompt caching on the system prompt + tool schemas | ~1,000 input tokens repeated every turn; Gemini bills cached context lower | key | ~$0.02 to measure |
 | `--summaries` as the upload default | cap removed the dense cost (this milestone); only "needs a key at ingest" remains | decision | $0.003 / document at upload |
 | Per-user upload (multi-corpus) | the app is one corpus per deployment; a hosted version needs `category` to mean a person | design | ₹0 |
