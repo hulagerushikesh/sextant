@@ -7,6 +7,12 @@ story is the root README.
 
 ## 2026-09-20
 
+- **Sub-floor ordering by dense cosine shipped** (₹0) — chunks the
+  cross-encoder scores under the 0.01 floor are ordered by dense
+  similarity instead of fusion noise; handbook rerank recall@5 0.964 →
+  0.982, hit@1 0.909 → 0.927 (q47, q48, g03), survey unchanged, nothing
+  above the floor moves. Baselines regenerated. The agent still filters
+  at 0.01, so its answers are unchanged. `learning/subfloor-order.md`.
 - **HyDE measured, decided against** ($0.010) — hypothetical-answer
   embedding hurts dense on both sets, is erased by the 25-deep rerank
   pool, and breaks the abstention floor when it replaces the question

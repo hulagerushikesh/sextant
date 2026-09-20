@@ -120,6 +120,19 @@ DEFAULT_MIN_SCORE = 0.01
 MAX_PER_DOCUMENT_ENV = settings.env_name("MAX_PER_DOCUMENT")
 MAX_PER_DOCUMENT = int(settings.getenv("MAX_PER_DOCUMENT", "2") or 0)
 
+# Below DEFAULT_MIN_SCORE the cross-encoder has said "nothing here", and its
+# order among those chunks is noise -- ties at 0.000 broken by fusion rank.
+# Dense similarity still carries signal there (q48 in `learning/hyde.md`: both
+# documents in the dense top-7, one dropped by the cross-encoder). "dense"
+# orders the sub-floor chunks by their cosine, keyed below the floor so none
+# crosses it and the reported score is untouched; "none" keeps the
+# cross-encoder's order. Only callers that lower `min_score` ever see the
+# difference; the product floor removes those chunks either way. Measured in
+# `learning/subfloor-order.md`: handbook rerank recall@5 0.964 -> 0.982,
+# survey unchanged, nothing above the floor moves.
+SUBFLOOR_ORDER_ENV = settings.env_name("SUBFLOOR_ORDER")
+SUBFLOOR_ORDER = settings.getenv("SUBFLOOR_ORDER", "dense") or "dense"
+
 # A document over the cap keeps its slot unless the next document waiting
 # scores at least this fraction of it. Dense siblings that crowd a list score
 # within a few percent of the chunk they push out; the chunks a hard cap let in
@@ -407,7 +420,17 @@ class KnowledgeBase:
         if not candidates:
             return [], "none"
 
-        order = sorted(range(len(candidates)), key=lambda i: scores[i], reverse=True)
+        # `keys` orders; `scores` is what a hit reports and what the floor
+        # tests. They differ only under the floor, and only when asked to.
+        keys = list(scores)
+        if scored_by == "cross-encoder" and SUBFLOOR_ORDER == "dense":
+            keys = [
+                score
+                if score >= DEFAULT_MIN_SCORE
+                else DEFAULT_MIN_SCORE * max(0.0, dense_scores.get(candidates[i].id, 0.0))
+                for i, score in enumerate(scores)
+            ]
+        order = sorted(range(len(candidates)), key=lambda i: keys[i], reverse=True)
         # An RRF score is a rank artefact with no meaning on a 0-1 scale, so
         # thresholding it would repeat exactly the mistake this project
         # already made once with l2 distances.
@@ -417,7 +440,7 @@ class KnowledgeBase:
         # Only where a score is a relevance and not a rank: the guard inside
         # compares magnitudes, and an RRF or BM25 score has none to compare.
         if scored_by in ("cosine", "cross-encoder"):
-            chosen = self._diversify(order, [c.id for c in candidates], scores, limit)
+            chosen = self._diversify(order, [c.id for c in candidates], keys, limit)
         else:
             chosen = order[:limit]
         return [
