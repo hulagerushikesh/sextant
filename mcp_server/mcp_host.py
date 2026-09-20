@@ -47,6 +47,7 @@ _FORWARDED_ENV = (
     + settings.env_names("EMBEDDER")
     + settings.env_names("CHUNK_TOKENS")
     + settings.env_names("MAX_PER_DOCUMENT")
+    + settings.env_names("SUBFLOOR_ORDER")
 )
 
 

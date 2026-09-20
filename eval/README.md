@@ -153,6 +153,12 @@ from this; rerank unchanged. Three rounds and the survey-set question a
 hard cap lost are in [`../learning/candidate-cap.md`](../learning/candidate-cap.md).
 Re-run any experiment's control with `SEXTANT_MAX_PER_DOCUMENT=0`.
 
+Under the 0.01 floor the cross-encoder's order is noise, and chunks there
+are ordered by dense cosine instead (`SEXTANT_SUBFLOOR_ORDER`, default
+`dense`; `none` for the old order). `baseline.json` rerank recall@5 0.964
+→ 0.982 from this; nothing at or above the floor moves, so the agent's
+results are unchanged. [`../learning/subfloor-order.md`](../learning/subfloor-order.md).
+
 ## Setting min_score
 
 The summary gap between splits says no threshold exists — answerable scores go

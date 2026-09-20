@@ -28,11 +28,11 @@
       "scored_by": "rrf"
     },
     "rerank": {
-      "hit@1": 0.9091,
-      "recall@3": 0.9485,
-      "recall@5": 0.9636,
-      "mrr": 0.9545,
-      "ndcg@5": 0.9376,
+      "hit@1": 0.9273,
+      "recall@3": 0.9667,
+      "recall@5": 0.9818,
+      "mrr": 0.9606,
+      "ndcg@5": 0.9521,
       "scored_by": "cross-encoder"
     }
   },
@@ -56,10 +56,10 @@
       "unanswerable_mean": 0.0321
     },
     "rerank": {
-      "answerable_min": 0.0001,
-      "answerable_mean": 0.7774,
+      "answerable_min": 0.0,
+      "answerable_mean": 0.7773,
       "unanswerable_max": 0.973,
-      "unanswerable_mean": 0.1353
+      "unanswerable_mean": 0.1341
     }
   },
   "threshold_sweep": {

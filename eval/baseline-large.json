@@ -56,9 +56,9 @@
       "unanswerable_mean": 0.0211
     },
     "rerank": {
-      "answerable_min": 0.0003,
+      "answerable_min": 0.0,
       "answerable_mean": 0.9174,
-      "unanswerable_max": 0.0001,
+      "unanswerable_max": 0.0,
       "unanswerable_mean": 0.0
     }
   },
