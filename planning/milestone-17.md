@@ -148,6 +148,19 @@ the loop stops rephrasing on unanswerable questions, searches 2.9 → 1.2,
 cost halved — is queued in `NEXT.md` with its own rule.
 [`../learning/floor-fallback.md`](../learning/floor-fallback.md).
 
+### 4 · Prompt caching — measured, no knob ($0.027, 2026-09-20)
+
+**Hypothesis.** Implicit caching never fires on the ~1,400-token prefix;
+an explicit cache is refused as under the minimum, or if accepted cuts
+the search turn's billed input ≥ 40%. Rule: explicit saves ≥ 30% per
+query net of storage at 5 queries/hour → opt-in knob.
+
+**Measured.** 0 of 22 turns implicitly cached. Explicit cache accepted at
+1,410 tokens and hit on every turn: −40% gross over four questions, −28%
+net at 5/hour (break-even ~1.5/hour, the rule's 30% at ~10/hour). No knob
+for an on-demand deployment; `cached_tokens` reported and priced.
+[`../learning/prompt-caching.md`](../learning/prompt-caching.md).
+
 ## Also in this milestone
 
 - Ship the composer fix already on `main` the next time the VM is up

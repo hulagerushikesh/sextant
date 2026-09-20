@@ -164,6 +164,13 @@ class TestLoop:
         )
         assert events[-1]["usage"]["output_tokens"] == 200
 
+    async def test_cached_prompt_tokens_are_reported_as_a_subset_of_input(self, host):
+        events, _ = await collect(
+            "q", host, [answer_turn(input_tokens=1500, cached_tokens=1200)]
+        )
+        usage = events[-1]["usage"]
+        assert usage["input_tokens"] == 1500 and usage["cached_tokens"] == 1200
+
     async def test_an_answer_with_no_tool_call_still_completes(self, host):
         events, _ = await collect("q", host, [answer_turn()])
         assert events[-1]["turns"] == 1

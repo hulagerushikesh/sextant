@@ -21,7 +21,6 @@ runs; none is started on a hunch.
 | Idea | Why it is on the list | Needs | Cost |
 | --- | --- | --- | --- |
 | Floor fallback as a cost feature: `SEXTANT_FLOOR_FALLBACK=dense` measured on the whole answerable handbook set, both arms, judged — does the model decline where control would have rephrased into a hit? | `../learning/floor-fallback.md`: it did not help the answerable questions it was built for, but 15/15 unanswerable still declined and the loop's cost on them halved (searches 2.9 → 1.2). Ships only if false abstention across all 55 answerable questions does not rise | key | ~$0.20 (110 agent runs + judge on flash-lite) |
-| Prompt caching on the system prompt + tool schemas | ~1,000 input tokens repeated every turn; Gemini bills cached context lower | key | ~$0.02 to measure |
 | `--summaries` as the upload default | cap removed the dense cost (this milestone); only "needs a key at ingest" remains | decision | $0.003 / document at upload |
 | Per-user upload (multi-corpus) | the app is one corpus per deployment; a hosted version needs `category` to mean a person | design | ₹0 |
 | Request-level index tier (`exact` flat / `fast` hnsw / `lean` ivfpq_rerank) | caller states a budget, server maps to index + params; only meaningful past ~25k chunks, where HNSW overtakes flat (`../learning/ivfpq-100k.md`) | corpus ≥ 25k | ₹0 |
@@ -48,6 +47,12 @@ runs; none is started on a hunch.
   a different system; dense worse on both sets, invisible after the
   reranker, and a fabricated passage scores 0.70 against a corpus that
   cannot answer the question. `../learning/hyde.md`.
+- **Prompt caching** — the 1,410-token prefix is under the implicit-cache
+  minimum (0 of 22 turns hit); an explicit cache works and saves 40% gross
+  but 28% net of storage at 5 queries/hour, under the 30% rule, and needs
+  re-creating on every prompt or tool change while the deployment idles.
+  `cached_tokens` is reported and priced so the number is honest if one is
+  ever configured. `../learning/prompt-caching.md`.
 - **Floor fallback as a recall fix** — handing the model the sub-floor
   dense order does not recover q48: the model's phrasing decides whether
   the answer chunk clears 0.01 by 0.003, and below the floor dense cosine

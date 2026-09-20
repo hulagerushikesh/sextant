@@ -43,6 +43,7 @@ def final_chunk(
     input_tokens: int = 100,
     output_tokens: int = 10,
     thinking_tokens: int = 0,
+    cached_tokens: int = 0,
     grounding: types.GroundingMetadata | None = None,
 ) -> types.GenerateContentResponse:
     """The closing chunk: finish reason, cumulative usage, grounding if any."""
@@ -52,6 +53,7 @@ def final_chunk(
         grounding_metadata=grounding,
         usage=types.GenerateContentResponseUsageMetadata(
             prompt_token_count=input_tokens,
+            cached_content_token_count=cached_tokens or None,
             candidates_token_count=output_tokens,
             thoughts_token_count=thinking_tokens or None,
         ),

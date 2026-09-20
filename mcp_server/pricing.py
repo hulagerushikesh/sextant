@@ -40,21 +40,35 @@ PRICING_AS_OF = "2026-08"
 # to 2026-12-31, then $1.50/$7.50).
 INPUT_USD_PER_MTOK = 0.25
 OUTPUT_USD_PER_MTOK = 1.50
+# Prompt tokens served from a context cache bill at a tenth of the input rate.
+# The agent's prefix (system prompt + tool schemas, 1,410 tokens) is under the
+# implicit-cache minimum, so in the product this is always 0; an explicit
+# cache would make it real, and the storage it charges ($1.00 per million
+# tokens per hour) is not modelled here. Measured in `learning/prompt-caching.md`.
+CACHED_INPUT_USD_PER_MTOK = 0.025
 
 # $14 per 1,000 grounded requests once the 5,000/month free allowance is used.
 GROUNDING_USD_PER_REQUEST = 0.014
 
 
 def estimate_cost(
-    input_tokens: int, output_tokens: int, grounded_requests: int = 0
+    input_tokens: int,
+    output_tokens: int,
+    grounded_requests: int = 0,
+    cached_tokens: int = 0,
 ) -> float:
     """USD for one query's model usage, rounded to the nearest hundredth of a cent.
 
     `output_tokens` is expected to already include thinking tokens; the agent
     adds them at the point it reads `usage_metadata`, where the distinction is
     visible, rather than here, where it would be a silent assumption.
+    `cached_tokens` is the part of `input_tokens` a cache served, as Gemini
+    reports it: a subset, billed at the cached rate instead of the input rate.
     """
+    cached = min(max(cached_tokens, 0), input_tokens)
     dollars = (
-        input_tokens * INPUT_USD_PER_MTOK + output_tokens * OUTPUT_USD_PER_MTOK
+        (input_tokens - cached) * INPUT_USD_PER_MTOK
+        + cached * CACHED_INPUT_USD_PER_MTOK
+        + output_tokens * OUTPUT_USD_PER_MTOK
     ) / 1_000_000
     return round(dollars + grounded_requests * GROUNDING_USD_PER_REQUEST, 6)
