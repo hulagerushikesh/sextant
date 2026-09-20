@@ -42,7 +42,11 @@ from pydantic import BaseModel, Field
 
 from tools import settings
 
-JUDGE_MODEL = "gemini-3.7-flash"
+# The judge's model. Overridable so an experiment can grade on a cheaper model
+# when the budget says so (`learning/floor-fallback.md` used flash-lite); the
+# default is the stronger one, because a judge that misreads support is worse
+# than no judge.
+JUDGE_MODEL = settings.getenv("JUDGE_MODEL", "gemini-3.7-flash") or "gemini-3.7-flash"
 CITATION = re.compile(r"\[(\d+)\]")
 
 JUDGE_SYSTEM = """You are grading a retrieval-augmented answer. You are strict, \

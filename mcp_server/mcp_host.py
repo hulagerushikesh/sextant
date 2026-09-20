@@ -48,6 +48,7 @@ _FORWARDED_ENV = (
     + settings.env_names("CHUNK_TOKENS")
     + settings.env_names("MAX_PER_DOCUMENT")
     + settings.env_names("SUBFLOOR_ORDER")
+    + settings.env_names("FLOOR_FALLBACK")
 )
 
 

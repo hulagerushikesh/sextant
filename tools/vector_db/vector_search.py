@@ -133,6 +133,18 @@ MAX_PER_DOCUMENT = int(settings.getenv("MAX_PER_DOCUMENT", "2") or 0)
 SUBFLOOR_ORDER_ENV = settings.env_name("SUBFLOOR_ORDER")
 SUBFLOOR_ORDER = settings.getenv("SUBFLOOR_ORDER", "dense") or "dense"
 
+# What a cross-encoder search returns when *nothing* clears `min_score`. "none"
+# returns the empty list: the floor is the abstention signal and the caller
+# (the agent) rephrases or declines. "dense" returns the chunks the dense pass
+# found, ordered by cosine and reported as such -- `scored_by: cosine`, the
+# cosine as the score, `below_floor: true` on the result -- so the reader knows
+# these are nearest-by-embedding, not relevant. The cosines are not calibrated
+# across questions (an unanswerable question's nearest chunk can sit above an
+# answerable one's), so the flag is the only thing separating the two; whether
+# a model reading them can tell is what `learning/floor-fallback.md` measures.
+FLOOR_FALLBACK_ENV = settings.env_name("FLOOR_FALLBACK")
+FLOOR_FALLBACK = settings.getenv("FLOOR_FALLBACK", "none") or "none"
+
 # A document over the cap keeps its slot unless the next document waiting
 # scores at least this fraction of it. Dense siblings that crowd a list score
 # within a few percent of the chunk they push out; the chunks a hard cap let in
@@ -387,7 +399,7 @@ class KnowledgeBase:
     ) -> dict[str, Any]:
         """The synchronous body of `search`, for callers already on a thread."""
         start = time.time()
-        results, scored_by = self._search(query, limit, min_score, mode)
+        results, scored_by, below_floor = self._search(query, limit, min_score, mode)
 
         return {
             "success": True,
@@ -397,6 +409,7 @@ class KnowledgeBase:
             "mode": mode,
             "scored_by": scored_by,
             "min_score": min_score,
+            "below_floor": below_floor,
             "processing_time": time.time() - start,
             "collection": self.collection_name,
             "collection_size": self.collection.count(),
@@ -405,9 +418,10 @@ class KnowledgeBase:
 
     def _search(
         self, query: str, limit: int, min_score: float, mode: str
-    ) -> tuple[list[dict[str, Any]], str]:
+    ) -> tuple[list[dict[str, Any]], str, bool]:
+        """Hits, what scored them, and whether they are the sub-floor fallback."""
         if self.collection.count() == 0:
-            return [], "none"
+            return [], "none", False
 
         # Always built: even a dense-only search needs the chunk text cache to
         # assemble its hits.
@@ -418,7 +432,7 @@ class KnowledgeBase:
 
         candidates, scores, scored_by = self._rank(query, mode, dense_ids, dense_scores, lexical)
         if not candidates:
-            return [], "none"
+            return [], "none", False
 
         # `keys` orders; `scores` is what a hit reports and what the floor
         # tests. They differ only under the floor, and only when asked to.
@@ -434,8 +448,25 @@ class KnowledgeBase:
         # An RRF score is a rank artefact with no meaning on a 0-1 scale, so
         # thresholding it would repeat exactly the mistake this project
         # already made once with l2 distances.
+        below_floor = False
         if scored_by == "cross-encoder":
-            order = [i for i in order if scores[i] >= min_score]
+            kept = [i for i in order if scores[i] >= min_score]
+            if not kept and min_score > 0 and FLOOR_FALLBACK == "dense":
+                # Nothing cleared the floor. Hand back what the dense pass
+                # found, in its own order and with its own score, and say so:
+                # the cross-encoder's verdict was "no", and the hit must not
+                # carry a cross-encoder score that pretends otherwise.
+                below_floor = True
+                scored_by = "cosine"
+                scores = [dense_scores.get(c.id, 0.0) for c in candidates]
+                keys = scores
+                order = sorted(
+                    (i for i in range(len(candidates)) if scores[i] > 0.0),
+                    key=lambda i: keys[i],
+                    reverse=True,
+                )
+            else:
+                order = kept
 
         # Only where a score is a relevance and not a rank: the guard inside
         # compares magnitudes, and an RRF or BM25 score has none to compare.
@@ -446,7 +477,7 @@ class KnowledgeBase:
         return [
             self._hit(candidates[i], scores[i], scored_by, dense_scores.get(candidates[i].id))
             for i in chosen
-        ], scored_by
+        ], scored_by, below_floor
 
     def _diversify(
         self, order: list[int], ids: list[str], scores: list[float], limit: int

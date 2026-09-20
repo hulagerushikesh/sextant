@@ -159,6 +159,14 @@ are ordered by dense cosine instead (`SEXTANT_SUBFLOOR_ORDER`, default
 → 0.982 from this; nothing at or above the floor moves, so the agent's
 results are unchanged. [`../learning/subfloor-order.md`](../learning/subfloor-order.md).
 
+When nothing clears the floor the search returns an empty list
+(`SEXTANT_FLOOR_FALLBACK`, default `none`). `dense` returns the dense
+pass's chunks in cosine order instead, reported as `scored_by: cosine`
+with `below_floor: true`, and the agent prefixes them with a warning. Not
+the default: on the agent it halved the loop's cost on unanswerable
+questions with abstention intact, but did not help the answerable ones it
+was built for. [`../learning/floor-fallback.md`](../learning/floor-fallback.md).
+
 ## Setting min_score
 
 The summary gap between splits says no threshold exists — answerable scores go
@@ -224,6 +232,7 @@ committed baseline is built without them. Full table in
 ```bash
 ./.venv/bin/sextant-eval-agent --kinds multihop --sample 20 --store chroma_db --out run.json
 ./.venv/bin/sextant-eval-agent --kinds multihop --dry-run   # list the questions, spend nothing
+./.venv/bin/sextant-eval-agent --ids q48 u01 u02 --judge     # exact questions, answers judged too
 ```
 
 Everything above is one `kb.search()` per question. The product lets the
@@ -234,7 +243,12 @@ first query) and **recall@union** (everything any search retrieved), plus
 the tool sequence, searches, turns and cost per question. A question
 answered from `kb_list` makes no search, so it also grades **named** — the
 share of expected documents whose title appears in the answer
-([`learning/kb-list.md`](../learning/kb-list.md)). Multi-hop questions are the point:
+([`learning/kb-list.md`](../learning/kb-list.md)). `--unanswerable` adds the
+whole unanswerable split and `--judge` sends every answer through
+`eval.judge` as well (faithfulness, relevance, declined; a second model
+call per question, `SEXTANT_JUDGE_MODEL` to grade on a cheaper model),
+which is how abstention is measured end to end — an unanswerable row has
+no retrieval grade and stays out of those means. Multi-hop questions are the point:
 under the shipped prompt the loop searched once and answered half, and one
 prompt bullet is what changed that. Results and the two product findings it
 surfaced are in [`learning/agent-loop.md`](../learning/agent-loop.md).

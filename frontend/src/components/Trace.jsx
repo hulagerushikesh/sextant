@@ -23,6 +23,10 @@ function describe(summary) {
     const passages = `${summary.hits} passage${summary.hits === 1 ? '' : 's'}`
     const scored =
       summary.top_score != null ? `, top ${Number(summary.top_score).toFixed(2)}` : ''
+    // The sub-floor fallback: nothing was judged relevant, the nearest passages
+    // came back anyway. Shown with the empty tone so it reads as the floor
+    // speaking, not as a successful search.
+    if (summary.below_floor) return { text: `${passages} below the floor`, tone: 'empty' }
     return { text: passages + scored, tone: 'ok' }
   }
   if (summary.documents != null) {

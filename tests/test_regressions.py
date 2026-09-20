@@ -129,12 +129,21 @@ class TestTheStoreOverrideReachesTheServer:
         # A knob the KB reads but the host does not forward is a silent no-op
         # in the app while working in every test and CLI.
         from mcp_server.mcp_host import kb_server
-        from tools.vector_db.vector_search import MAX_PER_DOCUMENT_ENV, SUBFLOOR_ORDER_ENV
+        from tools.vector_db.vector_search import (
+            FLOOR_FALLBACK_ENV,
+            MAX_PER_DOCUMENT_ENV,
+            SUBFLOOR_ORDER_ENV,
+        )
 
         monkeypatch.delenv(PERSIST_DIR_ENV, raising=False)
         monkeypatch.setenv(MAX_PER_DOCUMENT_ENV, "0")
         monkeypatch.setenv(SUBFLOOR_ORDER_ENV, "dense")
-        assert kb_server().env == {MAX_PER_DOCUMENT_ENV: "0", SUBFLOOR_ORDER_ENV: "dense"}
+        monkeypatch.setenv(FLOOR_FALLBACK_ENV, "dense")
+        assert kb_server().env == {
+            MAX_PER_DOCUMENT_ENV: "0",
+            SUBFLOOR_ORDER_ENV: "dense",
+            FLOOR_FALLBACK_ENV: "dense",
+        }
 
 
 class TestLongDocumentsAreReachable:

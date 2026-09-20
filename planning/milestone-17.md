@@ -131,6 +131,23 @@ searched afterwards did so *inside* the documents it had named. The fifth
 is a content comparison that should search. Shipped. The harness now
 records the tool sequence and a `named` grade.
 
+### 3 · Dense fallback under the floor — measured, not shipped ($0.12, 2026-09-20)
+
+**Hypothesis.** When `kb_search` keeps nothing at or above 0.01, return the
+dense pass's chunks in cosine order, marked `below_floor`, with a warning
+line ahead of them; the four all-sub-floor answerable questions reach
+recall@union 1.0 and are judged relevant, and at most one of the 15
+unanswerable questions stops declining. Rule: both → ship as default.
+
+**Measured.** Both arms, 20 questions, agent harness with `--judge` (added
+for this, judge on flash-lite for budget). Abstention held outright,
+15/15; the answerable half failed — the knob fired on two of the four
+(the model's own phrasing cleared the floor on the rest), helped q29 and
+handed q48 the wrong config chunks. Not shipped. The unregistered result —
+the loop stops rephrasing on unanswerable questions, searches 2.9 → 1.2,
+cost halved — is queued in `NEXT.md` with its own rule.
+[`../learning/floor-fallback.md`](../learning/floor-fallback.md).
+
 ## Also in this milestone
 
 - Ship the composer fix already on `main` the next time the VM is up
