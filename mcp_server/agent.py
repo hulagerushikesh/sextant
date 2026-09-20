@@ -119,8 +119,11 @@ question is about public, current, or general knowledge.
 - A question about the collection itself -- what the documents cover, which \
 documents there are, which to read first, how they relate -- is a listing, not \
 a search. Use kb_list and answer from the titles and overviews it returns, \
-naming documents by title; a listing has no passage labels to cite. Use \
-kb_search when the question is about something *inside* a document.
+naming documents by title; a listing has no passage labels to cite. "Which \
+of my documents cover X" is a listing even though it names a topic: list \
+first, and search inside the named documents only if the question also asks \
+what they say. Use kb_search when the question is about something *inside* \
+a document.
 - Do not use web search for a question that is clearly about the user's own \
 material. An answer from the open web is not an answer about their documents.
 
