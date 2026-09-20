@@ -20,7 +20,7 @@ runs; none is started on a hunch.
 
 | Idea | Why it is on the list | Needs | Cost |
 | --- | --- | --- | --- |
-| HyDE / query expansion | q48 (agent-loop note): every phrasing scores ≈0 under the reranker; a hypothetical answer may embed where the question does not | key | ~$0.05 |
+| Keep dense top-1 per document through the rerank cut (q48) | `../learning/hyde.md`: dense already finds both of q48's documents; the cross-encoder drops one. Candidate-side, not query-side | pre-register | ₹0 |
 | Prompt caching on the system prompt + tool schemas | ~1,000 input tokens repeated every turn; Gemini bills cached context lower | key | ~$0.02 to measure |
 | `--summaries` as the upload default | cap removed the dense cost (this milestone); only "needs a key at ingest" remains | decision | $0.003 / document at upload |
 | Per-user upload (multi-corpus) | the app is one corpus per deployment; a hosted version needs `category` to mean a person | design | ₹0 |
@@ -43,6 +43,11 @@ runs; none is started on a hunch.
   score; leads at 1,602 chunks. `../learning/reranker-decision.md`.
 - **Cloud Run / scale-out / 24×7 hosting** — embedded Chroma is
   single-writer; run policy is on demand. `milestone-15.md`.
+- **HyDE / query expansion** — the generator does not know a personal
+  corpus's world: for the vocabulary-free question it wrote a passage about
+  a different system; dense worse on both sets, invisible after the
+  reranker, and a fabricated passage scores 0.70 against a corpus that
+  cannot answer the question. `../learning/hyde.md`.
 - **Per-query routing between HNSW and IVF-PQ** — query text carries no
   signal for it, and holding both resident forfeits IVF-PQ's only win
   (memory) while HNSW beats it on recall and latency at every size
