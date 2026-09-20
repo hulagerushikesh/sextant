@@ -103,6 +103,43 @@ class TestThreshold:
         assert result["results"]
 
 
+class TestFloorFallback:
+    """Milestone 17: what a search returns when nothing clears the floor."""
+
+    async def test_off_by_default_an_empty_result_stays_empty(self, kb):
+        result = await kb.search("boiling point of liquid nitrogen", limit=5, min_score=0.99)
+        assert result["results"] == []
+        assert result["below_floor"] is False
+
+    async def test_on_the_nearest_chunks_come_back_marked_and_cosine_scored(self, kb, monkeypatch):
+        monkeypatch.setattr(vector_search, "FLOOR_FALLBACK", "dense")
+        result = await kb.search("boiling point of liquid nitrogen", limit=5, min_score=0.99)
+        hits = result["results"]
+        assert hits and result["below_floor"] is True
+        assert result["scored_by"] == "cosine"
+        assert all(hit["scored_by"] == "cosine" for hit in hits)
+        # The reported score is the cosine, not a cross-encoder score that
+        # would read as a relevance; and the list is in cosine order.
+        assert [hit["score"] for hit in hits] == [hit["dense_score"] for hit in hits]
+        assert [hit["score"] for hit in hits] == sorted(
+            (hit["score"] for hit in hits), reverse=True
+        )
+
+    async def test_on_a_search_that_clears_the_floor_is_untouched(self, kb, monkeypatch):
+        monkeypatch.setattr(vector_search, "FLOOR_FALLBACK", "dense")
+        result = await kb.search("kalman", limit=5)
+        assert result["below_floor"] is False
+        assert result["scored_by"] == "cross-encoder"
+
+    async def test_a_caller_asking_for_everything_never_gets_the_fallback(self, kb, monkeypatch):
+        # min_score 0 keeps nothing out, so there is nothing to fall back from;
+        # `sextant-eval` grades at 0 and must see the cross-encoder's order.
+        monkeypatch.setattr(vector_search, "FLOOR_FALLBACK", "dense")
+        result = await kb.search("boiling point of liquid nitrogen", limit=5, min_score=0.0)
+        assert result["below_floor"] is False
+        assert result["scored_by"] == "cross-encoder"
+
+
 class TestListing:
     async def test_every_document_is_listed_with_its_opening(self, kb):
         listing = await kb.list_documents()

@@ -87,7 +87,9 @@ def _store() -> KnowledgeBase:
         "scored: 'cross-encoder' scores are relevance in 0-1, where anything "
         "above about 0.5 is a genuine match. Returns an empty list when the "
         "collection holds nothing relevant, which means the answer is not in the "
-        "knowledge base -- say so rather than guessing."
+        "knowledge base -- say so rather than guessing. A result flagged "
+        "below_floor is the same verdict with the nearest passages attached for "
+        "reading: they are ordered by embedding similarity, not judged relevant."
     )
 )
 async def kb_search(

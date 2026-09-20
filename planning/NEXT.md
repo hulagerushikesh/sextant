@@ -20,7 +20,7 @@ runs; none is started on a hunch.
 
 | Idea | Why it is on the list | Needs | Cost |
 | --- | --- | --- | --- |
-| Dense fallback under the floor: when nothing clears 0.01, return the dense order marked as such instead of nothing | `../learning/subfloor-order.md`: q47/q48 are now ordered right but still filtered out for the agent; the unanswerable split would get passages too, so this is graded by the agent harness + judge, not `sextant-eval` | key | ~$0.10 |
+| Floor fallback as a cost feature: `SEXTANT_FLOOR_FALLBACK=dense` measured on the whole answerable handbook set, both arms, judged — does the model decline where control would have rephrased into a hit? | `../learning/floor-fallback.md`: it did not help the answerable questions it was built for, but 15/15 unanswerable still declined and the loop's cost on them halved (searches 2.9 → 1.2). Ships only if false abstention across all 55 answerable questions does not rise | key | ~$0.20 (110 agent runs + judge on flash-lite) |
 | Prompt caching on the system prompt + tool schemas | ~1,000 input tokens repeated every turn; Gemini bills cached context lower | key | ~$0.02 to measure |
 | `--summaries` as the upload default | cap removed the dense cost (this milestone); only "needs a key at ingest" remains | decision | $0.003 / document at upload |
 | Per-user upload (multi-corpus) | the app is one corpus per deployment; a hosted version needs `category` to mean a person | design | ₹0 |
@@ -48,6 +48,11 @@ runs; none is started on a hunch.
   a different system; dense worse on both sets, invisible after the
   reranker, and a fabricated passage scores 0.70 against a corpus that
   cannot answer the question. `../learning/hyde.md`.
+- **Floor fallback as a recall fix** — handing the model the sub-floor
+  dense order does not recover q48: the model's phrasing decides whether
+  the answer chunk clears 0.01 by 0.003, and below the floor dense cosine
+  picks a document's title chunk over its answer paragraph. The knob stays
+  (default `none`) for the cost result above. `../learning/floor-fallback.md`.
 - **Per-query routing between HNSW and IVF-PQ** — query text carries no
   signal for it, and holding both resident forfeits IVF-PQ's only win
   (memory) while HNSW beats it on recall and latency at every size
