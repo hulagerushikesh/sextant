@@ -163,9 +163,11 @@ prompt change. $0.04 for 29 questions.
 - A judge pass (`sextant-judge`) over the multi-hop set would settle whether
   q36/q47 answers are as complete as the `expect` field suggests, and could
   replace recall@union with an answer-level number for this class. ~$0.05.
-- Query expansion or HyDE for q48-shaped questions: no shared vocabulary
+- ~~Query expansion or HyDE for q48-shaped questions: no shared vocabulary
   between question and passage, reranker at zero. That is research question
-  2, and this harness is how it would be graded end to end.
+  2, and this harness is how it would be graded end to end.~~ Measured in
+  [`hyde.md`](hyde.md): it does not help, and for q48 the model wrote a
+  passage about a different system. The question is a rerank-cut problem.
 - A cheaper first turn. Every question costs two turns minimum — one to
   search, one to answer — and the search turn is 60% of the tokens because
   the system prompt is re-sent. Prompt caching would halve the per-question
