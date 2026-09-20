@@ -160,6 +160,12 @@ class TestCost:
     def test_zero_usage_is_free(self):
         assert estimate_cost(0, 0) == 0.0
 
+    def test_cached_prompt_tokens_bill_at_a_tenth_and_never_exceed_the_input(self):
+        # 10,000 in of which 8,000 cached: 2,000 at $0.25/M + 8,000 at $0.025/M.
+        assert estimate_cost(10_000, 0, cached_tokens=8_000) == pytest.approx(0.0007)
+        capped = estimate_cost(1_000, 0, cached_tokens=5_000)
+        assert capped == estimate_cost(1_000, 0, cached_tokens=1_000)
+
     def test_output_is_the_expensive_half(self):
         assert estimate_cost(0, 1000) > estimate_cost(1000, 0)
 

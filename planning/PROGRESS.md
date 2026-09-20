@@ -7,6 +7,11 @@ story is the root README.
 
 ## 2026-09-20
 
+- **Prompt caching measured, no knob** ($0.027) — implicit caching never
+  fires on the agent's 1,410-token prefix; an explicit cache is accepted
+  and saves 40% gross per question, 28% net of storage at 5 queries/hour
+  (rule: 30%). `usage.cached_tokens` and the cached rate in `pricing.py`
+  ship. `learning/prompt-caching.md`.
 - **Floor fallback measured, not shipped** ($0.12) — returning the dense
   order when nothing clears 0.01, marked `below_floor`, does not help the
   answerable questions it was built for (q48 is phrasing luck at the floor

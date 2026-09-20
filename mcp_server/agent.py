@@ -505,7 +505,7 @@ async def run(
     ]
     contents.append(types.Content(role="user", parts=[types.Part(text=query)]))
 
-    input_tokens = output_tokens = 0
+    input_tokens = output_tokens = cached_tokens = 0
     grounded_requests = 0
     turns = 0
     known_sources = len(registry)  # restored labels are already on the client
@@ -518,7 +518,7 @@ async def run(
         spoken = ""
         grounding = None
         finish_reason = None
-        turn_input = turn_output = 0
+        turn_input = turn_output = turn_cached = 0
 
         stream = await client.models.generate_content_stream(
             model=MODEL,
@@ -556,9 +556,15 @@ async def run(
                 turn_output = (usage.candidates_token_count or 0) + (
                     usage.thoughts_token_count or 0
                 )
+                # The part of the prompt Gemini served from its implicit cache
+                # (a prefix it had seen recently). Billed at the cached rate;
+                # counted inside prompt_token_count, so this is a subset, not
+                # an addition. Measured in `learning/prompt-caching.md`.
+                turn_cached = usage.cached_content_token_count or 0
 
         input_tokens += turn_input
         output_tokens += turn_output
+        cached_tokens += turn_cached
 
         if grounding is not None:
             grounded_requests += 1
@@ -653,7 +659,7 @@ async def run(
             known_sources = len(registry)
             yield {"type": "sources", "sources": registry.as_json()}
 
-    cost = estimate_cost(input_tokens, output_tokens, grounded_requests)
+    cost = estimate_cost(input_tokens, output_tokens, grounded_requests, cached_tokens)
     logger.info(
         "agent finished in %d turn(s), %d source(s)",
         turns,
@@ -662,6 +668,7 @@ async def run(
             "agent_turns": turns,
             "agent_truncated": truncated,
             "agent_input_tokens": input_tokens,
+            "agent_cached_tokens": cached_tokens,
             "agent_output_tokens": output_tokens,
             "agent_grounded_requests": grounded_requests,
             "agent_cost_usd": cost,
@@ -675,6 +682,7 @@ async def run(
         "truncated": truncated,
         "usage": {
             "input_tokens": input_tokens,
+            "cached_tokens": cached_tokens,
             "output_tokens": output_tokens,
             "grounded_requests": grounded_requests,
             # Reported per query rather than aggregated somewhere: the cost of a
