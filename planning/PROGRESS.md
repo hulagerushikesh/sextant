@@ -7,6 +7,10 @@ story is the root README.
 
 ## 2026-09-20
 
+- **HyDE measured, decided against** ($0.010) — hypothetical-answer
+  embedding hurts dense on both sets, is erased by the 25-deep rerank
+  pool, and breaks the abstention floor when it replaces the question
+  (unanswerable max 0.00 → 0.70 on the survey). `learning/hyde.md`.
 - **`kb_list` measured and its prompt bullet shipped** ($0.034, two agent
   runs) — the model lists first on 4/5 global questions and 3/3 starters
   and names every expected document; the "which of my documents cover X"

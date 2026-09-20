@@ -41,6 +41,7 @@ depends on a number in an earlier one.
 | [`summary-chunks.md`](summary-chunks.md) | M16 exp 5 — one overview chunk per document for global questions? | Opt-in `--summaries`; wins rank, cost dense recall |
 | [`candidate-cap.md`](candidate-cap.md) | M17 exp 1 — was the dense loss in exps 1, 3, 5 crowding? | Yes; shipped, cap 2 with a score guard, dense only |
 | [`ivfpq-100k.md`](ivfpq-100k.md) | §9 item 5 — at 100k vectors, does IVF-PQ's memory win become a latency win? | Not in Python at recall ≥ 0.9; its recall dial at scale is `oversample`, not `nprobe` |
+| [`hyde.md`](hyde.md) | §9 item 2 — does embedding a hypothetical answer help on a personal corpus? | No: dense worse on both sets, erased by the reranker, abstention broken when it replaces the question; the model writes the wrong document |
 | [`kb-list.md`](kb-list.md) | M17 step 2 — does the agent reach for the listing tool unprompted, and name the documents? | 3/5 → one sentence → 4/5 global, 3/3 starters, 100% named; bullet ships; list-then-search emerges on its own |
 | [`ivf-hnsw-1m.md`](ivf-hnsw-1m.md) | §9 item 6 — at 1M vectors and 65k cells, does an HNSW coarse quantizer pay? | Half: same cells at a quarter of the coarse cost, 1.6–1.8× on the whole query (not 2×); `nlist` past `4√n` costs recall |
 
@@ -412,8 +413,13 @@ level-6-style experiment, zero cloud cost; the open ones are scheduled as
    L25/L26.~~ Done — [`table-chunking.md`](table-chunking.md): rows under
    a header, +0.09 hit@1 on the survey set, and why one row per chunk
    crowded dense retrieval.
-2. Does HyDE help on a technical personal corpus, or hurt (hallucinated
-   jargon)? One function in `retrieval.py`, one eval row.
+2. ~~Does HyDE help on a technical personal corpus, or hurt (hallucinated
+   jargon)? One function in `retrieval.py`, one eval row.~~ Done —
+   [`hyde.md`](hyde.md): hurts dense on both sets (hit@1 −0.07 / −0.03),
+   invisible after the reranker, and replacing the question lifts the
+   reranker's top score on an unanswerable survey question from 0.00 to
+   0.70. For q48 the model wrote a passage about the wrong system. Nothing
+   ships.
 2b. ~~Is 200 tokens the right chunk size, or MiniLM's?~~ Done —
    [`chunk-size.md`](chunk-size.md): bigger loses for both embedders,
    150 helps the reranker and hurts dense through crowding; 200 stays.
