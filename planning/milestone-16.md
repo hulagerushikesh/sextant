@@ -173,7 +173,9 @@ paid ones and come last so the free results shape their questions.
 
 ## Also in this milestone (small, product)
 
-- Ship the composer fix already on `main` the next time the VM is up.
+- ~~Ship the composer fix already on `main` the next time the VM is up.~~
+  Deployed 2026-09-23 with the whole of M17 (the box was still on a
+  pre-`kb_list` image); `PROGRESS.md` has the run.
 - ~~Render markdown tables in answers~~ — done 2026-09-17: a GFM table
   block in `Answer.jsx` (rule row required, so a streaming header renders
   as prose until the rule lands; citations work inside cells).
