@@ -65,6 +65,12 @@ class TestRecordingHost:
         assert host.searches[1]["limit"] == 3
         assert host.tools == inner.tools and host.connected
 
+    async def test_a_sub_floor_result_is_marked_on_the_search_it_came_from(self):
+        below = {**kb_result(hit("alpha#0", "Alpha", "text")), "below_floor": True}
+        host = RecordingHost(FakeHost({"kb_search": below}))
+        await host.call("kb_search", {"query": "one"})
+        assert host.searches[0]["below_floor"] is True
+
     async def test_other_tools_are_not_searches_but_are_calls(self):
         host = RecordingHost(FakeHost({"kb_stats": {"documents": 2}, "kb_list": {"documents": []}}))
         await host.call("kb_list", {})
@@ -96,6 +102,14 @@ class TestGrading:
         assert grade["recall@union"] == 1.0
         assert grade["union"] == ["alpha", "gamma", "beta"]
         assert grade["queries"] == ["first", "second"]
+
+    def test_the_grade_counts_the_searches_that_fell_below_the_floor(self):
+        searches: list[dict[str, Any]] = [
+            {"query": "first", "hits": [hit("alpha#0", "A", "x")], "below_floor": True},
+            {"query": "second", "hits": [hit("beta#0", "B", "x")]},
+        ]
+        assert grade_record(item(), searches)["below_floor"] == 1
+        assert grade_record(item(), [])["below_floor"] == 0
 
     def test_no_search_at_all_is_a_zero(self):
         grade = grade_record(item(), [])

@@ -165,7 +165,9 @@ pass's chunks in cosine order instead, reported as `scored_by: cosine`
 with `below_floor: true`, and the agent prefixes them with a warning. Not
 the default: on the agent it halved the loop's cost on unanswerable
 questions with abstention intact, but did not help the answerable ones it
-was built for. [`../learning/floor-fallback.md`](../learning/floor-fallback.md).
+was built for, and on all 55 answerable questions it is safe but fires on
+one of them. [`../learning/floor-fallback.md`](../learning/floor-fallback.md),
+[`../learning/floor-fallback-cost.md`](../learning/floor-fallback-cost.md).
 
 ## Setting min_score
 
@@ -248,7 +250,10 @@ whole unanswerable split and `--judge` sends every answer through
 `eval.judge` as well (faithfulness, relevance, declined; a second model
 call per question, `SEXTANT_JUDGE_MODEL` to grade on a cheaper model),
 which is how abstention is measured end to end — an unanswerable row has
-no retrieval grade and stays out of those means. Multi-hop questions are the point:
+no retrieval grade and stays out of those means. Every search also records
+`below_floor`, and the grade counts them: a `SEXTANT_FLOOR_FALLBACK=dense`
+run whose count is 0 did not test the knob, whatever else its numbers did
+([`learning/floor-fallback-cost.md`](../learning/floor-fallback-cost.md)). Multi-hop questions are the point:
 under the shipped prompt the loop searched once and answered half, and one
 prompt bullet is what changed that. Results and the two product findings it
 surfaced are in [`learning/agent-loop.md`](../learning/agent-loop.md).
