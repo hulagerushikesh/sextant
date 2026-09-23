@@ -7,6 +7,20 @@ story is the root README.
 
 ## 2026-09-23
 
+- **Composer fix deployed — and with it the whole of M17** (≈₹4 of VM
+  time) — the VM had been parked since 2026-09-17 and was still serving a
+  pre-`kb_list` image, so shipping the compact composer carried `kb_list`,
+  sub-floor ordering, the floor-fallback knob, cached-token reporting and
+  the table/export work with it. A fresh static IP was reserved and
+  attached, DNS repointed, the working tree shipped and both images
+  rebuilt on the box; the key and the daily cap were replaced in the VM's
+  `.env` by hand. Verified: TLS valid on the new address, Basic-auth gate
+  returns 401, `/health` reports `budget_usd: 0.6` and offers
+  `kb_search, kb_stats, kb_list`, and one live query answered from the
+  corpus with a citation in two turns ($0.002). Store on `/data` untouched
+  (22 documents) and still ingested under the pre-table-chunking pipeline —
+  a re-ingest is ₹0 and not yet run.
+
 - **Floor fallback as a cost feature measured, candidate closed** ($0.25)
   — all 55 answerable handbook questions, both arms, judged on
   flash-lite. The fallback is safe (false abstention 1 → 0, faithfulness
