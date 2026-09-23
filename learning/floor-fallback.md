@@ -5,7 +5,8 @@
 `gemini-3.1-flash-lite` ≈ $0.03). Decision: **not shipped** —
 `SEXTANT_FLOOR_FALLBACK` stays `none`. The pre-registered rule needed the
 answerable questions to benefit, and they do not; what the run found instead
-is queued with its own rule.*
+is queued with its own rule — and measured in [`floor-fallback-cost.md`](floor-fallback-cost.md),
+which closed the candidate.*
 
 ## Hypothesis
 

@@ -161,6 +161,24 @@ net at 5/hour (break-even ~1.5/hour, the rule's 30% at ~10/hour). No knob
 for an on-demand deployment; `cached_tokens` reported and priced.
 [`../learning/prompt-caching.md`](../learning/prompt-caching.md).
 
+### 5 · Floor fallback as a cost feature — measured, candidate closed ($0.25, 2026-09-23)
+
+**Hypothesis.** Across all 55 answerable handbook questions, sub-floor
+passages do not make the model decline what it would otherwise answer.
+Clauses: false abstention up by at most one question; faithfulness and
+relevance down by at most 0.02; **the fallback fires on at least 3 of the
+55, or the run has measured nothing**; cost per question up by at most 5%.
+Rule: all four → flip the default.
+
+**Measured.** Three clauses held — false abstention 1 → 0 (q48, and it
+flipped for phrasing reasons, not the knob), faithfulness 0.936 → 0.960,
+cost 0.00151 → 0.00147. The exposure clause failed: the fallback fired on
+**one** question (q29, six turns → two), and only two of 55 control-arm
+questions asked anything that would have fired it. 40 of 55 questions
+issued different queries between arms, which is where r@union +0.036 came
+from. Candidate closed; the knob stays in the code, off.
+[`../learning/floor-fallback-cost.md`](../learning/floor-fallback-cost.md).
+
 ## Also in this milestone
 
 - Ship the composer fix already on `main` the next time the VM is up
