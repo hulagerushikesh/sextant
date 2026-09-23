@@ -5,6 +5,20 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-09-23
+
+- **Floor fallback as a cost feature measured, candidate closed** ($0.25)
+  — all 55 answerable handbook questions, both arms, judged on
+  flash-lite. The fallback is safe (false abstention 1 → 0, faithfulness
+  0.936 → 0.960, citations valid throughout) and it fired on **one**
+  question: the pre-registered exposure clause failed, and every
+  set-level number that moved is one-run nondeterminism (40 of 55
+  questions asked a different query between arms). `SEXTANT_FLOOR_FALLBACK`
+  stays `none` and the candidate leaves the queue. The agent harness now
+  records `below_floor` on every search and counts it in the grade, so
+  the exposure number comes out of the record instead of a replay script.
+  `learning/floor-fallback-cost.md`.
+
 ## 2026-09-20
 
 - **Prompt caching measured, no knob** ($0.027) — implicit caching never

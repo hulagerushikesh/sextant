@@ -104,6 +104,7 @@ class RecordingHost:
                     "query": arguments.get("query"),
                     "limit": arguments.get("limit"),
                     "hits": list(result.get("results") or []),
+                    "below_floor": bool(result.get("below_floor")),
                 }
             )
         return result
@@ -155,6 +156,10 @@ def grade_record(
     document, or a page of one -- so a chunk collapses the same way it does in
     `eval.harness`.
 
+    `below_floor` counts the searches that came back under the relevance floor
+    (`SEXTANT_FLOOR_FALLBACK=dense` only). A run of that knob whose count is 0
+    did not test it: the model's own phrasing cleared the floor every time.
+
     `named` is the listing grade: the fraction of expected documents whose
     title (as `kb_list` reported it) appears in the answer. A question answered
     from the listing makes no search, so the retrieval columns read 0 for it
@@ -177,6 +182,7 @@ def grade_record(
     named = [doc for doc in docs if known.get(doc, "").strip() and known[doc].lower() in text]
     return {
         "searches": len(searches),
+        "below_floor": sum(1 for search in searches if search.get("below_floor")),
         "hit@1": hit_at_1(first, relevant) if relevant else 0.0,
         "recall@first": recall_at_k(first, relevant, len(first)) if first and relevant else 0.0,
         "recall@union": recall_at_k(union, relevant, len(union)) if union and relevant else 0.0,
