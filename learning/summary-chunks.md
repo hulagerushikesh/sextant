@@ -2,7 +2,9 @@
 
 *Milestone 16, 2026-09-16. Cost: $0.07 (22 documents summarised twice,
 one of them a 144-page PDF). Decision: `sextant-ingest --summaries` ships
-as an opt-in; not the default, and no tree.*
+as an opt-in; not the default, and no tree. **Reversed 2026-09-24** — both
+conditions this note wrote down for making it the default happened; see the
+last section. Still no tree.*
 
 ## Hypothesis
 
@@ -151,6 +153,45 @@ unchanged at 0.912 / 0.985 (39).
 - A per-document candidate cap (experiments 1, 3, 5 all point at it): if
   it removes the dense recall cost, the argument against default weakens
   to "needs a key at ingest time".
+
+## Reversed — the default, 2026-09-24 (milestone 18, ₹0)
+
+This note listed three things that would change the decision. Two of them
+happened, and they are the two that carried it:
+
+1. **`kb_list` shipped** (2026-09-20, [`kb-list.md`](kb-list.md)). The
+   listing reads a document's model-written overview when it has one and
+   the first 240 characters of its opening when it does not. Summaries now
+   have a second consumer, and it is the one the agent reaches for on 4 of
+   5 collection questions.
+2. **The per-document cap shipped** (2026-09-17,
+   [`candidate-cap.md`](candidate-cap.md)) and removed the dense recall
+   cost outright: the with-summaries store went 0.900 → **0.973**, which is
+   what the no-summaries store scores, with rerank hit@1 unchanged at 0.964
+   on every store. The reason this note gave for "not the default" —
+   "dense recall@5 drops past the 0.02 gate" — is no longer true of the
+   code that ships.
+
+What was left of the argument was "the CI store is built without a key".
+That is a fact about ingestion, not a reason for a flag, and it is
+answered by making the key the switch rather than the flag: `sextant-ingest`
+summarises when `GEMINI_API_KEY` resolves, `--no-summaries` says don't,
+`--summaries` says do and fails loudly if it cannot. With no key the run
+prints one line and stores text, exactly as it does today — the CI store is
+built by the same command it always was.
+
+The default spends money, so it says so first: with a key present the run
+prints what it is about to do and what a document costs before the first
+model call. One thing is new rather than inherited: under the default, a model failure
+mid-run degrades to text for the rest of the run instead of aborting it.
+Asking for overviews and not getting them is an error; the default asking
+on your behalf and not getting them should not turn a working ingest into a
+failed one.
+
+**No measurement was taken for this.** Nothing retrieval-side changed, both
+baselines are untouched and `sextant-eval --check` is green on them. The
+numbers are the two above, already in `learning/`; this is the decision they
+imply, written down where the old decision was.
 
 ## Reproduce
 

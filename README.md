@@ -6,8 +6,10 @@ just this app. A FastAPI agent server discovers its tools over MCP, hands them t
 the model alongside web search, and lets the model decide what to retrieve.
 Every retrieval stage is there because a measurement said so.
 
-Formerly *AgenticRAG*; renamed in 0.7. The `agenticrag-*` commands and
-`AGENTICRAG_*` variables still work as aliases for one release.
+Formerly *AgenticRAG*; renamed in 0.7. The `agenticrag-*` commands were
+dropped in 0.8; the `AGENTICRAG_*` environment variables still work, because a
+deployed `.env` written before the rename should not silently lose its
+settings.
 
 Started as [SudhanshuR37/AgenticRAG](https://github.com/SudhanshuR37/AgenticRAG)
 with Sudhanshu Randive; rebuilt from the ground up in September 2026 as the
@@ -123,12 +125,15 @@ chunks lose through dilution even with a 512-token model, 150 ranks slightly
 better through the reranker at the cost of crowding dense retrieval, and 200
 stays.
 
-**Why summaries are opt-in.** `sextant-ingest --summaries` adds one
+**Why summaries are on when a key is.** `sextant-ingest` adds one
 model-written overview chunk per document. Measured on this corpus it moves
 the reranked pipeline's hit@1 up (+0.02 local, 0.6 → 1.0 on "which
-document…" questions), and a short document's first chunk already is its
-overview — so it is a flag, not the default. It also cost dense recall@5
-(−0.07, crowding) until the per-document cap below removed that.
+document…" questions) and gives `kb_list` a real overview to list. It was a
+flag for a year of milestones for one reason — it cost dense recall@5
+(−0.07, crowding) — and the per-document cap below took that back in full
+(0.900 → 0.973, the same the no-summaries store scores), so it is now the
+default whenever `GEMINI_API_KEY` resolves. No key, or `--no-summaries`, and
+ingestion stores text only and says so; nothing in ingestion needs a model.
 [`learning/summary-chunks.md`](learning/summary-chunks.md).
 
 **Why at most two chunks per document.** Three experiments lost dense
@@ -310,7 +315,7 @@ Index files — PDF, Markdown or plain text:
 ```
 
 ```bash
-./.venv/bin/sextant-ingest ~/papers -r --summaries   # + one overview chunk per document; needs GEMINI_API_KEY
+./.venv/bin/sextant-ingest ~/papers -r --no-summaries   # text only; overviews are on when GEMINI_API_KEY resolves
 ```
 
 File loading is a command rather than an MCP tool on purpose: a `kb_ingest_file`
@@ -361,7 +366,7 @@ tools/vector_db/
   loaders.py         PDF (PyMuPDF; lines rebuilt from span baselines; pypdf fallback), Markdown, text → text plus page, section and table spans
   chunking.py        Token-aware splitting with overlap and exact char offsets
   tables.py          Finds tables (PDF captions, Markdown pipes) for row chunks
-  summaries.py       One model-written overview per document, stored as a chunk (`sextant-ingest --summaries`, opt-in)
+  summaries.py       One model-written overview per document, stored as a chunk (on when a key resolves; `--no-summaries` off)
   embeddings.py      The embedding backend, and the token budget it implies
   retrieval.py       BM25, reciprocal rank fusion, cross-encoder reranking
   ann/               flat, HNSW, IVF-PQ (+rerank) in NumPy; FAISS reference; benchmark

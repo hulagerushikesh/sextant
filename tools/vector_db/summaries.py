@@ -10,9 +10,12 @@ else -- no second store, no tree -- which is the cheapest version of the
 RAPTOR idea and enough to measure whether the full tree would be worth
 building (`learning/summary-chunks.md`).
 
-Opt-in (`sextant-ingest --summaries`) because it costs a model call per
-document, and the model needs `GEMINI_API_KEY`. Everything else in ingestion
-runs without a key and keeps doing so.
+On by default when `GEMINI_API_KEY` resolves (`--no-summaries` to opt out).
+It was opt-in while it cost dense recall@5 through crowding; the per-document
+cap removed that cost in full (`learning/candidate-cap.md`), leaving only the
+model call per document. Everything else in ingestion runs without a key and
+keeps doing so -- no key means no overviews and a printed line, never a
+failure.
 """
 
 from __future__ import annotations
@@ -75,8 +78,8 @@ def _client() -> Any:
     key = os.getenv("GEMINI_API_KEY")
     if not key:
         raise SummariesUnavailable(
-            "GEMINI_API_KEY is not set; summaries need a model. Ingest without "
-            "--summaries, or add the key to .env."
+            "GEMINI_API_KEY is not set; summaries need a model. Ingest with "
+            "--no-summaries, or add the key to .env."
         )
     return genai.Client(api_key=key).aio
 
