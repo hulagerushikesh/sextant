@@ -1,6 +1,6 @@
 [project]
 name = "sextant"
-version = "0.7.0"
+version = "0.8.0"
 description = "sextant: an MCP-native agentic RAG system with measured retrieval"
 requires-python = ">=3.11"
 license = "MIT"
@@ -34,12 +34,10 @@ sextant-ingest = "tools.vector_db.ingest_cli:main"
 sextant-eval = "eval.harness:main"
 sextant-eval-agent = "eval.agent_harness:main"
 sextant-judge = "eval.judge:main"
-# Pre-rename names, kept for one release so existing shells, MCP client
-# configs and the VM runbook keep working. Remove in 0.8.
-agenticrag-kb = "tools.vector_db.server:main"
-agenticrag-ingest = "tools.vector_db.ingest_cli:main"
-agenticrag-eval = "eval.harness:main"
-agenticrag-judge = "eval.judge:main"
+# The pre-rename `agenticrag-*` aliases were removed in 0.8, one release after
+# the rename, as promised in milestone 15. The AGENTICRAG_ *environment* prefix
+# is a different promise and still stands: `tools/settings.py` falls back to it,
+# and the deployed box's .env still uses those names.
 
 [project.optional-dependencies]
 dev = [

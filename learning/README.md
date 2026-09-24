@@ -38,7 +38,7 @@ depends on a number in an earlier one.
 | [`agent-loop.md`](agent-loop.md) | M16 exp 2 — does the agent search twice for two-part questions? | No (0.722); one prompt bullet → 0.778, shipped |
 | [`chunk-size.md`](chunk-size.md) | M16 exp 3 — is 200 tokens the content's size or MiniLM's? | 200 stays; bigger loses, 150 helps rerank and hurts dense |
 | [`embedder-swap.md`](embedder-swap.md) | M16 exp 4 — MiniLM → bge-small? | Not switched; opt-in `SEXTANT_EMBEDDER` |
-| [`summary-chunks.md`](summary-chunks.md) | M16 exp 5 — one overview chunk per document for global questions? | Opt-in `--summaries`; wins rank, cost dense recall |
+| [`summary-chunks.md`](summary-chunks.md) | M16 exp 5 — one overview chunk per document for global questions? | Opt-in, then the default once the cap paid back the dense recall (2026-09-24) |
 | [`candidate-cap.md`](candidate-cap.md) | M17 exp 1 — was the dense loss in exps 1, 3, 5 crowding? | Yes; shipped, cap 2 with a score guard, dense only |
 | [`ivfpq-100k.md`](ivfpq-100k.md) | §9 item 5 — at 100k vectors, does IVF-PQ's memory win become a latency win? | Not in Python at recall ≥ 0.9; its recall dial at scale is `oversample`, not `nprobe` |
 | [`subfloor-order.md`](subfloor-order.md) | after HyDE — the reranker scores q48's second document 0.000; is its order under the floor a ranking at all? | No: order sub-floor chunks by dense cosine; handbook rerank recall@5 0.964 → 0.982, survey unchanged; shipped as default, invisible to the agent until the floor itself is revisited |
@@ -139,7 +139,7 @@ point.
 - Cormack, Clarke & Buettcher 2009, *Reciprocal Rank Fusion* (SIGIR, 2 pages).
 - Karpukhin et al. 2020, *Dense Passage Retrieval* (arXiv:2004.04906).
 - Nogueira & Cho 2019, *Passage Re-ranking with BERT* (arXiv:1901.04085).
-- Do: `agenticrag-eval` — read the four ablation rows and `eval/README.md`.
+- Do: `sextant-eval` — read the four ablation rows and `eval/README.md`.
   Then remove RRF and re-run; watch hit@1 drop 8 points.
 
 **Check yourself.** Under what corpus property would you expect the
@@ -224,7 +224,7 @@ they live (server or client)?
 ## Level 5 — Agents and MCP
 
 **Why here.** This is the project's differentiator. The knowledge base is a
-real MCP server (`agenticrag-kb`) usable from any MCP client; the FastAPI app
+real MCP server (`sextant-kb`) usable from any MCP client; the FastAPI app
 discovers its tools over stdio and lets the model choose. The ANN benchmark is
 also an MCP tool — `main.py` never imports the knowledge base.
 
@@ -246,7 +246,7 @@ also an MCP tool — `main.py` never imports the knowledge base.
 - modelcontextprotocol.io → *Specification* (architecture, transports, tools).
 - Yao et al. 2022, *ReAct* (arXiv:2210.03629).
 - Schick et al. 2023, *Toolformer* (arXiv:2302.04761).
-- Do: add `agenticrag-kb` to Claude Desktop's MCP config and search the corpus
+- Do: add `sextant-kb` to Claude Desktop's MCP config and search the corpus
   from there — proves the server is not app-shaped.
 
 **Check yourself.** Why is `kb_ann_benchmark` an MCP tool but hidden from the
@@ -279,7 +279,7 @@ without them), four ablations, CI gate at 0.02.
 - Es et al. 2023, *RAGAS* (arXiv:2309.15217); Saad-Falcon et al. 2023, *ARES*.
 - Zheng et al. 2023, *Judging LLM-as-a-judge* (arXiv:2306.05685).
 - Do: write 5 new golden questions for a document you add, run
-  `agenticrag-eval --check`, then deliberately break `min_score` and watch CI's
+  `sextant-eval --check`, then deliberately break `min_score` and watch CI's
   gate logic fail.
 
 **Check yourself.** Why did recall saturate at 1.0 before distractors, and

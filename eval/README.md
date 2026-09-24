@@ -220,6 +220,11 @@ SEXTANT_CHROMA_DIR=/tmp/with-overviews \
 ./.venv/bin/sextant-eval --store /tmp/with-overviews
 ```
 
+Since 0.8 the flag is only for forcing it: overviews are on whenever
+`GEMINI_API_KEY` resolves, and the control arm above is now the one that
+needs a flag (`--no-summaries`). CI has no key, so the store it builds and
+checks against `baseline.json` is still the one without them.
+
 One model-written overview per document, stored as a chunk (`kind:
 summary`) in the same index. Measured against the five `global` questions
 and the rest: global hit@5 was already 1.0 without them — a short

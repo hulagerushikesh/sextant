@@ -182,6 +182,11 @@ curl -u USER:PASSWORD https://agenticrag.hulage.in/health
 
 ## B6 · Load the corpus + guardrails
 
+Since 0.8 this spends money: the box's `.env` has `GEMINI_API_KEY`, so the
+ingest writes one model-written overview per document (~$0.003 each, ~$0.07
+for this corpus). That is the `kb_list` listing's overview text and worth it
+here. Add `--no-summaries` for a free ingest.
+
 ```bash
 # Ingest the committed corpus into the VM's Chroma volume, then restart the api
 # so it reloads the persisted store (it holds a stale segment after CLI ingest).

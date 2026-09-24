@@ -190,4 +190,5 @@ from. Candidate closed; the knob stays in the code, off.
   IP re-reserved and reattached, DNS repointed, tree shipped and rebuilt,
   key and daily cap replaced on the box by hand. The VM had been serving a
   pre-`kb_list` image, so this deploy carried all of M17.
-- Remove the `agenticrag-*` command aliases in 0.8.
+- ~~Remove the `agenticrag-*` command aliases in 0.8.~~ Done 2026-09-24 with
+  the 0.8 bump; the `AGENTICRAG_` environment prefix stays.

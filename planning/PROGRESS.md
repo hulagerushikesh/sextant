@@ -5,6 +5,27 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-09-24 — milestone 18 opens, 0.8
+
+- **Milestone 17 closed, 18 planned.** The plan turned up the thing that
+  was never on a list: the deployed store was written 2026-09-15, before
+  table chunking, the PyMuPDF extractor and the per-document cap. The
+  re-ingest is item 1 and waits on a go-ahead — it needs the VM up.
+  `planning/README.md` was two milestones stale and is now true.
+- **Summaries are the default when a key resolves.** They were opt-in for
+  exactly one reason — 21 overview chunks crowded the graded slots and cost
+  dense recall@5 0.970 → 0.900 — and the cap took that back in full
+  (0.900 → 0.973). `sextant-ingest` summarises when `GEMINI_API_KEY` is
+  there, `--no-summaries` says don't, `--summaries` says do and fails loudly
+  if it cannot, and no key prints a line and stores text. A model failure
+  under the default degrades to text for the rest of the run instead of
+  aborting it. No new measurement: the numbers were already taken, and both
+  baselines are untouched.
+- **0.8.** The four `agenticrag-*` command aliases are gone, one release
+  after the rename as promised. The `AGENTICRAG_` *environment* prefix
+  stays — the deployed `.env` still uses it, and dropping the fallback
+  would silently reset the box's daily budget cap.
+
 ## 2026-09-23
 
 - **Composer fix deployed — and with it the whole of M17** (≈₹4 of VM
