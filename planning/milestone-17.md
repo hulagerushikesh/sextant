@@ -1,5 +1,9 @@
 # Milestone 17 — What three experiments kept pointing at
 
+*Closed 2026-09-23. Two shipped (per-document cap, `kb_list`), three
+candidates measured and decided against ($0.43 in all), and the composer
+fix deployed. Next: [`milestone-18.md`](milestone-18.md).*
+
 Milestone 16 measured five changes and shipped two. Three of the five —
 one-row table chunks, 150-token chunks, summary chunks — lost dense
 recall@5 the same way: more chunks per document, the five graded slots
