@@ -5,7 +5,15 @@ before it can start and what it costs; anything with a ₹ or $ figure is
 asked for before it runs. Move a line to [`PROGRESS.md`](PROGRESS.md) when it
 ships; move it to the bottom section when it is decided against.
 
-## Now — Milestone 17 ([`milestone-17.md`](milestone-17.md))
+## Now — Milestone 18 ([`milestone-18.md`](milestone-18.md))
+
+| # | Step | Needs | Cost | State |
+| --- | --- | --- | --- | --- |
+| 1 | Re-ingest the deployed store on the current pipeline; drop the résumé document | VM up: re-reserve IP, `add-access-config`, re-add the Cloudflare A record (grey cloud), `start` | ₹0 API, ≈₹1 VM | **waits on a go-ahead** — the box's store is from 2026-09-15, before table chunking, PyMuPDF and the cap |
+| 2 | `--summaries` on by default when a key resolves | — | ₹0 to ship, $0.003/document at upload | queued — the cap removed the dense cost that made it opt-in |
+| 3 | 0.8: drop the four `agenticrag-*` command aliases, bump the version | — | ₹0 | queued — the `AGENTICRAG_` env prefix stays until the box's `.env` is rewritten |
+
+## Done — Milestone 17 ([`milestone-17.md`](milestone-17.md))
 
 | # | Step | Needs | Cost | State |
 | --- | --- | --- | --- | --- |
@@ -20,11 +28,8 @@ runs; none is started on a hunch.
 
 | Idea | Why it is on the list | Needs | Cost |
 | --- | --- | --- | --- |
-| `--summaries` as the upload default | cap removed the dense cost (this milestone); only "needs a key at ingest" remains | decision | $0.003 / document at upload |
 | Per-user upload (multi-corpus) | the app is one corpus per deployment; a hosted version needs `category` to mean a person | design | ₹0 |
 | Request-level index tier (`exact` flat / `fast` hnsw / `lean` ivfpq_rerank) | caller states a budget, server maps to index + params; only meaningful past ~25k chunks, where HNSW overtakes flat (`../learning/ivfpq-100k.md`) | corpus ≥ 25k | ₹0 |
-| Make the repo public | sweep done 2026-09-19: no key-shaped strings in 28 commits; email, gate username, released IP and a home path scrubbed from tracked files. Left in history: the released IP (6 hits), author email, `node_modules` from the pre-rebuild upstream commit `3a19674` (bloat, not secrets). MIT `LICENSE` and upstream attribution added 2026-09-19; project id stays. Remaining: flip visibility on GitHub | you: Settings → General → Change visibility | ₹0 |
-| Remove `agenticrag-*` command aliases | promised for 0.8 | 0.8 release | ₹0 |
 
 ## Decided against (with the reason, so it is not re-litigated)
 
@@ -69,4 +74,10 @@ runs; none is started on a hunch.
   signal for it, and holding both resident forfeits IVF-PQ's only win
   (memory) while HNSW beats it on recall and latency at every size
   measured. Tier per request, not route per query. `../learning/ivfpq-100k.md`.
-- **Keeping the static IP while parked** — ₹21/day for nothing; released.
+- **Keeping the static IP while parked** — ₹21/day for nothing; released
+  twice, most recently 2026-09-23 after the composer deploy.
+
+## Shipped, moved out of the queue
+
+- **Make the repo public** — done 2026-09-20, MIT. The standing
+  consequence: the VM's IP never goes into a tracked file.
