@@ -31,7 +31,10 @@ run what the repo says it runs. What it needs:
 - The VM up: re-reserve the IP, `add-access-config`, re-add the Cloudflare
   A record grey-cloud, `deploy.sh HOST start`. ≈₹5.6/hour.
 - `docker compose exec api sextant-ingest /data/corpus -r` after a backup
-  of `/data/chroma_db`, because a re-ingest rewrites it.
+  of `/data/chroma_db`, because a re-ingest rewrites it. Since item 2 that
+  also writes an overview per document — ~$0.07 for 22 of them, and the
+  `kb_list` listing on the deployed box gets real overviews instead of
+  leads. `--no-summaries` if the answer on the day is no.
 - Drop `upload:Rushikesh_Hulage_Resume_Rubrik` (9 chunks, a personal
   résumé that has no business in a demo corpus) while the store is open.
 - Verify: `kb_stats` document and chunk counts before and after, one live
