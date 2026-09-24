@@ -7,15 +7,15 @@ product.
 | | Read |
 | --- | --- |
 | **Next** | [`NEXT.md`](NEXT.md) — the queue: what is in progress, what waits on a key or a go-ahead, what was decided against and why |
-| **Now** | [`milestone-17.md`](milestone-17.md) — candidate cap (shipped), `kb_list` tool (built; measurement waits on a key) |
+| **Now** | [`milestone-18.md`](milestone-18.md) — re-ingest the deployed store, `--summaries` by default, cut 0.8 |
 | **Progress** | [`PROGRESS.md`](PROGRESS.md) — what shipped, by date |
-| **Past plans** | [`milestone-16.md`](milestone-16.md) — five retrieval experiments, done · [`milestone-15.md`](milestone-15.md) — ship, prove, rename, done · [`go-live-proof.md`](go-live-proof.md) — what was observed when the site went live |
+| **Past plans** | [`milestone-17.md`](milestone-17.md) — cap, `kb_list`, three candidates closed, done · [`milestone-16.md`](milestone-16.md) — five retrieval experiments, done · [`milestone-15.md`](milestone-15.md) — ship, prove, rename, done · [`go-live-proof.md`](go-live-proof.md) — what was observed when the site went live |
 | **History** | [`trackers/`](trackers/) — HTML checklists from phases 9–13 · [`archive/`](archive/) — course-era docs describing features never built (`archive/README.md`) |
 
 Operational runbooks stay next to what they operate: [`../deploy/README.md`](../deploy/README.md)
 (GCP + Caddy), [`../eval/README.md`](../eval/README.md) (golden set + metrics).
 
-## Status (2026-09-17)
+## Status (2026-09-24)
 
 | Phase | What | State |
 | --- | --- | --- |
@@ -25,12 +25,14 @@ Operational runbooks stay next to what they operate: [`../deploy/README.md`](../
 | 14 | Product-grade UI: ⌘K palette, shortcuts, empty states, onboarding, skeletons, toasts | Done |
 | 15 | Ship + prove + rename | **Done** 2026-09-15 — A–E; snapshot drill skipped. `go-live-proof.md` |
 | 16 | Retrieval research: table chunking, agent-level eval, chunk size, embedder swap, summary nodes | **Experiments done** (5/5, $0.21) — table chunking shipped (+0.09 hit@1); decomposition prompt + last-turn note shipped; bge-small, chunk size, summaries measured and kept as knobs; PDF extractor moved to PyMuPDF. Table rendering + Markdown export shipped 2026-09-17; composer fix deployed 2026-09-23; see `milestone-16.md` |
-| 17 | Per-document candidate cap; `kb_list` tool | **In progress** — cap shipped 2026-09-17 (default 2, dense r@5 +0.02 to +0.07, rerank unchanged); `kb_list` built 2026-09-19, its measurement waits on a key; see `milestone-17.md` |
+| 17 | Per-document candidate cap; `kb_list` tool; three product candidates measured | **Done** 2026-09-23 — cap shipped 09-17 (default 2, dense r@5 +0.02 to +0.07, rerank unchanged); `kb_list` shipped 09-20 (lists first on 4/5 global questions, names 100% of expected documents); floor fallback, prompt caching and the fallback's cost claim measured and closed ($0.43 across the three); composer fix deployed 09-23. See `milestone-17.md` |
+| 18 | Re-ingest the deployed store; `--summaries` by default; 0.8 | **In progress** — see `milestone-18.md` |
 
-Numbers that describe the system today: 320 tests, mypy clean, two golden
-sets (60 questions / 52 chunks; 32 page-labelled / 1,602 chunks), hit@1 0.94
-and 0.93 for the full pipeline, ~$0.003/query on `gemini-3.1-flash-lite`,
-22 docs / 1,602 chunks in the local store. Package is `sextant` 0.7.0.
+Numbers that describe the system today: 409 tests, mypy clean, two golden
+sets (65 questions / 58 chunks; 39 page-labelled / 1,602 chunks), hit@1 0.94
+and 0.93 for the full pipeline, ~$0.0015/query on `gemini-3.1-flash-lite`,
+22 docs / 1,602 chunks in the local store. Package is `sextant` 0.7.0. The
+repo has been public since 2026-09-20 (MIT).
 
 ## Cost position
 
@@ -39,7 +41,7 @@ GCP project `agenticrag-rush`, billing account in **INR**.
 | Resource | State | ₹/month |
 | --- | --- | --- |
 | VM `agenticrag` e2-standard-2 | on demand — `deploy.sh HOST start\|stop` | ≈135/day while up (≈4,100 if left on) |
-| Static IP | released 2026-09-17; re-reserve on go-live | 0 |
+| Static IP | released again 2026-09-23 after the composer deploy; re-reserve on go-live | 0 |
 | Boot disk 30 GB pd-standard + data disk 20 GB pd-balanced | kept | ≈270 |
 | Budget alert "agenticrag monthly" | ₹1,700 (≈$20), 50/90/100 % | — |
 | Gemini | free tier at personal volume | ≈0 |
@@ -59,5 +61,10 @@ API calls) happens without an explicit OK on the amount.
 3. ~~**Reranker**~~ — settled 2026-09-15: it stays. Only stage with a
    calibrated abstention score; leads ranking at 1,602 chunks. See
    `../learning/reranker-decision.md`.
-4. **Make the repo public** — requires stripping `ACME_EMAIL` from
-   `deploy/env.example` and a final secret sweep of history.
+4. ~~**Make the repo public**~~ — done 2026-09-20. Secret sweep of 28
+   commits found no key-shaped strings; email, gate username, the released
+   IP and a home path were scrubbed from tracked files; MIT `LICENSE` and
+   upstream attribution added. Left in history knowingly: the released IP,
+   the author email, and `node_modules` from the pre-rebuild upstream
+   commit `3a19674`. **Consequence, standing:** the VM's current IP never
+   goes into a tracked file.
