@@ -318,9 +318,26 @@ Index files — PDF, Markdown or plain text:
 ./.venv/bin/sextant-ingest ~/papers -r --no-summaries   # text only; overviews are on when GEMINI_API_KEY resolves
 ```
 
+Take one back out — a document ingested by mistake, or one that should never
+have been in a shared store:
+
+```bash
+./.venv/bin/sextant-forget --list          # ids, chunk counts, titles
+./.venv/bin/sextant-forget resume-2024     # asks first; -y for a non-interactive shell
+```
+
 File loading is a command rather than an MCP tool on purpose: a `kb_ingest_file`
 tool would hand every client that mounts this server the ability to read
-arbitrary paths. Indexing a corpus is something a person does deliberately.
+arbitrary paths. Indexing a corpus is something a person does deliberately, and
+deleting from it more so — the model is offered read tools only, so mounting
+"search my notes" never also grants "delete my notes".
+
+Re-ingesting a file replaces the document rather than layering over it. That
+distinction is not free: chunk ids are `<document>#<n>`, so an upsert alone
+replaces them one for one, and a document that used to make eleven chunks and
+now makes one would leave ten chunks of deleted text embedded and searchable —
+ranking, in a test of exactly this, ahead of the document that replaced them.
+Each document's existing chunks are cleared before its new ones are written.
 
 Or upload a file over HTTP and let the server parse it — this is what the
 browser's drop zone does, and it is the only path that gives a PDF its page
@@ -371,6 +388,7 @@ tools/vector_db/
   retrieval.py       BM25, reciprocal rank fusion, cross-encoder reranking
   ann/               flat, HNSW, IVF-PQ (+rerank) in NumPy; FAISS reference; benchmark
   ingest_cli.py      `sextant-ingest` — index files from disk
+  forget_cli.py      `sextant-forget` — take a document and its chunks back out
 tools/settings.py    `SEXTANT_*` env names, with `AGENTICRAG_*` fallback
 chroma_db/           Persistent vector store (gitignored)
 eval/

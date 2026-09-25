@@ -182,6 +182,10 @@ curl -u USER:PASSWORD https://agenticrag.hulage.in/health
 
 ## B6 · Load the corpus + guardrails
 
+Re-running this is a replacement, not an overlay: each document's existing
+chunks are cleared before its new ones are written, so re-ingesting a corpus
+after a chunker change leaves nothing of the old chunking behind.
+
 Since 0.8 this spends money: the box's `.env` has `GEMINI_API_KEY`, so the
 ingest writes one model-written overview per document (~$0.003 each, ~$0.07
 for this corpus). That is the `kb_list` listing's overview text and worth it
@@ -193,6 +197,10 @@ here. Add `--no-summaries` for a free ingest.
 ssh USER@IP 'cd ~/agenticrag && \
   docker compose -f docker-compose.prod.yml exec api sextant-ingest eval/corpus -r && \
   docker compose -f docker-compose.prod.yml restart api'
+
+# Take a document back out (the confirmation needs -T off, so pass -y):
+ssh USER@IP 'cd ~/agenticrag && \
+  docker compose -f docker-compose.prod.yml exec api sextant-forget --list'
 
 # A real gated query end to end:
 curl -u USER:PASSWORD -s https://agenticrag.hulage.in/query \

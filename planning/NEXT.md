@@ -9,7 +9,7 @@ ships; move it to the bottom section when it is decided against.
 
 | # | Step | Needs | Cost | State |
 | --- | --- | --- | --- | --- |
-| 1 | Re-ingest the deployed store on the current pipeline; drop the résumé document | VM up: re-reserve IP, `add-access-config`, re-add the Cloudflare A record (grey cloud), `start` | ₹0 API, ≈₹1 VM | **waits on a go-ahead** — the box's store is from 2026-09-15, before table chunking, PyMuPDF and the cap |
+| 1 | Re-ingest the deployed store on the current pipeline; drop the résumé document | VM up: re-reserve IP, `add-access-config`, re-add the Cloudflare A record (grey cloud), `start` | ₹0 API + ~$0.07 overviews, ≈₹1 VM | **waits on a go-ahead** — the box's store is from 2026-09-15, before table chunking, PyMuPDF and the cap. Prerequisite shipped 2026-09-25: a re-ingest is now a replacement, and `sextant-forget` takes the résumé out |
 | 2 | `--summaries` on by default when a key resolves | — | ₹0 to ship, $0.003/document at upload | **shipped** 2026-09-24 — the key is the switch; `--no-summaries` opts out, no key is a printed line — [`../learning/summary-chunks.md`](../learning/summary-chunks.md) |
 | 3 | 0.8: drop the four `agenticrag-*` command aliases, bump the version | — | ₹0 | **shipped** 2026-09-24 — `AGENTICRAG_` env prefix kept, the box's `.env` still uses it |
 
