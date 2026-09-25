@@ -26,7 +26,19 @@ what a chunk is or which chunks come back. The embedder is local, so
 re-ingest costs no API at all; the cost is the VM being up.
 
 **Not an experiment.** No hypothesis, no rule — it is making production
-run what the repo says it runs. What it needs:
+run what the repo says it runs.
+
+**Prerequisite, found while preparing it and fixed 2026-09-25.** A re-ingest
+was not a replacement. Chunk ids are `<document>#<n>` and the store upserted
+them, so a document whose chunk count fell left the surplus behind: measured
+on a real store, eleven chunks became one and the ten chunks of deleted text
+stayed embedded, searchable, and took the top three hits for their own
+subject. This re-ingest is precisely the case that triggers it — every
+document is re-chunked by a different chunker. `_store` now clears a
+document's existing chunks before writing its new ones, and
+`sextant-forget` removes a document outright.
+
+What it needs:
 
 - The VM up: re-reserve the IP, `add-access-config`, re-add the Cloudflare
   A record grey-cloud, `deploy.sh HOST start`. ≈₹5.6/hour.
@@ -36,7 +48,8 @@ run what the repo says it runs. What it needs:
   `kb_list` listing on the deployed box gets real overviews instead of
   leads. `--no-summaries` if the answer on the day is no.
 - Drop `upload:Rushikesh_Hulage_Resume_Rubrik` (9 chunks, a personal
-  résumé that has no business in a demo corpus) while the store is open.
+  résumé that has no business in a demo corpus) while the store is open:
+  `sextant-forget -y upload:Rushikesh_Hulage_Resume_Rubrik`.
 - Verify: `kb_stats` document and chunk counts before and after, one live
   query with a citation.
 

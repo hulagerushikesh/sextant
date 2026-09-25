@@ -677,6 +677,37 @@ class KnowledgeBase:
         async with self._write_lock:
             return await asyncio.to_thread(self._add_file_sync, path, category)
 
+    async def remove_document(self, document_id: str) -> dict[str, Any]:
+        """Delete a document and every chunk of it, overview included.
+
+        A corpus is something a person curates, so it needs a way back out:
+        a document ingested by mistake, one that should never have been in a
+        shared store, one whose source file is gone. Like ingestion this is a
+        command and never an MCP tool -- the model is offered read tools only,
+        and "search my notes" must not carry "delete my notes" with it.
+        """
+        async with self._write_lock:
+            return await asyncio.to_thread(self._remove_document_sync, document_id)
+
+    def _remove_document_sync(self, document_id: str) -> dict[str, Any]:
+        stored = self.collection.get(where={"document_id": document_id})
+        ids = stored.get("ids") or []
+        if not ids:
+            return {
+                "success": False,
+                "message": f"No document {document_id!r} in the collection",
+                "chunks_removed": 0,
+                "collection_size": self.collection.count(),
+            }
+        self.collection.delete(ids=list(ids))
+        self._invalidate_index()
+        return {
+            "success": True,
+            "message": f"Removed {document_id} and its {len(ids)} chunk(s)",
+            "chunks_removed": len(ids),
+            "collection_size": self.collection.count(),
+        }
+
     def _add_file_sync(self, path: str, category: str) -> dict[str, Any]:
         # Parsing a 144-page PDF is seconds of blocking work before any
         # embedding starts, so the load belongs on the thread too.
@@ -772,6 +803,20 @@ class KnowledgeBase:
             if (self.collection.metadata or {}).get("embedding_model") is None:
                 self._stamp_embedding_model(self.embedder.name)
             embeddings = self.embedder.encode(texts)
+            # Clear what each document holds now, before writing what it holds
+            # next. An upsert alone replaces chunk ids one for one, and the
+            # number of chunks a document makes is not stable: change the
+            # chunker, the target size or the file and a document that used to
+            # make eleven chunks makes one, leaving ten chunks of deleted text
+            # in the index -- still embedded, still searchable, and ranking
+            # ahead of the document that replaced them. Only the documents
+            # actually being written are touched.
+            for doc_id in {meta["document_id"] for meta in metadatas}:
+                existing = self.collection.get(where={"document_id": doc_id}).get("ids") or []
+                stale = [chunk_id for chunk_id in existing if chunk_id not in set(ids)]
+                if stale:
+                    logger.info("Replacing %s: dropping %d stale chunk(s)", doc_id, len(stale))
+                    self.collection.delete(ids=stale)
             # upsert, not add: re-ingesting the same id replaces it rather than
             # raising, which is what you want when re-running an ingest script.
             self.collection.upsert(
