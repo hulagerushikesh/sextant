@@ -58,7 +58,14 @@ because each one was learned the expensive way.
 ## Gotchas that recur
 
 - Chroma segment goes stale after CLI ingest: restart `:8100` to see new
-  chunks. To empty the store: `rm chroma_db/chroma.sqlite3` and restart.
+  chunks. To drop one document: `sextant-forget <id>` (`--list` for the ids,
+  `-y` to skip the confirmation). To empty the store:
+  `rm chroma_db/chroma.sqlite3` and restart.
+- Re-ingesting a document is a replacement: `_store` clears its existing
+  chunks first. Without that an upsert replaces `<doc>#<n>` one for one and a
+  document that now makes fewer chunks leaves the surplus embedded and
+  searchable (measured: 11 → 1 left ten stale chunks holding the top hits).
+  Removal is a command, never an MCP tool — the model gets read tools only.
 - faiss + torch OpenMP: `server.py` must import faiss before anything that
   pulls torch, or the KB subprocess segfaults (exit 139).
 - PDFs go through PyMuPDF (`loaders._page_lines`), not pypdf: pypdf guesses

@@ -31,6 +31,7 @@ dependencies = [
 [project.scripts]
 sextant-kb = "tools.vector_db.server:main"
 sextant-ingest = "tools.vector_db.ingest_cli:main"
+sextant-forget = "tools.vector_db.forget_cli:main"
 sextant-eval = "eval.harness:main"
 sextant-eval-agent = "eval.agent_harness:main"
 sextant-judge = "eval.judge:main"

@@ -5,6 +5,24 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-09-25 — a re-ingest was not a replacement
+
+- **Found while preparing the deployed re-ingest, and it would have
+  corrupted it.** Chunk ids are `<document>#<n>` and `_store` upserted them,
+  so a document whose chunk count fell left the surplus behind. Measured on
+  a real store: a document went from eleven chunks to one, and the ten
+  chunks of deleted text stayed embedded and took the top three hits for
+  their own subject. The VM re-ingest re-chunks every document with a
+  different chunker, which is exactly the trigger. `_store` now clears each
+  document's existing chunks before writing its new ones, and only the
+  documents being written are touched.
+- **`sextant-forget`** — removes a document and all its chunks, overview
+  included. `--list` to find ids, a confirmation by default, `-y` for
+  `docker compose exec -T`. A command, never an MCP tool: the model is
+  offered read tools only, and mounting "search my notes" must not also
+  grant "delete my notes". This is how the résumé leaves the deployed store.
+- 12 tests, including the eleven-chunks-to-one regression.
+
 ## 2026-09-24 — milestone 18 opens, 0.8
 
 - **Milestone 17 closed, 18 planned.** The plan turned up the thing that
