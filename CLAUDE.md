@@ -48,6 +48,7 @@ because each one was learned the expensive way.
 - `:8100` — this project's API (safe to restart).
 - `:8000` and `:8001` belong to other projects on this machine. Do not kill.
 - `:3000` — Vite dev server via `.claude/launch.json` (`sextant-frontend`).
+  `sextant-api` in the same file runs the agent server on `:8100`.
 
 ## Gate before a commit that touches code
 
@@ -95,3 +96,17 @@ because each one was learned the expensive way.
   does not. Only the latter is in the gate.
 - Browser-pane synthetic key presses don't fire the app's key handlers; test
   shortcuts by dispatching `KeyboardEvent`s from `javascript_tool`.
+- The frontend is TypeScript + Tailwind v4 + shadcn since 2026-09-27; the gate's
+  `npm run build` now runs `tsc -b` first, so a type error fails the gate.
+- `frontend/.env.development` sets `VITE_MOCK` only. It deliberately does not set
+  `VITE_SERVER_URL`: a tracked value there outranks a developer's gitignored
+  `.env.local` and silently points the UI at the wrong port (it pointed this
+  machine at `:8000` instead of `:8100` for exactly one commit). The default
+  lives in `lib/api.ts`; the override lives in `.env.local`.
+- `VITE_MOCK=1` renders the whole UI from `lib/mock.ts` with no server. Useful
+  for design work, and the mock answer exercises every renderer construct on
+  purpose — including a table — so a construct is never shipped unseen.
+- Vite 7 warns `You are using Node.js 20.12.2. Vite requires Node.js version
+  20.19+` on this machine. It builds anyway; production builds on
+  `node:22-alpine`. The day that warning becomes an error, the gate breaks here
+  before production does.

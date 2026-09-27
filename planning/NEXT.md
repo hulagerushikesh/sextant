@@ -5,7 +5,14 @@ before it can start and what it costs; anything with a ₹ or $ figure is
 asked for before it runs. Move a line to [`PROGRESS.md`](PROGRESS.md) when it
 ships; move it to the bottom section when it is decided against.
 
-## Now — Milestone 18 ([`milestone-18.md`](milestone-18.md))
+## Now — Milestone 19 ([`milestone-19.md`](milestone-19.md))
+
+| # | Step | Needs | Cost | State |
+| --- | --- | --- | --- | --- |
+| 1 | Review `ui-redesign/sextant` and port it into `frontend/` | — | ₹0 | **shipped** 2026-09-27 — four post-scan gaps closed first (tables, Markdown export, `sextant.*` storage keys, growing composer); verified live against `:8100`; bundle 61.5 → 186.8 kB gzip after lazy-loading the Lab |
+| 2 | Deploy it, rewrite the box's `.env` onto `SEXTANT_*`, drop the `AGENTICRAG_` fallback, rotate the exposed key | VM up; you paste the new key | ≈₹3 VM | **waits on a go-ahead** — four jobs, one trip |
+
+## Done — Milestone 18 ([`milestone-18.md`](milestone-18.md))
 
 | # | Step | Needs | Cost | State |
 | --- | --- | --- | --- | --- |
