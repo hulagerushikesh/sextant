@@ -368,8 +368,9 @@ the complete list rather than a delta.
 ## Layout
 
 ```
-frontend/            React + Vite UI: transcript, inline citations, trace,
-                     drag-and-drop ingestion, saved conversations
+frontend/            React 19 + Vite + TypeScript UI, Tailwind v4 + shadcn:
+                     transcript, inline citations, trace, drag-and-drop
+                     ingestion, saved conversations, ⌘K, the Index Lab
 mcp_server/
   main.py            FastAPI agent server (:8000) — HTTP surface only
   agent.py           The tool-use loop: declares tools, runs turns, emits events
@@ -420,6 +421,14 @@ through in red rather than as plain text: that is the dangling citation
 metrics. The passage shipped to the browser is the whole chunk — the old
 400-character excerpt was sized for whole documents and outlived the reason for
 it by three phases.
+
+**The renderer has five constructs and no markdown library.** Headings, bullets,
+numbered lists, paragraphs and GFM tables, because `[3]` is a citation here and a
+broken link to every markdown parser. The table rule (`|---|:--:|`) is what makes
+a table a table rather than prose containing a pipe — which also makes it the
+streaming test: a header row that has arrived without its rule renders as a
+paragraph until the rule follows it, so a half-streamed table never flickers as a
+broken one.
 
 **The trace reports outcomes, not just calls.** A search that returns nothing is
 labelled *nothing found*, in a different colour, next to the search that follows

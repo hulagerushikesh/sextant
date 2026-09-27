@@ -1,255 +1,333 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+@import "@fontsource-variable/newsreader";
+
+@custom-variant dark (&:is(.dark *));
+
 /*
- * Tokens and base type.
+ * Theme: "Sextant" — tweakcn-format tokens (shadcn variable names, OKLCH).
+ * Paste-able into https://tweakcn.com to iterate visually.
  *
- * Three typefaces, no downloads: the container builds offline and a webfont that
- * silently falls back is worse than a system stack that was chosen. Chrome is
- * sans, the answer is serif, and anything the machine produced -- tool names,
- * scores, citation numbers, token counts -- is mono. The reader can tell what
- * kind of thing they are looking at before reading a word of it.
+ * Three typefaces, one job each: Geist for chrome, Newsreader for the answer
+ * (it is read, not scanned), Geist Mono for anything the machine produced —
+ * tool names, scores, token counts, citation numbers.
  *
- * Colour carries one piece of information: which tier a source came from. Blue
- * is the user's own corpus, retrieved locally over MCP; ochre is the open web,
- * fetched by Google. That distinction is the whole point of the system, so it
- * is the only thing given a hue.
+ * Colour carries one fact: which tier a passage came from. Blue is the user's
+ * own corpus over MCP; ochre is the open web via Google. Every other surface
+ * is a cool neutral so those two hues are the only thing that reads as colour.
  */
 
+@theme inline {
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Newsreader Variable', 'Iowan Old Style', Georgia, serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-heading: var(--font-sans);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Provenance — the one semantic hue pair in the app. */
+  --color-corpus: var(--corpus);
+  --color-corpus-foreground: var(--corpus-foreground);
+  --color-corpus-muted: var(--corpus-muted);
+  --color-web: var(--web);
+  --color-web-foreground: var(--web-foreground);
+  --color-web-muted: var(--web-muted);
+  --color-success: var(--success);
+  --color-success-muted: var(--success-muted);
+  --color-warning: var(--warning);
+  --color-warning-muted: var(--warning-muted);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  --shadow-2xs: var(--shadow-2xs);
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow: var(--shadow);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+}
+
 :root {
-  color-scheme: light dark;
+  --background: oklch(0.975 0.003 260);
+  --foreground: oklch(0.19 0.012 260);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.19 0.012 260);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.19 0.012 260);
+  --primary: oklch(0.24 0.014 260);
+  --primary-foreground: oklch(0.985 0.002 260);
+  --secondary: oklch(0.955 0.004 260);
+  --secondary-foreground: oklch(0.24 0.014 260);
+  --muted: oklch(0.955 0.004 260);
+  --muted-foreground: oklch(0.52 0.012 260);
+  --accent: oklch(0.945 0.006 260);
+  --accent-foreground: oklch(0.19 0.012 260);
+  --destructive: oklch(0.55 0.2 27);
+  --border: oklch(0.905 0.006 260);
+  --input: oklch(0.905 0.006 260);
+  --ring: oklch(0.55 0.13 255);
 
-  --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, sans-serif;
-  --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia,
-    ui-serif, serif;
-  --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono',
-    monospace;
+  --corpus: oklch(0.5 0.15 255);
+  --corpus-foreground: oklch(0.985 0.002 260);
+  --corpus-muted: oklch(0.94 0.03 255);
+  --web: oklch(0.55 0.12 70);
+  --web-foreground: oklch(0.985 0.002 260);
+  --web-muted: oklch(0.95 0.035 80);
+  --success: oklch(0.55 0.14 155);
+  --success-muted: oklch(0.94 0.04 155);
+  --warning: oklch(0.65 0.16 70);
+  --warning-muted: oklch(0.95 0.05 80);
 
-  --ground: #eceef2;
-  --surface: #ffffff;
-  --sunken: #f5f6f9;
-  --ink: #131820;
-  --ink-soft: #49525f;
-  --ink-faint: #7c8593;
-  --rule: #dbdfe6;
-  --rule-strong: #c2c8d2;
+  --chart-1: var(--muted-foreground);
+  --chart-2: var(--corpus);
+  --chart-3: var(--web);
+  --chart-4: var(--success);
+  --chart-5: oklch(0.6 0.2 300);
 
-  --local: #1d4f8c;
-  --local-bg: #e4ecf8;
-  --local-rule: #b9cce8;
-  --web: #8a5210;
-  --web-bg: #f8eeda;
-  --web-rule: #e6d0a6;
-  --rerank: #1f7a4d;
-  --faiss: #7c3aed;
-  --faiss2: #c026d3;
+  --sidebar: oklch(0.965 0.004 260);
+  --sidebar-foreground: oklch(0.19 0.012 260);
+  --sidebar-primary: oklch(0.24 0.014 260);
+  --sidebar-primary-foreground: oklch(0.985 0.002 260);
+  --sidebar-accent: oklch(0.925 0.006 260);
+  --sidebar-accent-foreground: oklch(0.19 0.012 260);
+  --sidebar-border: oklch(0.905 0.006 260);
+  --sidebar-ring: oklch(0.55 0.13 255);
 
-  --danger: #9d2f1c;
-  --danger-bg: #fbeae6;
+  --radius: 0.625rem;
 
-  /* Primary action colour. Distinct role from --local (which labels the corpus
-     tier): this is the one hue the interface pushes forward -- buttons, the
-     active tab, a focused composer -- so it carries a little more energy than
-     the desaturated source blue. */
-  --accent: #2f5fd0;
-  --accent-strong: #244fb4;
-  --accent-soft: #e9effc;
-  --accent-contrast: #ffffff;
-
-  /* Positive / within-budget. */
-  --ok: #1f7a4d;
-  --ok-bg: #e7f4ec;
-
-  --radius: 8px;
-  --radius-sm: 6px;
-  --radius-lg: 14px;
-  --radius-pill: 999px;
-
-  /* Elevation. Panels lift off the ground; the ground itself stays flat. */
-  --shadow-sm: 0 1px 2px rgb(16 24 40 / 0.06);
-  --shadow-md: 0 4px 14px rgb(16 24 40 / 0.09);
-  --shadow-lg: 0 16px 40px rgb(16 24 40 / 0.16);
-
-  --rail-width: 22rem;
-  --nav-width: 15rem;
-
-  /* Motion. The built-in easings are too soft to feel intentional; these are
-     the two curves everything below uses. Entering things start fast (out),
-     things that move on screen accelerate and settle (in-out). Nothing that a
-     keyboard triggers many times a day animates at all. */
-  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
-  --dur-press: 120ms;
-  --dur: 180ms;
-  --dur-enter: 240ms;
+  --shadow-2xs: 0 1px 2px 0 oklch(0.2 0.02 260 / 0.04);
+  --shadow-xs: 0 1px 2px 0 oklch(0.2 0.02 260 / 0.06);
+  --shadow-sm: 0 1px 3px 0 oklch(0.2 0.02 260 / 0.08), 0 1px 2px -1px oklch(0.2 0.02 260 / 0.08);
+  --shadow: 0 2px 6px -1px oklch(0.2 0.02 260 / 0.1), 0 1px 2px -1px oklch(0.2 0.02 260 / 0.06);
+  --shadow-md: 0 6px 16px -4px oklch(0.2 0.02 260 / 0.12), 0 2px 4px -2px oklch(0.2 0.02 260 / 0.06);
+  --shadow-lg: 0 16px 40px -8px oklch(0.2 0.02 260 / 0.18), 0 4px 8px -4px oklch(0.2 0.02 260 / 0.08);
+  --shadow-xl: 0 28px 64px -12px oklch(0.2 0.02 260 / 0.25);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --ground: #0d1015;
-    --surface: #151a21;
-    --sunken: #1a2029;
-    --ink: #e3e8ef;
-    --ink-soft: #a2abb9;
-    --ink-faint: #767f8d;
-    --rule: #262d38;
-    --rule-strong: #384250;
+.dark {
+  --background: oklch(0.155 0.008 260);
+  --foreground: oklch(0.93 0.006 260);
+  --card: oklch(0.195 0.009 260);
+  --card-foreground: oklch(0.93 0.006 260);
+  --popover: oklch(0.205 0.009 260);
+  --popover-foreground: oklch(0.93 0.006 260);
+  --primary: oklch(0.93 0.006 260);
+  --primary-foreground: oklch(0.17 0.01 260);
+  --secondary: oklch(0.245 0.01 260);
+  --secondary-foreground: oklch(0.93 0.006 260);
+  --muted: oklch(0.235 0.01 260);
+  --muted-foreground: oklch(0.66 0.012 260);
+  --accent: oklch(0.26 0.012 260);
+  --accent-foreground: oklch(0.96 0.005 260);
+  --destructive: oklch(0.7 0.17 25);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.7 0.12 255);
 
-    --local: #82abe6;
-    --local-bg: #17273c;
-    --local-rule: #2b415e;
-    --web: #ddab6c;
-    --web-bg: #302512;
-    --web-rule: #4d3d1e;
-    --rerank: #57c98a;
-    --faiss: #a78bfa;
-    --faiss2: #e879f9;
+  --corpus: oklch(0.74 0.12 255);
+  --corpus-foreground: oklch(0.15 0.02 255);
+  --corpus-muted: oklch(0.3 0.06 255 / 0.55);
+  --web: oklch(0.78 0.11 75);
+  --web-foreground: oklch(0.18 0.03 75);
+  --web-muted: oklch(0.32 0.06 75 / 0.55);
+  --success: oklch(0.75 0.15 155);
+  --success-muted: oklch(0.3 0.06 155 / 0.5);
+  --warning: oklch(0.8 0.15 75);
+  --warning-muted: oklch(0.32 0.07 75 / 0.5);
 
-    --danger: #e58a78;
-    --danger-bg: #331914;
+  --chart-1: var(--muted-foreground);
+  --chart-2: var(--corpus);
+  --chart-3: var(--web);
+  --chart-4: var(--success);
+  --chart-5: oklch(0.75 0.16 300);
 
-    --accent: #6f9bf2;
-    --accent-strong: #82abf6;
-    --accent-soft: #16233c;
-    --accent-contrast: #0b1017;
-    --ok: #57c98a;
-    --ok-bg: #12241a;
-    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
-    --shadow-md: 0 6px 18px rgb(0 0 0 / 0.45);
-    --shadow-lg: 0 18px 44px rgb(0 0 0 / 0.55);
+  --sidebar: oklch(0.135 0.008 260);
+  --sidebar-foreground: oklch(0.9 0.006 260);
+  --sidebar-primary: oklch(0.74 0.12 255);
+  --sidebar-primary-foreground: oklch(0.15 0.02 255);
+  --sidebar-accent: oklch(0.215 0.01 260);
+  --sidebar-accent-foreground: oklch(0.96 0.005 260);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: oklch(0.7 0.12 255);
+
+  --shadow-2xs: 0 1px 2px 0 oklch(0 0 0 / 0.3);
+  --shadow-xs: 0 1px 2px 0 oklch(0 0 0 / 0.4);
+  --shadow-sm: 0 1px 3px 0 oklch(0 0 0 / 0.45), 0 1px 2px -1px oklch(0 0 0 / 0.4);
+  --shadow: 0 2px 6px -1px oklch(0 0 0 / 0.5), 0 1px 2px -1px oklch(0 0 0 / 0.4);
+  --shadow-md: 0 6px 16px -4px oklch(0 0 0 / 0.55), 0 2px 4px -2px oklch(0 0 0 / 0.4);
+  --shadow-lg: 0 16px 40px -8px oklch(0 0 0 / 0.6), 0 4px 8px -4px oklch(0 0 0 / 0.45);
+  --shadow-xl: 0 28px 64px -12px oklch(0 0 0 / 0.7);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans antialiased;
+    color-scheme: light dark;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  html:not(.dark) {
+    color-scheme: light;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  html, body, #root {
+    height: 100%;
+  }
+  ::selection {
+    background: color-mix(in oklch, var(--corpus) 30%, transparent);
   }
 }
 
-:root[data-theme='dark'] {
-  --rerank: #57c98a;
-  --faiss: #a78bfa;
-  --faiss2: #e879f9;
-  --ground: #0d1015;
-  --surface: #151a21;
-  --sunken: #1a2029;
-  --ink: #e3e8ef;
-  --ink-soft: #a2abb9;
-  --ink-faint: #767f8d;
-  --rule: #262d38;
-  --rule-strong: #384250;
-
-  --local: #82abe6;
-  --local-bg: #17273c;
-  --local-rule: #2b415e;
-  --web: #ddab6c;
-  --web-bg: #302512;
-  --web-rule: #4d3d1e;
-
-  --danger: #e58a78;
-  --danger-bg: #331914;
-
-  --accent: #6f9bf2;
-  --accent-strong: #82abf6;
-  --accent-soft: #16233c;
-  --accent-contrast: #0b1017;
-  --ok: #57c98a;
-  --ok-bg: #12241a;
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
-  --shadow-md: 0 6px 18px rgb(0 0 0 / 0.45);
-  --shadow-lg: 0 18px 44px rgb(0 0 0 / 0.55);
-}
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-* {
-  margin: 0;
-}
-
-html,
-body,
-#root {
-  height: 100%;
-}
-
-body {
-  font-family: var(--sans);
-  font-size: 15px;
-  line-height: 1.55;
-  color: var(--ink);
-  background: var(--ground);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-button,
-textarea,
-input {
-  font: inherit;
-  color: inherit;
-}
-
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/* Anything pressable answers the press. Subtle, fast, transform-only, and
-   gated so a tap on a touch screen does not leave a stuck hover. */
-button:not(:disabled) {
-  transition: transform var(--dur-press) var(--ease-out);
-}
-
-button:not(:disabled):active {
-  transform: scale(0.97);
-}
-
-/* Keyboard hints. Real <kbd> so they read as keys to a screen reader too. */
-kbd {
-  display: inline-block;
-  min-width: 1.4em;
-  padding: 1px 5px;
-  border: 1px solid var(--rule-strong);
-  border-bottom-width: 2px;
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--ink-soft);
-  font-family: var(--sans);
-  font-size: 0.6875rem;
-  line-height: 1.4;
-  text-align: center;
-}
-
-/* A shape where content will be. Opacity-only pulse: no layout, no paint. */
-.skeleton {
-  display: block;
-  height: 0.9em;
-  border-radius: var(--radius-sm);
-  background: var(--rule);
-  animation: skeleton-pulse 1.4s var(--ease-in-out) infinite;
-}
-
-@keyframes skeleton-pulse {
-  0%,
-  100% {
-    opacity: 0.55;
+@layer utilities {
+  /* Answer prose: serif, generous measure, optical sizing on. */
+  .prose-answer {
+    font-family: var(--font-serif);
+    font-size: 1.0625rem;
+    line-height: 1.65;
+    font-optical-sizing: auto;
+    letter-spacing: 0.002em;
   }
-  50% {
-    opacity: 1;
+  .prose-answer p + p,
+  .prose-answer p + ul,
+  .prose-answer ul + p,
+  .prose-answer p + ol,
+  .prose-answer ol + p {
+    margin-top: 0.85em;
+  }
+  .prose-answer ul, .prose-answer ol {
+    padding-left: 1.4em;
+  }
+  .prose-answer ul { list-style: disc; }
+  .prose-answer ol { list-style: decimal; }
+  .prose-answer li + li { margin-top: 0.3em; }
+  .prose-answer strong { font-weight: 600; }
+  .prose-answer code {
+    font-family: var(--font-mono);
+    font-size: 0.82em;
+    padding: 0.1em 0.35em;
+    border-radius: 4px;
+    background: var(--muted);
+  }
+  .prose-answer h3, .prose-answer h4, .prose-answer h5 {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 0.9375rem;
+    letter-spacing: -0.005em;
+    margin: 1.2em 0 0.4em;
+  }
+
+  /* Wide tables scroll inside their own box; the thread never scrolls
+     sideways. Sans and tabular-nums, because a table is machine output being
+     read in columns, not prose. */
+  .prose-answer .answer-table-wrap {
+    margin-top: 0.85em;
+    overflow-x: auto;
+  }
+  .prose-answer .answer-table-wrap + p,
+  .prose-answer .answer-table-wrap + ul,
+  .prose-answer .answer-table-wrap + ol,
+  .prose-answer p + .answer-table-wrap,
+  .prose-answer ul + .answer-table-wrap,
+  .prose-answer ol + .answer-table-wrap {
+    margin-top: 0.85em;
+  }
+  .prose-answer .answer-table {
+    border-collapse: collapse;
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    line-height: 1.45;
+    font-variant-numeric: tabular-nums;
+    min-width: 100%;
+  }
+  .prose-answer .answer-table th,
+  .prose-answer .answer-table td {
+    padding: 0.4em 0.7em;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--border);
+  }
+  .prose-answer .answer-table th {
+    font-weight: 600;
+    background: var(--muted);
+    border-bottom-width: 2px;
+    white-space: nowrap;
+  }
+  .prose-answer .answer-table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .tabular { font-variant-numeric: tabular-nums; }
+
+  /* Streaming caret. */
+  .caret::after {
+    content: '';
+    display: inline-block;
+    width: 0.5em;
+    height: 1em;
+    margin-left: 2px;
+    vertical-align: -0.15em;
+    background: var(--corpus);
+    animation: caret-blink 1s steps(2, start) infinite;
+  }
+  @keyframes caret-blink { to { visibility: hidden; } }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--foreground) 15%, transparent) transparent;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .skeleton {
-    animation: none;
-    opacity: 0.7;
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
-  button:not(:disabled):active {
-    transform: none;
-  }
-}
-
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
 }
