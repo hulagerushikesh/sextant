@@ -5,6 +5,33 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-09-27 — the redesigned UI is the UI
+
+- **Milestone 19.** `ui-redesign/sextant` had been finished and unmerged since
+  2026-09-13 under one instruction: *port only after review*. This was the
+  review and the port. `frontend/` is now React 19 + TypeScript + Tailwind v4 +
+  shadcn, replacing 747 lines of `App.jsx` and 1,952 lines of hand-written
+  `App.css`.
+- **The review was the work, not the copy.** The redesign was pinned to the
+  2026-09-13 contract and four things had shipped after it: GFM tables in the
+  answer renderer, Markdown export of a conversation, the `sextant.*` storage
+  keys with their one-time migration, and the composer that grows one line to
+  six. All four were closed before the port landed; porting without them would
+  have been a silent feature regression, which is the one way a redesign that
+  looks better is worse.
+- **Three more found by running it, not reading it**: the onboarding card still
+  named `agenticrag-ingest`, deleted in 0.8; the new tracked `.env.development`
+  outranked the developer's gitignored `.env.local` and pointed the UI at the
+  wrong port; and the mock never rendered a table, so the construct would have
+  gone unseen in design work.
+- **Bundle: 61.5 kB → 186.8 kB gzip, 3.0×.** Lazy-loading the Index Lab moved
+  Recharts into its own 123.4 kB chunk (315.3 → 192.7) and the ⌘K palette took
+  another 6. The pre-registered budget was 120 kB and was missed; the rule said
+  record it and land the port, so that is what happened. What is left is React,
+  Radix, Motion and the shadcn primitives — the design system that was chosen.
+- Not deployed. That needs a VM trip, which should carry the `.env` rewrite,
+  the `AGENTICRAG_` fallback removal and the key rotation with it.
+
 ## 2026-09-27 — the deployed store is on the current pipeline
 
 - **Milestone 18 item 1 shipped.** The VM's store was written 2026-09-15,

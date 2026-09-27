@@ -2,6 +2,18 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "sextant-api",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "mcp_server.main:app",
+        "--port",
+        "8100"
+      ],
+      "port": 8100
+    },
+    {
       "name": "sextant-frontend",
       "runtimeExecutable": "npm",
       "runtimeArgs": [

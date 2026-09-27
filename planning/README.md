@@ -7,7 +7,7 @@ product.
 | | Read |
 | --- | --- |
 | **Next** | [`NEXT.md`](NEXT.md) — the queue: what is in progress, what waits on a key or a go-ahead, what was decided against and why |
-| **Now** | nothing queued — milestone 18 closed 2026-09-27; [`NEXT.md`](NEXT.md) holds the candidates |
+| **Now** | [`milestone-19.md`](milestone-19.md) — the redesigned UI is the UI; one item left, a VM trip that carries four jobs |
 | **Progress** | [`PROGRESS.md`](PROGRESS.md) — what shipped, by date |
 | **Past plans** | [`milestone-17.md`](milestone-17.md) — cap, `kb_list`, three candidates closed, done · [`milestone-16.md`](milestone-16.md) — five retrieval experiments, done · [`milestone-15.md`](milestone-15.md) — ship, prove, rename, done · [`go-live-proof.md`](go-live-proof.md) — what was observed when the site went live |
 | **History** | [`trackers/`](trackers/) — HTML checklists from phases 9–13 · [`archive/`](archive/) — course-era docs describing features never built (`archive/README.md`) |
@@ -27,6 +27,7 @@ Operational runbooks stay next to what they operate: [`../deploy/README.md`](../
 | 16 | Retrieval research: table chunking, agent-level eval, chunk size, embedder swap, summary nodes | **Experiments done** (5/5, $0.21) — table chunking shipped (+0.09 hit@1); decomposition prompt + last-turn note shipped; bge-small, chunk size, summaries measured and kept as knobs; PDF extractor moved to PyMuPDF. Table rendering + Markdown export shipped 2026-09-17; composer fix deployed 2026-09-23; see `milestone-16.md` |
 | 17 | Per-document candidate cap; `kb_list` tool; three product candidates measured | **Done** 2026-09-23 — cap shipped 09-17 (default 2, dense r@5 +0.02 to +0.07, rerank unchanged); `kb_list` shipped 09-20 (lists first on 4/5 global questions, names 100% of expected documents); floor fallback, prompt caching and the fallback's cost claim measured and closed ($0.43 across the three); composer fix deployed 09-23. See `milestone-17.md` |
 | 18 | Re-ingest the deployed store; `--summaries` by default; 0.8 | **Done** 2026-09-27 — 0.8 cut and summaries defaulted 09-24; a re-ingest made a replacement plus `sextant-forget` 09-25; the deployed store re-ingested 09-27 (61 chunks/22 docs → 79/21 with 21 overviews, résumé removed, ₹8). See `milestone-18.md` |
+| 19 | Port the redesigned UI into `frontend/` | **Port done** 2026-09-27 — React 19 + TS + Tailwind v4 + shadcn replaces 747 lines of `App.jsx` and 1,952 of `App.css`; four post-scan gaps closed first, three more bugs found by running it; bundle 61.5 → 186.8 kB gzip. Deploy still open. See `milestone-19.md` |
 
 Numbers that describe the system today: 409 tests, mypy clean, two golden
 sets (65 questions / 58 chunks; 39 page-labelled / 1,602 chunks), hit@1 0.94
