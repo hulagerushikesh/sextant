@@ -5,6 +5,29 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-09-27 — the deployed store is on the current pipeline
+
+- **Milestone 18 item 1 shipped.** The VM's store was written 2026-09-15,
+  three milestones behind: before table chunking, before the PyMuPDF
+  extractor, before the per-document cap, and with no overviews at all. The
+  box was also still running the pre-2026-09-25 `_store`, so the re-ingest
+  was shipped and rebuilt first — running it on the old image is the exact
+  upsert case that leaves stale chunks searchable.
+- **61 chunks / 22 documents → 79 chunks / 21 documents, 21 overviews.**
+  Every document was re-chunked (`config-reference` 3 → 10 on the table
+  chunker, `kalman-filter` 4 → 5) and every one got an overview, the first
+  time the deployed store has had them. Chunk ids verified contiguous per
+  document: no stale leftovers, which is the fix doing its job.
+- **The résumé is out.** `sextant-forget -y upload:Rushikesh_Hulage_Resume_Rubrik`
+  removed its nine chunks; the store is now the 21-document corpus only.
+- One live query verified against the rebuilt store through the API, and the
+  overview chunk (`bytetrack#summary`) took rank 1 — the thing the deployed
+  store could not do before today.
+- `/data/chroma-backup-2026-09-27.tgz` (334K) holds the pre-ingest store.
+- **₹8 total**: ~20 minutes of VM (≈₹2) plus 21 overviews and one query
+  (~$0.07, ≈₹6). VM stopped, access config deleted, static IP released
+  again; no DNS record was created, so there is none to remove.
+
 ## 2026-09-25 — a re-ingest was not a replacement
 
 - **Found while preparing the deployed re-ingest, and it would have

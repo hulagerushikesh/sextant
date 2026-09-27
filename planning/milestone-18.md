@@ -53,7 +53,17 @@ What it needs:
 - Verify: `kb_stats` document and chunk counts before and after, one live
   query with a citation.
 
-Wait on: an explicit go-ahead on the ₹, since it turns the meter on.
+**Shipped 2026-09-27, ₹8.** The box was still running the pre-09-25 `_store`,
+so the tree was shipped and the image rebuilt before anything was ingested.
+61 chunks across 22 documents became 79 across 21, every document re-chunked
+on the table chunker (`config-reference` 3 → 10) and every one given an
+overview — the deployed store's first. Chunk ids verified contiguous per
+document, so nothing stale survived. `sextant-forget -y
+upload:Rushikesh_Hulage_Resume_Rubrik` took the résumé's nine chunks out. One
+live query answered from the rebuilt store with `bytetrack#summary` at rank 1.
+Pre-ingest store backed up to `/data/chroma-backup-2026-09-27.tgz`. VM stopped,
+access config deleted, static IP released; no DNS record was created, so the
+Cloudflare zone was never touched.
 
 ## 2 · `--summaries` as the upload default — ₹0 to decide, $0.003/document at upload
 
