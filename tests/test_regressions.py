@@ -177,3 +177,33 @@ class TestTheAgentCannotWrite:
         assert "kb_ingest" not in READABLE_TOOLS
         declared = {tool.get("name") for tool in declare_tools(as_host(FakeHost()))}
         assert "kb_ingest" not in declared
+
+
+class TestTheOldEnvironmentPrefixIsLoudNotSilent:
+    """The rename kept `AGENTICRAG_*` working as a fallback so the deployed
+    box's `.env` would not silently fall back to defaults. The box was
+    rewritten onto `SEXTANT_*` on 2026-09-28 and the fallback went with it --
+    but the failure it guarded against is still real, so a leftover variable
+    now has to announce itself instead of doing nothing."""
+
+    def test_the_old_spelling_is_no_longer_read(self, monkeypatch):
+        from tools import settings
+
+        monkeypatch.delenv("SEXTANT_MAX_PER_DOCUMENT", raising=False)
+        monkeypatch.setenv("AGENTICRAG_MAX_PER_DOCUMENT", "7")
+        assert settings.getenv("MAX_PER_DOCUMENT", "2") == "2"
+
+    def test_a_leftover_variable_is_reported_with_its_new_name(self, monkeypatch):
+        from tools import settings
+
+        monkeypatch.setenv("AGENTICRAG_ANN_INDEX", "hnsw")
+        warning = settings.legacy_warning()
+        assert warning is not None
+        assert "AGENTICRAG_ANN_INDEX -> SEXTANT_ANN_INDEX" in warning
+
+    def test_a_clean_environment_says_nothing(self, monkeypatch):
+        from tools import settings
+
+        for name in settings.legacy_names():
+            monkeypatch.delenv(name, raising=False)
+        assert settings.legacy_warning() is None
