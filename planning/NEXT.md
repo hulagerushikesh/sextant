@@ -10,7 +10,8 @@ ships; move it to the bottom section when it is decided against.
 | # | Step | Needs | Cost | State |
 | --- | --- | --- | --- | --- |
 | 1 | Review `ui-redesign/sextant` and port it into `frontend/` | — | ₹0 | **shipped** 2026-09-27 — four post-scan gaps closed first (tables, Markdown export, `sextant.*` storage keys, growing composer); verified live against `:8100`; bundle 61.5 → 186.8 kB gzip after lazy-loading the Lab |
-| 2 | Deploy it, rewrite the box's `.env` onto `SEXTANT_*`, drop the `AGENTICRAG_` fallback, rotate the exposed key | VM up; you paste the new key | ≈₹3 VM | **waits on a go-ahead** — four jobs, one trip |
+| 2 | Drop the `AGENTICRAG_` env fallback; a leftover is a printed warning, not a silent default | — | ₹0 | **shipped** 2026-09-28 (0.8.1) — done off the box so the trip below is shorter; `settings.legacy_warning()` names every stale variable at startup |
+| 3 | Deploy it, rewrite the box's `.env` onto `SEXTANT_*`, rotate the exposed key | VM up; you paste the new key | ≈₹3 VM | **waits on a go-ahead** — three jobs, one trip. **`.env` rewrite goes first**, before the rebuild, or the container loses its cap and allowlist to defaults |
 
 ## Done — Milestone 18 ([`milestone-18.md`](milestone-18.md))
 

@@ -39,16 +39,17 @@ PERSIST_DIR_ENV = settings.env_name("CHROMA_DIR")
 ANN_BACKEND_ENV = settings.env_name("ANN_INDEX")
 
 # Variables the subprocess needs but MCP's stdio client would otherwise strip.
-# Both spellings of each: a `.env` written before the rename still says
-# AGENTICRAG_*, and the subprocess resolves the same fallback order.
-_FORWARDED_ENV = (
-    settings.env_names("CHROMA_DIR")
-    + settings.env_names("ANN_INDEX")
-    + settings.env_names("EMBEDDER")
-    + settings.env_names("CHUNK_TOKENS")
-    + settings.env_names("MAX_PER_DOCUMENT")
-    + settings.env_names("SUBFLOOR_ORDER")
-    + settings.env_names("FLOOR_FALLBACK")
+_FORWARDED_ENV = tuple(
+    settings.env_name(key)
+    for key in (
+        "CHROMA_DIR",
+        "ANN_INDEX",
+        "EMBEDDER",
+        "CHUNK_TOKENS",
+        "MAX_PER_DOCUMENT",
+        "SUBFLOOR_ORDER",
+        "FLOOR_FALLBACK",
+    )
 )
 
 

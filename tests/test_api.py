@@ -421,16 +421,16 @@ class TestAllowedOrigins:
     """The CORS allowlist is env-driven, never hardcoded into a shipped image."""
 
     def test_defaults_to_the_dev_frontend(self, monkeypatch):
-        monkeypatch.delenv("AGENTICRAG_ALLOWED_ORIGINS", raising=False)
+        monkeypatch.delenv("SEXTANT_ALLOWED_ORIGINS", raising=False)
         assert main._allowed_origins() == ["http://localhost:3000"]
 
     def test_a_single_production_origin_is_read(self, monkeypatch):
-        monkeypatch.setenv("AGENTICRAG_ALLOWED_ORIGINS", "https://agenticrag.hulage.in")
+        monkeypatch.setenv("SEXTANT_ALLOWED_ORIGINS", "https://agenticrag.hulage.in")
         assert main._allowed_origins() == ["https://agenticrag.hulage.in"]
 
     def test_a_comma_list_is_split_and_trimmed(self, monkeypatch):
         monkeypatch.setenv(
-            "AGENTICRAG_ALLOWED_ORIGINS",
+            "SEXTANT_ALLOWED_ORIGINS",
             "https://app.example.com, https://api.example.com ",
         )
         assert main._allowed_origins() == [
@@ -439,5 +439,5 @@ class TestAllowedOrigins:
         ]
 
     def test_blank_entries_are_dropped(self, monkeypatch):
-        monkeypatch.setenv("AGENTICRAG_ALLOWED_ORIGINS", "https://a.example.com,,  ")
+        monkeypatch.setenv("SEXTANT_ALLOWED_ORIGINS", "https://a.example.com,,  ")
         assert main._allowed_origins() == ["https://a.example.com"]

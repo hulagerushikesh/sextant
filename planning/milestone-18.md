@@ -118,6 +118,10 @@ still uses the legacy names. Removing the fallback silently drops the
 deployment's daily budget cap to its default. It goes when the box's
 `.env` is rewritten, which is item 1's trip, not this one.
 
+*Removed 2026-09-28 in 0.8.1, ahead of that trip: the silent-default risk is
+what `settings.legacy_warning()` now covers, so the fallback no longer had to
+carry it. The box's `.env` is rewritten before this tree is deployed.*
+
 ## Also in this milestone
 
 - `planning/README.md` was two milestones stale (320 tests, M17 "in

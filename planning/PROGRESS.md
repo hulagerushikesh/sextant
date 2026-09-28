@@ -5,6 +5,30 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-09-28 — every setting has one name again
+
+- **The `AGENTICRAG_` environment fallback is gone** (0.8.1). It was kept
+  through the 0.7 rename and the 0.8 CLI cut for one reason: the deployed
+  box's `.env` used the old spelling, and removing the fallback would have
+  dropped its budget cap, its CORS allowlist and its store path to defaults
+  without saying a word.
+- **What replaces it is louder than what it replaced.** `settings.getenv`
+  reads `SEXTANT_*` and nothing else; `settings.legacy_warning()` scans the
+  environment for pre-rename names and the agent server and the ingest CLI
+  print it at startup — `AGENTICRAG_ANN_INDEX -> SEXTANT_ANN_INDEX`, with a
+  count and the sentence that those settings are on their defaults. The
+  failure mode the fallback guarded against is now a line on stderr instead
+  of a silent default, which is the outcome the fallback was a proxy for.
+- `mcp_host._FORWARDED_ENV` halves: it forwarded both spellings of seven
+  knobs and now forwards seven names. `settings.env_names()` is deleted with
+  its only caller.
+- Three tests pin it: the old spelling is not read, a leftover is reported
+  with the name to move it to, and a clean environment says nothing.
+- **This is the local half of milestone 19 item 2**, done ahead of the VM
+  trip so the trip is shorter. The order on the box matters and is fixed:
+  rewrite `.env` onto `SEXTANT_*` *first*, then ship this tree and rebuild.
+  Gate green — 431 tests, mypy 57 files, ruff, frontend build.
+
 ## 2026-09-27 — the redesigned UI is the UI
 
 - **Milestone 19.** `ui-redesign/sextant` had been finished and unmerged since

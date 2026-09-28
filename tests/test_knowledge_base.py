@@ -266,7 +266,7 @@ class TestDenseBackend:
         from tools.vector_db.vector_search import ANN_BACKENDS, configured_ann_backend
 
         for name in ANN_BACKENDS:
-            monkeypatch.setenv("AGENTICRAG_ANN_INDEX", name.upper())
+            monkeypatch.setenv("SEXTANT_ANN_INDEX", name.upper())
             assert configured_ann_backend() == name
 
     def test_an_unknown_backend_is_rejected_loudly(self, monkeypatch):
@@ -276,7 +276,7 @@ class TestDenseBackend:
         )
 
         # A real index name, but not one exposed as a live dense backend.
-        monkeypatch.setenv("AGENTICRAG_ANN_INDEX", "faiss_hnsw")
+        monkeypatch.setenv("SEXTANT_ANN_INDEX", "faiss_hnsw")
         with pytest.raises(KnowledgeBaseUnavailable, match="not a known dense backend"):
             configured_ann_backend()
 
@@ -288,7 +288,7 @@ class TestDenseBackend:
         query = "how do you estimate hidden state"
         chroma_top = (await kb.search(query, limit=5))["results"][0]["id"]
 
-        monkeypatch.setenv("AGENTICRAG_ANN_INDEX", "flat")
+        monkeypatch.setenv("SEXTANT_ANN_INDEX", "flat")
         flat_kb = KnowledgeBase()
         assert flat_kb._health_check_sync()["dense_backend"] == "flat"
 

@@ -18,6 +18,7 @@ import os
 import sys
 from pathlib import Path
 
+from tools import settings
 from tools.vector_db.loaders import (
     MARKDOWN_SUFFIXES,
     PDF_SUFFIXES,
@@ -152,6 +153,10 @@ def main() -> None:
         format="%(levelname)s %(message)s",
         stream=sys.stderr,
     )
+
+    stale = settings.legacy_warning()
+    if stale:
+        print(f"Warning: {stale}", file=sys.stderr)
 
     files = _expand(args.paths, args.recursive)
     if not files:
