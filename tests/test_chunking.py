@@ -153,7 +153,6 @@ class TestEmbedderConfiguration:
         from tools.vector_db.embeddings import LOCAL_MODEL, configured_model
 
         monkeypatch.delenv("SEXTANT_EMBEDDER", raising=False)
-        monkeypatch.delenv("AGENTICRAG_EMBEDDER", raising=False)
         assert configured_model() == LOCAL_MODEL
         assert embedder.query_prefix == ""
 
@@ -182,7 +181,6 @@ class TestChunkSizeConfiguration:
         from tools.vector_db.chunking import configured_chunk_sizes
 
         monkeypatch.delenv("SEXTANT_CHUNK_TOKENS", raising=False)
-        monkeypatch.delenv("AGENTICRAG_CHUNK_TOKENS", raising=False)
         assert configured_chunk_sizes() == (DEFAULT_TARGET_TOKENS, 40)
 
     def test_overlap_follows_the_target(self, monkeypatch):

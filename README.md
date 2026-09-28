@@ -7,9 +7,9 @@ the model alongside web search, and lets the model decide what to retrieve.
 Every retrieval stage is there because a measurement said so.
 
 Formerly *AgenticRAG*; renamed in 0.7. The `agenticrag-*` commands were
-dropped in 0.8; the `AGENTICRAG_*` environment variables still work, because a
-deployed `.env` written before the rename should not silently lose its
-settings.
+dropped in 0.8, and the `AGENTICRAG_*` environment variables in 0.8.1, once the
+deployed box's `.env` had been rewritten. A leftover one is now reported at
+startup with its new name rather than quietly doing nothing.
 
 Started as [SudhanshuR37/AgenticRAG](https://github.com/SudhanshuR37/AgenticRAG)
 with Sudhanshu Randive; rebuilt from the ground up in September 2026 as the
@@ -250,7 +250,9 @@ appear in `/docs` and are rejected before a handler runs.
 | `SEXTANT_RATE_LIMIT` | `20` | Requests per window, `0` disables |
 | `SEXTANT_RATE_WINDOW` | `60` | Window in seconds |
 
-Every variable also answers to its `AGENTICRAG_` spelling.
+Each variable has exactly one name. An `AGENTICRAG_*` leftover from before
+the rename is not read; the server and the ingest CLI print it at startup
+with the name to move it to.
 
 ## Setup
 
@@ -390,7 +392,7 @@ tools/vector_db/
   ann/               flat, HNSW, IVF-PQ (+rerank) in NumPy; FAISS reference; benchmark
   ingest_cli.py      `sextant-ingest` — index files from disk
   forget_cli.py      `sextant-forget` — take a document and its chunks back out
-tools/settings.py    `SEXTANT_*` env names, with `AGENTICRAG_*` fallback
+tools/settings.py    `SEXTANT_*` env names; reports pre-rename leftovers
 chroma_db/           Persistent vector store (gitignored)
 eval/
   corpus/            21 committed documents — the fixed evaluation corpus

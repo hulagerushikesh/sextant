@@ -118,9 +118,16 @@ Three things the port turned up that the review would otherwise have shipped:
 ## Not in this milestone
 
 - **Deploying it.** ≈₹3 of VM time, and it should ride with the `.env`
-  rewrite (`SEXTANT_*` names), dropping the `AGENTICRAG_` fallback from
-  `tools/settings.py`, and rotating the `GEMINI_API_KEY` that was exposed
-  in a pasted screenshot on 2026-09-23 and confirmed still live on
-  2026-09-27. Four jobs, one trip.
+  rewrite (`SEXTANT_*` names) and rotating the `GEMINI_API_KEY` that was
+  exposed in a pasted screenshot on 2026-09-23 and confirmed still live on
+  2026-09-27. Three jobs, one trip.
+
+  *The fourth — dropping the `AGENTICRAG_` fallback — was done locally on
+  2026-09-28 (0.8.1) instead, because it costs nothing and needs no box. The
+  deploy order is now load-bearing: the `.env` rewrite happens **before** this
+  tree is built on the box, or the running container loses its budget cap and
+  CORS allowlist to defaults. `settings.legacy_warning()` prints exactly which
+  names are stale at startup, so a missed one is visible in `docker logs`
+  rather than silent.*
 - **Multi-corpus / per-user upload.** Still a design question.
 - **Request-level index tier.** Needs ≥25k chunks; the store holds 79.

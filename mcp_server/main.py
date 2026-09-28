@@ -168,6 +168,9 @@ class DocumentResponse(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Hold the MCP connection open for the process lifetime."""
+    stale = settings.legacy_warning()
+    if stale:
+        logger.warning(stale)
     await host.connect()
     try:
         yield

@@ -75,6 +75,11 @@ because each one was learned the expensive way.
 - A Chroma collection is stamped with the embedding model that built it and
   refuses to open under another (`SEXTANT_EMBEDDER`). MiniLM and bge-small
   are both 384-d, so without the stamp a mismatch would be silent.
+- Env names are `SEXTANT_*` only since 0.8.1 — the `AGENTICRAG_*` fallback is
+  gone. A leftover is not read and not silent: `settings.legacy_warning()` is
+  printed by the agent server and the ingest CLI with the name to move it to.
+  **The deployed box's `.env` must be rewritten before this tree is built on
+  it**, or the container loses its budget cap and CORS allowlist to defaults.
 - MCP stdio strips the environment: new `SEXTANT_*` knobs the KB needs must
   be added to `_FORWARDED_ENV` in `mcp_host.py` or they silently no-op
   (`test_every_retrieval_knob_crosses_the_process_boundary` pins the latest).
