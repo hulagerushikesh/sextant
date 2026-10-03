@@ -405,7 +405,9 @@ eval/
   baseline.json      Committed results; the CI gate compares against these
   baseline-large.json Results on the 1,602-chunk store (reranker decision)
 tests/               392 tests: chunking, retrieval, ANN, agent loop, API, regressions
-deploy/              Caddyfile, prod Dockerfile for the edge, deploy.sh, GCP runbook
+deploy/              Caddyfile, prod Dockerfile for the edge, GCP runbook
+  trip.sh            one VM trip: start, deploy, verify, park (parking is an EXIT trap)
+  deploy.sh          the individual steps: preflight, ship, build, start/stop
 learning/            Study path + measured notes (ANN comparison, reranker decision)
 planning/            Status, cost, milestone plans, trackers, archived docs
 ```
