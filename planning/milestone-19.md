@@ -122,6 +122,16 @@ Three things the port turned up that the review would otherwise have shipped:
   exposed in a pasted screenshot on 2026-09-23 and confirmed still live on
   2026-09-27. Three jobs, one trip.
 
+  **Done 2026-09-28, two of the three.** The `.env` went first and the proof
+  it worked is `/health` reporting `budget.budget_usd: 0.6` -- under the old
+  order that field would read `0` and the box would be uncapped. The tree
+  shipped, the stack rebuilt, the served `assets/` now carries the port's
+  split `lab-*.js` and `command-palette-*.js` chunks, and two live queries ran
+  ($0.0086): one correct abstention, one answered with `bytetrack#summary` at
+  0.9994. The key rotation is deferred -- the owner has it wired into several
+  places now. **The trip cost ₹703, of which ₹701 was the VM left running for
+  125.5 hours afterwards; see PROGRESS.md for the rule that earns.**
+
   *The fourth — dropping the `AGENTICRAG_` fallback — was done locally on
   2026-09-28 (0.8.1) instead, because it costs nothing and needs no box. The
   deploy order is now load-bearing: the `.env` rewrite happens **before** this

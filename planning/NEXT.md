@@ -11,7 +11,8 @@ ships; move it to the bottom section when it is decided against.
 | --- | --- | --- | --- | --- |
 | 1 | Review `ui-redesign/sextant` and port it into `frontend/` | — | ₹0 | **shipped** 2026-09-27 — four post-scan gaps closed first (tables, Markdown export, `sextant.*` storage keys, growing composer); verified live against `:8100`; bundle 61.5 → 186.8 kB gzip after lazy-loading the Lab |
 | 2 | Drop the `AGENTICRAG_` env fallback; a leftover is a printed warning, not a silent default | — | ₹0 | **shipped** 2026-09-28 (0.8.1) — done off the box so the trip below is shorter; `settings.legacy_warning()` names every stale variable at startup |
-| 3 | Deploy it, rewrite the box's `.env` onto `SEXTANT_*`, rotate the exposed key | VM up; you paste the new key | ≈₹3 VM | **waits on a go-ahead** — three jobs, one trip. **`.env` rewrite goes first**, before the rebuild, or the container loses its cap and allowlist to defaults |
+| 3 | Deploy it and rewrite the box's `.env` onto `SEXTANT_*` | VM up | ₹703 spent (≈₹2 of work, ₹701 of a VM left running five days) | **shipped** 2026-09-28 — `.env` rewritten first, tree shipped, stack rebuilt; `/health` reports `budget_usd: 0.6` under the new name, logs clean, new bundle served, two live queries |
+| 4 | Rotate the `GEMINI_API_KEY` exposed in a screenshot 2026-09-23 | you create and paste the key; VM up to install it | ≈₹2 VM | **deferred by you 2026-10-03** — the key is wired into several places, so revocation waits on that work. It is still live until then |
 
 ## Done — Milestone 18 ([`milestone-18.md`](milestone-18.md))
 

@@ -5,6 +5,48 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-09-28 — the box is on the current tree, and a VM left running cost Rs703
+
+- **Milestone 19 item 3, two of three jobs.** The box's `.env` was rewritten
+  onto `SEXTANT_*` **before** anything was built on it (backup kept as
+  `.env.pre-0.8.1`), then the working tree was shipped and the stack rebuilt.
+  The deployed UI is now the React 19 + TypeScript + Tailwind v4 + shadcn one,
+  and the deployed code is 0.8.1 with no `AGENTICRAG_` fallback.
+- **The rename is proven, not assumed.** `/health` reports
+  `budget.budget_usd: 0.6` -- the cap is being read under its new name. Had
+  the order been reversed, that field would read `0` and the box would have
+  been uncapped. The api logs contain no `AGENTICRAG_*` line, which is
+  `settings.legacy_warning()` saying the environment is clean.
+- **Verified from inside the box, no DNS needed**: containers healthy; the
+  served `assets/` carries `lab-*.js` (419 kB) and `command-palette-*.js`
+  (19.6 kB) as separate chunks, which is the code-splitting the port
+  introduced and proof the new bundle is live; `index-*.js` is 580,198 bytes,
+  byte-identical in size to the local build; `PUBLIC_URL` baked correctly;
+  Caddy's Let's Encrypt cert still in the `caddy_data` volume; the gate
+  answers 401 without credentials.
+- **Two live queries.** An unanswerable one (`per-document candidate cap`, a
+  sextant concept the tracker corpus does not hold) correctly said so instead
+  of inventing an answer. An answerable one (ByteTrack's two-pass association)
+  came back with `bytetrack#summary` at **0.9994**, three valid citations and
+  2 turns. $0.0086 total.
+- **The key rotation did not happen.** The owner reports the exposed key is
+  now wired into several places, so revoking it is not a one-line job; it
+  waits on that work. The key exposed on 2026-09-23 is therefore still live.
+- **Cost: Rs703, and almost none of it was the work.** The trip itself was
+  ~20 minutes (~Rs2). The VM was then left RUNNING from 2026-09-28 00:06 to
+  2026-10-03 12:37 -- **125.5 hours** -- because the session ended waiting on
+  the key rotation and nothing parked the box. The daily cap is Rs50-100; this
+  was ~Rs134/day for five days. Parked and the IP released on 2026-10-03.
+  **The rule this earns: the box is parked in the same turn it is started.
+  A trip that ends waiting on a human parks first and restarts later --
+  restarting costs Rs2, waiting cost Rs700.**
+- One pre-existing oddity, confirmed harmless: `docker compose` prints
+  `The "ubyP" variable is not set` four times. That is compose's YAML
+  interpolation pass reading `$ubyP` out of the bcrypt `BASIC_AUTH_HASH`. The
+  container gets the raw value through `env_file: format: raw` -- checked, 60
+  chars, `$2a$` prefix, and the gate returns 401 -- so the warning is noise,
+  not damage.
+
 ## 2026-09-28 — every setting has one name again
 
 - **The `AGENTICRAG_` environment fallback is gone** (0.8.1). It was kept
