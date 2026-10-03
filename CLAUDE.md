@@ -41,6 +41,10 @@ because each one was learned the expensive way.
   is ~₹135/day running; it is parked (stopped) by default, with **no external
   IP** since 2026-09-17 — `deploy.sh start` refuses until one is reattached.
 - GCP billing account is INR: budget amounts are rupees (`1700` ≈ $20).
+- **Park the box in the same turn it is started.** A trip that ends waiting on
+  a human -- a key to paste, a decision -- parks first and restarts later.
+  Restarting costs ₹2; on 2026-09-28 a box left running while waiting for a
+  key rotation billed **₹703 over 125.5 hours**, against a ₹50-100/day cap.
 - Kill CPU-heavy local jobs (eval runs, model loads) at the end of a session.
 
 ## Local ports
@@ -87,7 +91,14 @@ because each one was learned the expensive way.
   dense + rerank only, score-guarded). Set it to `0` for any experiment's
   control, or dense numbers will not match notes written before 2026-09-17.
 - Docker Compose interpolates `$` in `env_file` — bcrypt hashes need
-  `format: raw` (already set in `docker-compose.prod.yml`).
+  `format: raw` (already set in `docker-compose.prod.yml`). A side effect:
+  every compose command on the box prints `The "ubyP" variable is not set`
+  four times, because compose's *YAML* interpolation pass still reads `$ubyP`
+  out of the hash. The container gets the raw value (checked: 60 chars, `$2a$`
+  prefix, gate returns 401). Noise, not damage — pipe it through `grep -v ubyP`.
+- The api container does not publish 8000 to the host. Verify it from inside:
+  `docker exec agenticrag-api-1 curl -s localhost:8000/health`, not
+  `curl localhost:8000` over ssh (that returns HTTP 000).
 - `gemini-2.5-flash-lite` passes a one-shot probe and fails the tool loop
   (400 "tool call context circulation"); `gemini-3.1-flash-lite` is the
   cheapest model that actually runs it.
