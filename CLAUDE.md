@@ -42,9 +42,14 @@ because each one was learned the expensive way.
   IP** since 2026-09-17 — `deploy.sh start` refuses until one is reattached.
 - GCP billing account is INR: budget amounts are rupees (`1700` ≈ $20).
 - **Park the box in the same turn it is started.** A trip that ends waiting on
-  a human -- a key to paste, a decision -- parks first and restarts later.
+  a human — a key to paste, a decision — parks first and restarts later.
   Restarting costs ₹2; on 2026-09-28 a box left running while waiting for a
   key rotation billed **₹703 over 125.5 hours**, against a ₹50-100/day cap.
+- **Use `deploy/trip.sh`, not a sequence of gcloud commands.** It starts the
+  box, deploys, verifies and parks — and parking is an `EXIT` trap, so it also
+  happens on failure and on Ctrl-C. A checklist is what failed on 2026-09-28;
+  this is the same checklist with the last step made unskippable. Leaving the
+  box up takes `--keep-up`, which you have to decide to type.
 - Kill CPU-heavy local jobs (eval runs, model loads) at the end of a session.
 
 ## Local ports
