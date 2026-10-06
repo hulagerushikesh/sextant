@@ -5,6 +5,47 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-06 — milestone 20 planned, and "one corpus per deployment" turns out to hide a live defect
+
+- **Milestone 20 is planned, not started** ([`milestone-20.md`](milestone-20.md)).
+  The candidate line said *"a hosted version needs `category` to mean a
+  person."* Reading the code, that is three questions of different sizes --
+  isolation (a retrieval question, measurable), identity (nothing in the repo
+  answers it), concurrency (already `milestone-15.md`'s decided-against) --
+  and they are not in that order.
+- **A defect found while planning, live on the deployed box today.** Upload
+  ids are `upload:<filename stem>`, global across the store
+  (`mcp_server/uploads.py`), and since 2026-09-25 `_store` clears a document's
+  existing chunks before writing new ones -- correct on its own, and the right
+  behaviour for a re-ingest. Together: two people behind the shared Basic-auth
+  password who both upload `notes.pdf` destroy each other's chunks, with
+  `/upload` returning success and no symptom but citations that stop
+  appearing. Everyone behind one password is already a tenant in the only
+  sense that matters. The fix is item 1 and stands alone, whatever the rest of
+  the milestone decides.
+- **The measurable question is isolation, and the rule is pre-registered.**
+  `search()` has no filter parameter and the dense ANN index is built once
+  over every chunk, so a metadata filter can only post-filter -- `k` in, fewer
+  than `k` out, and the over-fetch needed grows as a tenant's share of the
+  corpus shrinks. A collection per corpus is today's pipeline over a smaller
+  store, so its recall needs no measuring; its cost is ~180 MB of models per
+  corpus, because `get_embedder()` is not cached and each `KnowledgeBase`
+  builds its own cross-encoder too. Rule: the filter is accepted only if at a
+  10% corpus share with a 10x k over-fetch budget it reaches the
+  collection-per-corpus hit@5 within 0.02.
+- **One invariant that is not up for measurement**: the corpus must never be a
+  tool argument. Tool schemas are discovered and handed straight to the model,
+  so a `kb_search(corpus=...)` lets a sentence inside an uploaded PDF read
+  another person's corpus. Isolation is enforced below the tool boundary.
+- **Identity is scoped down on purpose.** Caddy's `basic_auth` takes more than
+  one user and exposes `{http.auth.user.id}` for `reverse_proxy` to forward,
+  so identity can arrive from the transport rather than from the client or the
+  model -- which is what the invariant above requires anyway. Public signup,
+  OAuth and password reset are written down as out of scope with that reason,
+  not omitted.
+- Cost: ₹0. No VM, no model calls; the measurement runs on `sextant-eval`,
+  which does not spend.
+
 ## 2026-09-28 — the box is on the current tree, and a VM left running cost Rs703
 
 - **Milestone 19 item 3, two of three jobs.** The box's `.env` was rewritten
