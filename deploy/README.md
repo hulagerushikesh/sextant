@@ -123,6 +123,22 @@ Fill in `.env` (see [`env.example`](env.example)):
   Paste it **verbatim** — no quotes, no `$$` escaping. The compose file reads
   `.env` with `format: raw` so the `$` signs survive; the default interpolation
   would truncate it to `$2a$14` and the gate would reject every password.
+- `SEXTANT_PROXY_SECRET` — **required**, and the one entry a redeploy is most
+  likely to forget. Any long random string, generated on the box:
+  ```bash
+  openssl rand -hex 32
+  ```
+  Caddy forwards the authenticated username to the app as `X-Sextant-User`,
+  and this is how the app knows that header came from Caddy rather than from
+  a client that typed it. Caddy has no conditionals, so it forwards the name
+  whether or not this is set — leave it empty and the app refuses every
+  request with a 403 that names this variable. Both containers read the same
+  `.env`, so one value wires both halves.
+- `BASIC_AUTH_USER_2` / `BASIC_AUTH_HASH_2` (and `_3`) — optional, one person
+  per slot, hashed the same way as the first. An empty slot vanishes from the
+  Caddyfile before it is parsed; a user set without its hash stops Caddy from
+  starting. The name that authenticates is the namespace that person's uploads
+  are stored under, so renaming one orphans what they already uploaded.
 - `GEMINI_API_KEY` — your key. For v1 this file is the secret store (chmod 600).
   To harden later, pull it from Secret Manager at deploy time instead:
   ```bash

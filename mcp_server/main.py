@@ -30,10 +30,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 
+from mcp_server import identity
 from mcp_server.agent import AgentUnavailable, declare_tools, web_search_default
 from mcp_server.agent import run as run_agent
 from mcp_server.conversation import MAX_TURNS as MAX_HISTORY_TURNS
-from mcp_server.identity import owner_of
 from mcp_server.mcp_host import MCPHost, ToolUnavailable
 from mcp_server.observability import (
     REQUEST_ID_HEADER,
@@ -172,6 +172,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     stale = settings.legacy_warning()
     if stale:
         logger.warning(stale)
+    # Which of the two identity worlds this process is in. Printed because both
+    # of its failures are silent -- see `identity.describe`.
+    logger.info(identity.describe())
     await host.connect()
     try:
         yield
@@ -210,6 +213,30 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=[REQUEST_ID_HEADER],
 )
+
+
+@app.middleware("http")
+async def resolve_owner(request: Request, call_next):
+    """Settle who is asking, once, before any route runs.
+
+    Here rather than in the routes because the refusal is a property of the
+    request, not of the endpoint: a route added later inherits it instead of
+    having to remember it. The 403 is returned rather than raised -- Starlette
+    runs its exception handlers *inside* the user middleware stack, so an
+    HTTPException thrown from here would surface as a 500.
+
+    Declared above `tag_request` so that one stays the outer wrapper and a
+    refusal still carries a request id.
+    """
+    try:
+        request.state.owner = identity.owner_of(request.headers)
+    except identity.ForgedIdentity as e:
+        # The claimed name is attacker-controlled text; it does not go in the
+        # log line. What is worth recording is that someone tried, and from where.
+        client = request.client.host if request.client else "unknown"
+        logger.warning("refused a forged %s from %s", identity.USER_HEADER, client)
+        return JSONResponse(status_code=403, content={"detail": str(e)})
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -446,7 +473,7 @@ async def upload_files(
     `identity.py` for why an owner is not a permission.
     """
     _rate_limit(http_request)
-    owner = owner_of(http_request.headers)
+    owner = http_request.state.owner
     if len(files) > MAX_FILES:
         raise HTTPException(
             status_code=413,

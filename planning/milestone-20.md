@@ -245,10 +245,52 @@ type another person's name into a curl. The local-dev path needs a named
 default so that no-proxy development does not quietly become
 no-authentication production.
 
+**Shipped 2026-10-06 (0.8.3), ₹0.** Caddy's `basic_auth` grew three slots and
+`reverse_proxy` two `header_up` lines: `X-Sextant-User {http.auth.user.id}`,
+and `X-Sextant-Proxy-Auth {$SEXTANT_PROXY_SECRET}` as the proof that this
+proxy is what set it. `mcp_server/identity.py` believes the first only
+alongside the second, constant-time; a name without the proof is a **403** in
+middleware, so every route — including ones added later — inherits the refusal
+rather than remembering it. Precedence is authenticated name, then the
+browser's own id, then `shared`.
+
+**Checked against a real Caddy, not against what the docs imply.** `caddy
+validate` accepts the file with the optional slots empty (an unset `{$VAR}` is
+substituted before tokenising, so the line becomes whitespace and is skipped).
+`caddy adapt` shows both headers as `set`, not append. And a live proxy with
+two users, in front of a server that echoes its headers, rewrote a request
+that authenticated as `ada` while carrying `X-Sextant-User: grace` so the
+backend saw `ada`. Three facts the design depends on, none of them assumed.
+
+**One of those probes changed the design.** With `SEXTANT_PROXY_SECRET`
+unset, Caddy still forwards the name — it has no conditionals — with an
+*empty* proof beside it. So the first deploy of this tree onto a box without
+the secret refuses every request. That is kept rather than softened: the
+alternative, ignoring an unprovable name and falling back to the browser id,
+turns deleting one line of `.env` into every user silently collapsing into one
+namespace, which is item 1's collision returning with no symptom. The refusal
+names the missing variable, so it is a minute's work; a namespace collapse is
+found weeks later as documents that stopped being cited. **`SEXTANT_PROXY_SECRET`
+is now a deploy prerequisite**, the same shape as 0.8.1's `.env` rewrite.
+
+**The seam that no test can run end to end** — Caddy sets the header, Python
+reads it, and nothing runs both — is pinned by string: `tests/test_deploy_
+config.py` asserts the Caddyfile's header names are the constants
+`identity.py` declares. Rename one in Python and every Python test still
+passes while the box quietly loses its identities.
+
+**Not done here:** per-user rate limits and budgets. The limiter still keys on
+IP and the budget cap is still global; both are wrong under tenancy and both
+are now cheap, but neither is this item.
+
 ## Not in this milestone
 
 - **Deploying any of it.** A VM trip, ≈₹2, and it should ride with the
   `GEMINI_API_KEY` rotation still open from M19 rather than be spent alone.
+  That trip has a new precondition: `SEXTANT_PROXY_SECRET` goes into the box's
+  `.env` **before** this tree is built there, or Caddy forwards a name the app
+  cannot verify and every request 403s. Adding the second and third
+  `basic_auth` users is the same trip and the same file.
 - **Public signup, OAuth, password reset, per-user billing.** Out of scope
   by the argument in item 3, not by omission.
 - **Per-user rate limits and budgets.** The limiter keys on IP and the budget
