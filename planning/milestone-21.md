@@ -615,3 +615,56 @@ name, and one where `sextant-forget` does not take.
 
 With this, the whole of item 3's success criterion is something the script
 decides. What is left for a person is creating the key and the second gate user.
+
+---
+
+## Item 8 — an upload is judged by what it stored (₹0)
+
+Item 7 shipped with a check that could not fail for the thing it named.
+
+`/upload` answers **HTTP 200 with `"success": false`** when the file was
+unreadable, the tool was unavailable, or the ingest failed — the status code
+says the request arrived, not that anything was stored. Step 7 compared the
+status code. So against a box that refused both uploads, step 7 printed:
+
+```
+   first user uploads sextant-trip-probe.txt    200
+   second user uploads the same filename        200
+   they see one more                            got 21, wanted 22
+   they see one more                            got 21, wanted 22
+```
+
+Two ticks on the lines that describe the action, then unexplained count
+mismatches, with the actual reason — *No readable files in the upload* —
+nowhere on screen. The trip still failed, which is why this is a reporting
+defect rather than a correctness one, but an operator reading that output
+would go looking in the wrong place with the meter running.
+
+The verdict now comes out of the body:
+
+```
+   first user uploads sextant-trip-probe.txt    got refused: No readable files in the upload., wanted stored 1
+```
+
+`stored 1` on success, `refused: <the box's own reason>` otherwise, `http
+<code>` when the request did not return 200 at all, and `200 with an
+unreadable body` when it did but said nothing parseable.
+
+### The harness was lying too
+
+The first attempt to demonstrate this against the previous script did not
+work, because the `curl` stub printed the body regardless of `-o /dev/null`
+and appended a status line regardless of `-w`. The old code path could not be
+simulated, so the defect could not be planted.
+
+The stub honours both flags now, which is the difference between the three
+call sites in `trip.sh`: `-o /dev/null -w '%{http_code}'` sees only the status,
+`-w '\n%{http_code}'` sees the body and then the status, and a plain `curl`
+sees the body alone. With that, reverting `trip.sh` reproduces the output
+above exactly.
+
+**3 of the 4 new tests fail against the previous script.** The fourth
+(`test_nothing_is_left_behind_when_nothing_was_stored`) passes either way,
+since a refused upload stores nothing to clean up under both versions.
+
+₹0. No new requests — the same two uploads, read properly.
