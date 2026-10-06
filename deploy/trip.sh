@@ -62,6 +62,21 @@ park() {
     echo "   park it with: $0 --no-deploy  (or gcloud compute instances stop $INSTANCE --zone=$ZONE --project=$PROJECT)"
     return $code
   fi
+  # Step 7 writes two documents into the production corpus. Taking them out
+  # again is not a step at the end of step 7, for the same reason parking is
+  # not a step at the end of the trip: the run that needs it most is the one
+  # that died half way. It happens here, before the box is stopped, and it
+  # reports what it removed rather than assuming.
+  if [ "${PROBES_UPLOADED:-0}" = 1 ]; then
+    say "removing the probe documents step 7 uploaded"
+    # Same rule as the park below, for the same reason: documents left in the
+    # production corpus are not something a 0 should be able to say happened.
+    if ! forget_probes; then
+      echo "   probe documents are still in the production corpus." >&2
+      if [ "$code" = 0 ]; then code=1; fi
+    fi
+  fi
+
   say "parking $INSTANCE (this runs even on failure or Ctrl-C)"
   local state attempt
   # Twice. The readback below is only worth having once the dullest reason for
@@ -105,6 +120,51 @@ park() {
   fi
   return $code
 }
+# The filename both gate users upload. Distinctive on purpose: the cleanup
+# finds the documents by scanning the store for it rather than reconstructing
+# `upload:<owner>:<stem>` here, so `safe_owner()` changing how a name is spelled
+# cannot leave documents behind that this script then reports as gone.
+PROBE_STEM="sextant-trip-probe"
+PROBES_UPLOADED=0
+
+# Every probe id in the store, newline separated. Read off chroma's metadata:
+# no embedder, no model, no cost.
+probe_ids() {
+  ssh "$REMOTE" "docker exec -i -e STEM=$PROBE_STEM $INSTANCE-api-1 python -" <<'PROBES' 2>/dev/null | tr -d '\r'
+import os
+import chromadb
+
+stem = os.environ["STEM"]
+path = os.environ.get("SEXTANT_CHROMA_DIR", "/data/chroma")
+rows = chromadb.PersistentClient(path=path).get_collection("documents").get(
+    include=["metadatas"]
+)["metadatas"]
+ids = {(m or {}).get("document_id") for m in rows} - {None}
+for doc_id in sorted(i for i in ids if i.endswith(":" + stem)):
+    print(doc_id)
+PROBES
+}
+
+forget_probes() {
+  local ids left
+  ids=$(probe_ids)
+  if [ -z "$ids" ]; then
+    echo "   nothing to remove"
+    return 0
+  fi
+  echo "$ids" | sed 's/^/   removing /'
+  # shellcheck disable=SC2086
+  ssh "$REMOTE" "docker exec $INSTANCE-api-1 sextant-forget $(echo $ids) --yes" >/dev/null 2>&1 || true
+  left=$(probe_ids)
+  if [ -n "$left" ]; then
+    echo "$left" | sed 's/^/   STILL THERE: /' >&2
+    echo "   remove by hand: ssh $REMOTE \"docker exec $INSTANCE-api-1 sextant-forget <id> --yes\"" >&2
+    return 1
+  fi
+  echo "   the corpus is back to what it was"
+  return 0
+}
+
 trap park EXIT
 
 say "1 - starting $INSTANCE (bills ~Rs5.6/hour until parked)"
@@ -328,10 +388,102 @@ else
   fi
 fi
 
+# ---------------------------------------------------------------------------
+# 7 - isolation, from outside
+#
+# Step 6 proves the gate. Every check in it is a read, so it says nothing about
+# what is behind the gate. This is milestone 21's pre-registered success
+# criterion, run by the script instead of by hand:
+#
+#   two different basic_auth users each upload a file of the same name, both
+#   survive, each sees their own and not the other's, and a client-supplied
+#   X-Sextant-User is refused.
+#
+# Only runs with two gate users exported, which is already a deliberate act.
+# It is the one part of the trip that WRITES: two small text files, each
+# costing a summary (~$0.003) when a model key is configured. They are removed
+# in the EXIT trap, not at the end of this step, because the run that most
+# needs the cleanup is the one that died half way through.
+# ---------------------------------------------------------------------------
+say "7 - isolation, from outside"
+
+# `documents` off the scoped /stats -- the same number the asker's own UI shows.
+# -1 on any failure, which is never a count anything expects, so a broken read
+# fails the check instead of quietly matching.
+stats_docs() {
+  local auth="$1"; shift
+  # The curl is braced with `|| true` so an unreachable box is not `pipefail`'s
+  # problem, and python is the only thing that prints -- otherwise a failure
+  # produced the fallback twice and the count came out as two lines.
+  { curl -s --max-time 60 --config <(printf 'user = "%s"\n' "$auth") "$@" \
+      "$URL/stats" 2>/dev/null || true; } \
+    | python3 -c 'import json, sys
+try:
+    print(json.load(sys.stdin)["documents"])
+except Exception:
+    print(-1)'
+}
+
+upload_probe() {
+  local auth="$1" body="$2" dir file
+  dir=$(mktemp -d)
+  file="$dir/$PROBE_STEM.txt"
+  printf '%s\n' "$body" > "$file"
+  curl -s -o /dev/null -w '%{http_code}' --max-time 120 \
+    --config <(printf 'user = "%s"\n' "$auth") -F "files=@$file" "$URL/upload" 2>/dev/null \
+    | tr -d '\r' || true
+  rm -rf "$dir"
+}
+
+if [ -z "$URL" ] || [ -z "${SEXTANT_TRIP_AUTH:-}" ] || [ -z "${SEXTANT_TRIP_AUTH_2:-}" ]; then
+  echo "   needs both gate users exported -- isolation is unproven."
+  echo "   this is the half of the criterion that is otherwise done by hand."
+else
+  name_b="${SEXTANT_TRIP_AUTH_2%%:*}"
+  a0=$(stats_docs "$SEXTANT_TRIP_AUTH")
+  b0=$(stats_docs "$SEXTANT_TRIP_AUTH_2")
+  printf '   starting from: first user %s documents, second user %s\n' "$a0" "$b0"
+
+  # From here on the corpus has been written to, so the trap has work to do
+  # whatever happens next.
+  PROBES_UPLOADED=1
+  expect "first user uploads $PROBE_STEM.txt" 200 \
+    "$(upload_probe "$SEXTANT_TRIP_AUTH" 'Probe from the first gate user.')"
+  expect "they see one more"            "$((a0 + 1))" "$(stats_docs "$SEXTANT_TRIP_AUTH")"
+  expect "the second user sees nothing new" "$b0"     "$(stats_docs "$SEXTANT_TRIP_AUTH_2")"
+
+  # The forged name goes HERE, in the only window where the two users disagree.
+  # After the second upload both counts are a0+1 and b0+1, which for two users
+  # starting level are the same number -- and a check whose two sides agree
+  # cannot fail. That is how the first draft of this step passed against a proxy
+  # that forwarded the client's name.
+  if [ "$((a0 + 1))" != "$b0" ]; then
+    expect "naming yourself the other user" "$((a0 + 1))" \
+      "$(stats_docs "$SEXTANT_TRIP_AUTH" -H "X-Sextant-User: $name_b")"
+  else
+    echo "   the two users' counts coincide here -- forged name not provable" >&2
+    GATE_FAILURES=$((GATE_FAILURES + 1))
+  fi
+
+  expect "second user uploads the same filename" 200 \
+    "$(upload_probe "$SEXTANT_TRIP_AUTH_2" 'Probe from the second gate user.')"
+  expect "they see one more"            "$((b0 + 1))" "$(stats_docs "$SEXTANT_TRIP_AUTH_2")"
+  # The one that matters. Before 0.8.2 the id was `upload:<stem>`, so the second
+  # upload replaced the first and this number went back to $a0.
+  expect "the first user's copy survived" "$((a0 + 1))" "$(stats_docs "$SEXTANT_TRIP_AUTH")"
+
+  # What /stats counts is what the asker can see. This is what is actually in
+  # the store: two ids, same stem, different owners.
+  found=$(probe_ids | wc -l | tr -d ' ')
+  expect "probe documents in the store" 2 "$found"
+  owners=$(probe_ids | awk -F: '{print $2}' | sort -u | wc -l | tr -d ' ')
+  expect "owned by distinct names" 2 "$owners"
+fi
+
 say "done - the trap parks the box next"
 # The park happens either way -- it is a trap, not a step. But a box whose
 # gate did not hold is not a successful trip, and 0 would say it was.
 if [ "${GATE_FAILURES:-0}" != 0 ]; then
-  echo "$GATE_FAILURES gate check(s) failed -- the box is deployed but not proven." >&2
+  echo "$GATE_FAILURES check(s) failed -- the box is deployed but not proven." >&2
   exit 1
 fi
