@@ -16,11 +16,22 @@
 }
 
 {$SITE_ADDRESS} {
-	# Everything behind a shared Basic-auth credential. The hash is generated
-	# once with:  docker run --rm caddy caddy hash-password --plaintext 'secret'
+	# The front door. Each line is one person; the hash is generated once with:
+	#   docker run --rm caddy caddy hash-password --plaintext 'secret'
 	# and lives only in the box's .env -- never the image, never git.
+	#
+	# The slots after the first are optional: an unset {$VAR} expands to nothing
+	# before the Caddyfile is tokenised, so the line becomes whitespace and is
+	# skipped (checked with `caddy validate`). Adding a person is therefore two
+	# lines in .env and a reload, with no change to this file. Setting a user
+	# without its hash is a startup error, which is the right way round.
+	#
+	# More than three people means more slots here -- at which point generating
+	# this block is probably the better answer than a fourth copy of the line.
 	basic_auth {
 		{$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
+		{$BASIC_AUTH_USER_2} {$BASIC_AUTH_HASH_2}
+		{$BASIC_AUTH_USER_3} {$BASIC_AUTH_HASH_3}
 	}
 
 	# The app server's HTTP surface. Keep this list in step with main.py's
@@ -28,7 +39,20 @@
 	# and 404s as index.html, which looks like a frontend bug, not a routing one.
 	@api path /query* /health /ingest /upload /stats /tools /ann/*
 	handle @api {
-		reverse_proxy api:8000
+		reverse_proxy api:8000 {
+			# Who authenticated, named by the thing that did the authenticating.
+			# `header_up <name> <value>` is a *set*, not an append (confirmed in
+			# the adapted JSON and live: a request authenticating as `ada` while
+			# carrying `X-Sextant-User: grace` arrives at the app as `ada`), so a
+			# client cannot smuggle a name past this line.
+			header_up X-Sextant-User {http.auth.user.id}
+
+			# And the proof that this proxy is what set it. The app refuses an
+			# X-Sextant-User that arrives without a matching secret, so anything
+			# reaching api:8000 without passing through here cannot claim a name.
+			# Overwritten here too, for the same reason as above.
+			header_up X-Sextant-Proxy-Auth {$SEXTANT_PROXY_SECRET}
+		}
 	}
 
 	# The built React app. try_files makes client-side routing work: any

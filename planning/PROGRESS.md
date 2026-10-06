@@ -5,6 +5,39 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-06 — a name is worth what set it (0.8.3)
+
+- **Milestone 20 item 3, shipped: identity arrives from the transport.**
+  Caddy's `basic_auth` grew three slots, and `reverse_proxy` forwards
+  `X-Sextant-User {http.auth.user.id}` — the name of whoever actually
+  authenticated — beside `X-Sextant-Proxy-Auth`, the shared secret that proves
+  this proxy is what set it. `identity.py` believes the first only alongside
+  the second, compared constant-time. Precedence: authenticated name, then the
+  browser's own id, then `shared`.
+- **An unproven name is a 403, in middleware.** The pre-registered rule was
+  that this lands only with a test refusing a client-supplied identity header;
+  it refuses the whole request, not just the name, and nothing is stored under
+  anybody. Middleware rather than per-route so a route added later inherits the
+  refusal instead of having to remember it — and declared inside the
+  request-tagging middleware so a refusal still carries a request id.
+- **Three Caddy facts checked against a real Caddy, none assumed.** `caddy
+  validate` accepts the file with the optional user slots empty (an unset
+  `{$VAR}` is substituted before tokenising, so the line becomes whitespace).
+  `caddy adapt` shows both headers as `set`, not append. A live two-user proxy
+  in front of a header-echoing server rewrote a request that authenticated as
+  `ada` while carrying `X-Sextant-User: grace` so the backend saw `ada`.
+- **A fourth probe changed the design.** With `SEXTANT_PROXY_SECRET` unset,
+  Caddy forwards the name anyway, with an *empty* proof — so the first deploy
+  of this tree onto a box without the secret refuses every request. Kept rather
+  than softened: ignoring an unprovable name would turn deleting one `.env`
+  line into every user silently collapsing into one namespace, which is item
+  1's collision back with no symptom. The 403 names the missing variable.
+  **`SEXTANT_PROXY_SECRET` is a deploy prerequisite**, like 0.8.1's rename.
+- **The seam nothing can test end to end is pinned by string.**
+  `tests/test_deploy_config.py` asserts the Caddyfile's header names are the
+  constants `identity.py` declares; rename one in Python and every Python test
+  still passes while the box quietly loses its identities.
+
 ## 2026-10-06 — a corpus is a filter, and the filter was never the hard part
 
 - **Milestone 20 item 2, decided: A — one collection, filtered.** Full note
