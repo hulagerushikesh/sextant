@@ -5,6 +5,37 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-06 — milestone 21 planned: what else assumed there was one person
+
+- **Planned [`milestone-21.md`](milestone-21.md), ₹0 to plan.** Milestone 20
+  closed the same day; writing down what it left behind found two defects, and
+  both are from this week rather than inherited.
+- **`/ann/compare` hands out other people's text**, and routing it through
+  `ScopedHost` would not fix it: `passages` is a mapping keyed by *chunk* id
+  whose values carry no `document_id`, and `trim()` only drops a list entry
+  with that field. Reproduced against a running server — asking as `ada`
+  returned grace's chunk verbatim. The finding is not a missed endpoint; it is
+  that deny-by-default only denies the shapes it recognises, while `scope.py`
+  names `kb_ann_compare` in its own docstring as covered.
+- **`/ingest` lets any authenticated user overwrite any other's document.**
+  Ids pass straight through and `_store` clears a document's chunks first.
+  Reproduced: grace replaced `upload:ada:notes`, the call returned success, and
+  ada's own scoped listing now serves grace's text under ada's title. Milestone
+  20 item 1's collision again, deliberate instead of accidental, and worse —
+  the victim cites the forgery as their own.
+- **The limiter and the cap still count one person**, which M20 deferred by
+  name. The limiter keys on client IP, so one NAT shares a bucket and the
+  authenticated name is ignored; the daily cap is one global figure, so the
+  first user to spend it silences everybody until 00:00 UTC. A design choice,
+  so the milestone pre-registers behaviour rather than a number.
+- **Recorded while writing it:** every number in `learning/` is an unscoped
+  number. `eval/harness.py` builds a `KnowledgeBase` directly and never crosses
+  the host, so no eval run would catch a scoping bug. Correct — the scope is a
+  boundary, not a retrieval change — but it means tests are the only guard.
+- Item 3 is the VM trip, ≈₹2, carrying 0.8.2/0.8.3/0.8.4 and the M19 key
+  rotation. It succeeds only if two real `basic_auth` users upload the same
+  filename from the public URL and both survive, each seeing only their own.
+
 ## 2026-10-06 — the listing was the leak (0.8.4), and milestone 20 closes
 
 - **Milestone 20 item 4, shipped: every result is trimmed to what the asker
