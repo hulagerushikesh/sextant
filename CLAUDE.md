@@ -151,6 +151,15 @@ because each one was learned the expensive way.
   the box's `.env`. `/health` reports the asker's own share, and the spend
   card tracks it — without that, being refused while the card shows money left
   reads as a bug.
+- Every HTTP route is pinned on one side of the scope boundary since 0.8.7
+  (`TestEveryRouteIsOnOneSideOfTheBoundary`): adding an endpoint fails the
+  gate until it is declared as one that reaches the corpus or one that does
+  not, and a corpus route must call `scoped(host, owner)` -- never the
+  process-global `host` -- and must be rate limited. Both 0.8.5 doors and the
+  0.8.6 one were *routes*; only the tool list had been pinned.
+- `/stats` is rate limited since 0.8.7: scoping it in 0.8.4 made it recompute
+  from a full listing, so it walks the corpus and is no longer the cheap read
+  its missing limit assumed. The UI calls it once a page load, never polls.
 - `/ann/benchmark` and `/ann/compare` are rate limited since 0.8.6. They were
   the only routes with no limit, and an index build over every vector is the
   heaviest thing the box does.

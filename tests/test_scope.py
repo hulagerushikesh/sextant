@@ -403,3 +403,89 @@ class TestAgainstARealStore:
         assert "grace" in json.dumps(whole), "nothing to scope -- the fixture is wrong"
         assert "grace" not in json.dumps(trim(whole, "ada"))
         assert "upload:ada" in json.dumps(trim(whole, "ada"))
+
+
+class TestEveryRouteIsOnOneSideOfTheBoundary:
+    """The tool list is pinned; the route list was not, and that is where both
+    defects actually were.
+
+    `test_every_tool_the_server_exposes_is_classified` makes adding a *tool*
+    fail until somebody decides which half of the boundary it is on. But the
+    two doors 0.8.5 closed were routes, not tools: `/ann/compare` reached the
+    process-global host directly, and `/ingest` let any caller overwrite any
+    owner's document. 0.8.6 then found a third of the same shape -- `/ann/*`
+    had no rate limit -- and the only reason any of them was caught is that
+    somebody went looking. A route added tomorrow that returns corpus data
+    would have failed nothing.
+
+    So the route table is read off the live app and every path has to be
+    declared. The classification is deliberately crude -- it reads the
+    handler's source -- because the failure it exists for is crude: somebody
+    writes a new endpoint, calls `host` instead of `scoped(host, ...)`, and
+    every other test still passes.
+    """
+
+    # Routes that can reach the corpus. Each must hand the host to `scoped()`
+    # and must never touch the process-global one.
+    CORPUS = {
+        "/stats",
+        "/ann/benchmark",
+        "/ann/compare",
+        "/ingest",
+        "/upload",
+        "/query",
+        "/query/stream",
+    }
+    # Routes that cannot: liveness, the box's own numbers, and the tool
+    # schemas. None of these reads a document.
+    NO_CORPUS = {"/", "/health", "/tools"}
+
+    @staticmethod
+    def _routes() -> dict[str, str]:
+        """Every declared path on the live app, mapped to its handler source."""
+        import inspect
+
+        from fastapi.routing import APIRoute
+
+        from mcp_server import main
+
+        out = {}
+        for route in main.app.routes:
+            if not isinstance(route, APIRoute):
+                continue
+            try:
+                out[route.path] = inspect.getsource(route.endpoint)
+            except OSError:
+                # A handler whose source cannot be read is a handler nobody can
+                # check. Fail closed, the same way scope.py refuses a tool it
+                # cannot classify, rather than raising something unrelated.
+                out[route.path] = ""
+        return out
+
+    def test_every_route_the_server_exposes_is_classified(self):
+        # The pin. Adding an endpoint fails here until it is declared as one
+        # that reaches the corpus or one that does not.
+        assert set(self._routes()) == self.CORPUS | self.NO_CORPUS
+
+    def test_every_route_that_reaches_the_corpus_scopes_it(self):
+        for path in self.CORPUS:
+            assert "scoped(" in self._routes()[path], f"{path} does not scope the host"
+
+    def test_no_route_calls_the_process_global_host_directly(self):
+        # This is the `/ann/compare` defect exactly: the handler had a host, it
+        # just was not the scoped one. `scoped(host, owner).call(...)` does not
+        # match, a bare `host.call(...)` does.
+        for path, source in self._routes().items():
+            assert "host.call(" not in source, f"{path} bypasses ScopedHost"
+
+    def test_every_route_that_reaches_the_corpus_is_rate_limited(self):
+        # Scoping a read does not make it cheap -- `/stats` recomputes from a
+        # full listing and `/ann/*` builds two indexes. Both were unlimited
+        # until somebody noticed.
+        for path in self.CORPUS:
+            assert "_rate_limit(" in self._routes()[path], f"{path} is unlimited"
+
+    def test_a_route_that_reaches_no_corpus_calls_no_tool(self):
+        # The other direction: a path declared harmless must stay harmless.
+        for path in self.NO_CORPUS:
+            assert ".call(" not in self._routes()[path], f"{path} calls a tool"

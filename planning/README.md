@@ -7,7 +7,7 @@ product.
 | | Read |
 | --- | --- |
 | **Next** | [`NEXT.md`](NEXT.md) — the queue: what is in progress, what waits on a key or a go-ahead, what was decided against and why |
-| **Now** | [`milestone-21.md`](milestone-21.md) — what else assumed there was one person: both doors closed (0.8.5) and both counters fixed (0.8.6) on 2026-10-06; what is left is the trip that puts 0.8.2–0.8.6 on the box |
+| **Now** | [`milestone-21.md`](milestone-21.md) — what else assumed there was one person: both doors closed (0.8.5) and both counters fixed (0.8.6) on 2026-10-06; what is left is the trip that puts 0.8.2–0.8.7 on the box |
 | **Progress** | [`PROGRESS.md`](PROGRESS.md) — what shipped, by date |
 | **Past plans** | [`milestone-20.md`](milestone-20.md) — what a corpus belongs to; four items, ₹0, done · [`milestone-19.md`](milestone-19.md) — the redesigned UI is the UI; the key rotation is its one open item · [`milestone-18.md`](milestone-18.md) — re-ingest, summaries by default, 0.8, done · [`milestone-17.md`](milestone-17.md) — cap, `kb_list`, three candidates closed, done · [`milestone-16.md`](milestone-16.md) — five retrieval experiments, done · [`milestone-15.md`](milestone-15.md) — ship, prove, rename, done · [`go-live-proof.md`](go-live-proof.md) — what was observed when the site went live |
 | **History** | [`trackers/`](trackers/) — HTML checklists from phases 9–13 · [`archive/`](archive/) — course-era docs describing features never built (`archive/README.md`) |
@@ -30,13 +30,13 @@ Operational runbooks stay next to what they operate: [`../deploy/README.md`](../
 | 19 | Port the redesigned UI into `frontend/` | **Port done** 2026-09-27 — React 19 + TS + Tailwind v4 + shadcn replaces 747 lines of `App.jsx` and 1,952 of `App.css`; four post-scan gaps closed first, three more bugs found by running it; bundle 61.5 → 186.8 kB gzip. Deploy still open. See `milestone-19.md` |
 
 | 20 | What a corpus belongs to: the upload collision, one-collection-vs-one-each, identity, the listing leak | **Done** 2026-10-06, ₹0 across all four — uploads namespaced by owner (0.8.2); **A, one collection filtered**, decided on a measurement that passed and could not have failed (`../learning/multi-corpus.md`); identity forwarded by Caddy and refused without proof (0.8.3); every tool result scoped to the asker (0.8.4). See `milestone-20.md` |
-| 21 | What else assumed there was one person | **Items 1–2 done** 2026-10-06, ₹0 — the rule behind both scope holes (0.8.5): `trim()` recognises an *id* wherever one appears, and writes are an allow-list where reads are a deny-list. Then two ceilings (0.8.6): the limiter keys on a name only when the proxy vouched for it, and a per-owner share sits under the global cap rather than replacing it. Item 3 (the VM trip carrying 0.8.2–0.8.6 plus the key rotation) open. See `milestone-21.md` |
+| 21 | What else assumed there was one person | **Items 1–2 done** 2026-10-06, ₹0 — the rule behind both scope holes (0.8.5): `trim()` recognises an *id* wherever one appears, and writes are an allow-list where reads are a deny-list. Then two ceilings (0.8.6): the limiter keys on a name only when the proxy vouched for it, and a per-owner share sits under the global cap rather than replacing it. Then an unplanned item 4 (0.8.7): every HTTP route is pinned on one side of the scope boundary, because all three defects above were routes and only the tool list was pinned. Item 3 (the VM trip carrying 0.8.2–0.8.7 plus the key rotation) open. See `milestone-21.md` |
 
 Numbers that describe the system today: 531 tests, mypy clean (62 files), two
 golden sets (65 questions / 58 chunks; 39 page-labelled / 1,608 chunks), hit@1
 0.94 and 0.93 for the full pipeline, ~$0.0015/query on
 `gemini-3.1-flash-lite`, 22 docs / 1,660 chunks in the local store. Package is
-`sextant` 0.8.6; the deployed box is still on 0.8.1. The repo has been public
+`sextant` 0.8.7; the deployed box is still on 0.8.1. The repo has been public
 since 2026-09-20 (MIT).
 
 ## Cost position
