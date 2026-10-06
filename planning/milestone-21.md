@@ -185,7 +185,7 @@ grace -> /ingest {"id": "handbook", …}          HTTP 403
 
 ₹0: neither path makes a model call.
 
-**Verification.** 16 new tests (8 in `TestTheShapesAnIdTakes`, 9 in
+**Verification.** 24 new tests (8 in `TestTheShapesAnIdTakes`, 10 in
 `TestWrites`, 5 at the HTTP edge in `TestIngest`/`TestIndexLab`), plus
 `test_the_index_lab_shows_one_owner_nothing_of_the_others`, which runs a real
 `ann_compare` over a real three-document store and asserts the *serialised*
@@ -306,7 +306,7 @@ through a model call, and this box has no key wired up. It is covered at the
 HTTP edge with a stubbed agent instead, which is stated here rather than
 dressed up as a live run.
 
-**Verification.** 21 new tests. The three pre-registered clauses each have one
+**Verification.** 19 new tests. The three pre-registered clauses each have one
 named for it: `test_exhausting_a_share_leaves_the_other_owner_able_to_ask`,
 `test_the_global_ceiling_still_holds` (three owners each inside their own
 share, $1.05 between them, box shut), and

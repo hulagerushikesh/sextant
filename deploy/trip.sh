@@ -101,7 +101,39 @@ if [ "$DEPLOY" = 1 ]; then
     echo "   ssh $REMOTE \"cd $APP_DIR && cp -a .env .env.bak && sed -i 's/^AGENTICRAG_/SEXTANT_/' .env\"" >&2
     exit 1
   fi
-  echo "   no pre-rename names -- safe to build"
+  echo "   no pre-rename names"
+
+  # 0.8.3 put `header_up X-Sextant-User {http.auth.user.id}` in the Caddyfile,
+  # and Caddy has no conditionals: it forwards the authenticated name on every
+  # proxied request whether or not the app can verify it came from Caddy. With
+  # SEXTANT_PROXY_SECRET empty the app sees a name it cannot trust and refuses
+  # -- every request, not some. Deploying this tree without it takes the box
+  # down, so this is the same kind of hard stop as the one above.
+  if ! ssh "$REMOTE" "grep -q '^SEXTANT_PROXY_SECRET=..*' $APP_DIR/.env"; then
+    echo "   SEXTANT_PROXY_SECRET is missing or empty -- every request would 403." >&2
+    echo "   generate it ON THE BOX so the value never leaves it:" >&2
+    echo "   ssh $REMOTE \"cd $APP_DIR && printf 'SEXTANT_PROXY_SECRET=%s\\n' \\\$(openssl rand -hex 32) >> .env\"" >&2
+    exit 1
+  fi
+  echo "   proxy secret set"
+
+  # Not hard stops -- the box runs fine without any of these. They are printed
+  # because each one silently changes what the trip can prove: isolation needs
+  # two names at the gate, answers need a key, and a share needs configuring
+  # once there is more than one person to share between.
+  slots=$(ssh "$REMOTE" "grep -cE '^BASIC_AUTH_HASH(_[23])?=..*' $APP_DIR/.env || true")
+  echo "   basic_auth users: $slots (two are needed to prove isolation end to end)"
+  if ssh "$REMOTE" "grep -q '^GEMINI_API_KEY=..*' $APP_DIR/.env"; then
+    echo "   model key set"
+  else
+    echo "   GEMINI_API_KEY is empty -- retrieval will work, answers will not"
+  fi
+  if ssh "$REMOTE" "grep -q '^SEXTANT_DAILY_BUDGET_SHARE=..*' $APP_DIR/.env"; then
+    echo "   per-owner share set"
+  else
+    echo "   no SEXTANT_DAILY_BUDGET_SHARE -- the global cap alone (right for one user)"
+  fi
+  echo "   safe to build"
 
   say "3 - shipping the working tree"
   # tar over ssh, not rsync: macOS ships openrsync, which mangles a dotted
@@ -142,5 +174,36 @@ print("     %s chunks / %s documents / %s summaries at %s"
       % (d["collection_size"], d["documents"], d.get("summaries", 0), d["persist_dir"]))'
 echo "   stale env names in the log (want none):"
 ssh "$REMOTE" "cd $APP_DIR && $COMPOSE logs api --tail=120" 2>&1 | quiet | grep -i 'AGENTICRAG_' || echo "     clean"
+
+# A name is only worth anything if a client cannot simply type it. Going
+# straight at the api container skips Caddy, so this is exactly the forged
+# case: a header with no proof beside it. 403 is the pass.
+echo "   a name the proxy did not vouch for:"
+code=$(ssh "$REMOTE" "docker exec $INSTANCE-api-1 curl -s -o /dev/null -w '%{http_code}' --max-time 30 -H 'X-Sextant-User: forged' http://localhost:8000/health" 2>/dev/null | tr -d '\r')
+if [ "$code" = 403 ]; then
+  echo "     refused ($code)"
+else
+  echo "     got $code, expected 403 -- a client can name itself" >&2
+fi
+
+# 0.8.2 namespaced upload ids as `upload:<owner>:<stem>`. Anything still
+# spelled `upload:<stem>` predates it and belongs to nobody in particular --
+# a documented one-way break this trip is meant to confirm the box does not
+# have. Read straight off chroma's metadata: no embedder, no model, no cost.
+echo "   document ids:"
+ssh "$REMOTE" "docker exec -i $INSTANCE-api-1 python -" <<'AUDIT' 2>&1 | quiet || echo "     could not audit (not fatal)"
+import os
+import chromadb
+
+path = os.environ.get("SEXTANT_CHROMA_DIR", "/data/chroma")
+rows = chromadb.PersistentClient(path=path).get_collection("documents").get(
+    include=["metadatas"]
+)["metadatas"]
+ids = sorted({(m or {}).get("document_id") for m in rows} - {None})
+stale = [i for i in ids if i.startswith("upload:") and i.count(":") < 2]
+owners = sorted({i.split(":")[1] for i in ids if i.startswith("upload:") and i.count(":") >= 2})
+print("     %d documents; owners with uploads: %s" % (len(ids), ", ".join(owners) or "none"))
+print("     pre-0.8.2 upload ids: %s" % (", ".join(stale) if stale else "none"))
+AUDIT
 
 say "done - the trap parks the box next"
