@@ -33,6 +33,7 @@ from pydantic import BaseModel, Field, field_validator
 from mcp_server.agent import AgentUnavailable, declare_tools, web_search_default
 from mcp_server.agent import run as run_agent
 from mcp_server.conversation import MAX_TURNS as MAX_HISTORY_TURNS
+from mcp_server.identity import owner_of
 from mcp_server.mcp_host import MCPHost, ToolUnavailable
 from mcp_server.observability import (
     REQUEST_ID_HEADER,
@@ -437,8 +438,15 @@ async def upload_files(
     text. This one takes bytes and runs the loaders, so a PDF keeps its page
     numbers and a citation can say "p. 14" -- the thing the old browser upload
     could not do, and the reason it only accepted text files.
+
+    The id a file gets is namespaced by owner, because this endpoint *derives*
+    the id from the filename and two people behind the shared gate pick the
+    same filename constantly. `/ingest` is not namespaced: its caller states
+    the id outright, so there is nothing derived to collide by accident. See
+    `identity.py` for why an owner is not a permission.
     """
     _rate_limit(http_request)
+    owner = owner_of(http_request.headers)
     if len(files) > MAX_FILES:
         raise HTTPException(
             status_code=413,
@@ -449,7 +457,9 @@ async def upload_files(
     skipped: list[str] = []
     for upload in files:
         try:
-            documents.append(to_document(upload.filename or "upload", await upload.read()))
+            documents.append(
+                to_document(upload.filename or "upload", await upload.read(), owner=owner)
+            )
         except UnsupportedDocument as e:
             # One unreadable file should not lose the others in the same drop.
             skipped.append(str(e))

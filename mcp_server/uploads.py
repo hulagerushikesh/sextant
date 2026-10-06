@@ -27,6 +27,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from mcp_server.identity import DEFAULT_OWNER, safe_owner
 from tools.vector_db.loaders import (
     MARKDOWN_SUFFIXES,
     PDF_SUFFIXES,
@@ -57,13 +58,21 @@ def safe_name(filename: str) -> str:
     return cleaned or "upload"
 
 
-def to_document(filename: str, data: bytes, category: str = "upload") -> dict[str, Any]:
+def to_document(
+    filename: str,
+    data: bytes,
+    category: str = "upload",
+    owner: str = DEFAULT_OWNER,
+) -> dict[str, Any]:
     """Parse one uploaded file into a `kb_ingest` document.
 
     Raises UnsupportedDocument for a file type with no loader, and for a file
     that parses to nothing -- a scanned PDF with no text layer is the common
     case, and it should be reported rather than stored as an empty document that
     silently matches nothing.
+
+    `owner` namespaces the id. It is not a permission -- see `identity.py` for
+    what it is and what it deliberately is not.
     """
     name = safe_name(filename)
     suffix = Path(name).suffix.lower()
@@ -94,9 +103,13 @@ def to_document(filename: str, data: bytes, category: str = "upload") -> dict[st
         len(loaded.locators),
     )
     return {
-        # Stable, so re-uploading a corrected file replaces it rather than
-        # storing a second copy under a new id.
-        "id": f"upload:{Path(name).stem}",
+        # Stable *per owner*, so re-uploading a corrected file replaces it
+        # rather than storing a second copy under a new id -- while two people
+        # uploading the same filename no longer overwrite each other. The id
+        # was `upload:<stem>` before 0.8.2; a store written under that scheme
+        # keeps those documents, reachable by `sextant-forget`, but a re-upload
+        # lands beside them rather than replacing them.
+        "id": f"upload:{safe_owner(owner)}:{Path(name).stem}",
         "title": loaded.title,
         "content": loaded.text,
         "source": name,

@@ -13,7 +13,7 @@ costs money: no VM, no model calls, and `sextant-eval` does not spend.
 
 | # | Step | Needs | Cost | State |
 | --- | --- | --- | --- | --- |
-| 1 | Namespace upload ids by owner — two people uploading `notes.pdf` currently destroy each other's chunks | — | ₹0 | **not started** — a defect, not an experiment; lands with a test for both halves (different owners both survive, same owner still replaces) |
+| 1 | Namespace upload ids by owner — two people uploading `notes.pdf` destroyed each other's chunks | — | ₹0 | **shipped** 2026-10-06 (0.8.2) — `upload:<owner>:<stem>`, owner from the `X-Sextant-Client` header the frontend sets from a per-browser id; both halves pinned at the store. Namespacing, not isolation — nothing is hidden from search |
 | 2 | Decide what a corpus is: metadata filter (A) vs collection-per-corpus (B) vs deployment-per-corpus (C) | — | ₹0 | **not started** — measured on `eval/golden.jsonl` with synthetic owners; rule pre-registered: A is accepted only if at a 10% corpus share with a 10×k over-fetch budget it reaches B's hit@5 within 0.02 |
 | 3 | Identity: multiple Caddy `basic_auth` users, the authenticated name forwarded as a header | — | ₹0 | **not started** — lands only with a test that a client-supplied identity header is refused |
 

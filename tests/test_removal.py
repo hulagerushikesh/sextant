@@ -15,6 +15,7 @@ from typing import Any
 
 import pytest
 
+from mcp_server.uploads import to_document
 from tools.vector_db.forget_cli import _forget, _list
 from tools.vector_db.vector_search import KnowledgeBase
 
@@ -190,3 +191,46 @@ class TestForgetCommand:
         assert await _list(fake("keep", "drop")) == 0
         out = capsys.readouterr().out
         assert "drop" in out and "2 chunks" in out and "Keep" in out
+
+
+class TestUploadsOfTheSameFilename:
+    """The collision that `upload:<owner>:<stem>` exists to stop.
+
+    Ids were `upload:<filename stem>`, global across the store, and `_store`
+    clears a document's chunks before writing its new ones -- correct on its
+    own, and the right behaviour for a re-ingest. Together, two people behind
+    the one shared Basic-auth password who each uploaded `notes.md` destroyed
+    each other's chunks, and `/upload` answered success either way.
+
+    Both halves are asserted here, because a fix that only separated the two
+    people would have broken the replacement the stable id was for.
+    """
+
+    async def test_two_people_uploading_the_same_filename_both_survive(
+        self, own_kb: KnowledgeBase
+    ):
+        ada = to_document("notes.md", b"# Notes\n\nThe Hungarian algorithm assigns.\n", owner="ada")
+        grace = to_document("notes.md", b"# Notes\n\nA Kalman filter predicts.\n", owner="grace")
+
+        await own_kb.add_documents([ada])
+        await own_kb.add_documents([grace])
+
+        for document in (ada, grace):
+            stored = own_kb.collection.get(where={"document_id": document["id"]})["ids"]
+            assert stored, f"{document['id']} was destroyed by the other upload"
+        # And the text, not just the row: the earlier upload is still findable.
+        found = own_kb.search_sync("Hungarian algorithm assignment", limit=5)["results"]
+        assert any(hit["id"].startswith("upload:ada:notes") for hit in found)
+
+    async def test_the_same_person_re_uploading_replaces(self, own_kb: KnowledgeBase):
+        first = to_document("notes.md", b"# Notes\n\n" + b"Kalman filter. " * 200, owner="ada")
+        await own_kb.add_documents([first])
+        before = own_kb.collection.get(where={"document_id": first["id"]})["ids"]
+        assert len(before) > 1
+
+        second = to_document("notes.md", b"# Notes\n\nShort now.\n", owner="ada")
+        await own_kb.add_documents([second])
+
+        assert first["id"] == second["id"]
+        assert len(own_kb.collection.get(where={"document_id": second["id"]})["ids"]) == 1
+        assert own_kb.search_sync("Kalman filter", limit=5)["results"] == []

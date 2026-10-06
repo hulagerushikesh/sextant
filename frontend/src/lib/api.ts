@@ -4,6 +4,7 @@
  * changes what the server has to do.
  */
 import { mockCompare, mockHealth, mockStats, mockStream, mockSweep } from './mock'
+import { clientId } from './storage'
 import type { CompareResult, Health, Stats, StreamHandlers, SweepResult } from './types'
 
 export const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:8000'
@@ -81,7 +82,15 @@ export async function uploadFiles(files: File[]): Promise<{ success: boolean; me
   }
   const form = new FormData()
   for (const f of files) form.append('files', f, f.name)
-  const response = await fetch(`${SERVER_URL}/upload`, { method: 'POST', body: form })
+  // Namespaces the stored document id so two people behind the shared gate
+  // stop overwriting each other's uploads. Untrusted by the server, and it
+  // hides nothing from search — see mcp_server/identity.py.
+  const id = clientId()
+  const response = await fetch(`${SERVER_URL}/upload`, {
+    method: 'POST',
+    body: form,
+    headers: id ? { 'X-Sextant-Client': id } : undefined,
+  })
   if (!response.ok) throw new Error(await describeFailure(response))
   return response.json()
 }
