@@ -194,6 +194,69 @@ class TestIngest:
         assert body["success"] is False
         assert body["error"]
 
+    def test_a_caller_cannot_state_another_owners_id(self, client, host):
+        # Milestone 21 item 1, door two, reproduced live before the fix: an id
+        # is a replacement, so this wrote grace's text into ada's document and
+        # ada went on citing it as her own file.
+        before = len(host.calls)
+        response = client.post(
+            "/ingest",
+            json={"documents": [{"id": "upload:ada:notes", "content": "FORGED"}]},
+            headers={CLIENT_HEADER: "grace"},
+        )
+        assert response.status_code == 403
+        assert len(host.calls) == before
+
+    def test_the_refusal_says_which_prefix_the_caller_may_use(self, client):
+        # The 403 has to be actionable: the caller stated the id on purpose.
+        response = client.post(
+            "/ingest",
+            json={"documents": [{"id": "handbook", "content": "x"}]},
+            headers={CLIENT_HEADER: "grace"},
+        )
+        assert "upload:grace:" in response.json()["detail"]
+
+    def test_an_unidentified_caller_still_owns_the_shared_corpus(self, client, host):
+        # The CLI, curl and the eval harness send no header and must keep
+        # working exactly as they did before owners existed.
+        assert client.post(
+            "/ingest", json={"documents": [{"id": "handbook", "content": "x"}]}
+        ).status_code == 200
+
+
+class TestIndexLab:
+    """`/ann/*` answers with the asker's own neighbours.
+
+    It called the process-global host directly until 0.8.5, so the Lab handed
+    every visitor every other tenant's titles and the opening 200 characters
+    of their documents -- the one route the scope did not reach.
+    """
+
+    COMPARE = {
+        "k": 5,
+        "exact": ["upload:ada:notes#0", "upload:grace:secret#0"],
+        "results": {"hnsw": {"hits": [{"id": "upload:grace:secret#0"}], "recall": 1.0}},
+        "passages": {
+            "upload:ada:notes#0": {"title": "Notes", "excerpt": "ada's"},
+            "upload:grace:secret#0": {"title": "Grace Secret", "excerpt": "salary review"},
+        },
+    }
+
+    def test_the_lab_is_scoped_like_every_other_read(self, client, host):
+        host.results["kb_ann_compare"] = self.COMPARE
+        body = client.post(
+            "/ann/compare", json={"query": "Kalman"}, headers={CLIENT_HEADER: "ada"}
+        ).json()
+        assert json.dumps(body).count("grace") == 0
+        assert body["exact"] == ["upload:ada:notes#0"]
+        assert set(body["passages"]) == {"upload:ada:notes#0"}
+
+    def test_the_benchmark_route_is_scoped_too(self, client, host):
+        # It returns only aggregates today. It goes through the same boundary
+        # anyway, because "nothing to leak yet" is how this happened once.
+        host.results["kb_ann_benchmark"] = {"rows": [{"name": "hnsw", "recall": 0.98}]}
+        assert client.post("/ann/benchmark", json={}).status_code == 200
+
 
 class TestQuery:
     def test_the_answer_and_trace_come_back_together(self, client, monkeypatch):

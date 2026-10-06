@@ -43,7 +43,7 @@ from mcp_server.observability import (
     new_request_id,
     request_id,
 )
-from mcp_server.scope import scoped
+from mcp_server.scope import ForbiddenWrite, scoped
 from mcp_server.sources import MAX_RESTORED
 from mcp_server.uploads import MAX_FILES, SUPPORTED_SUFFIXES, to_document
 from tools import settings
@@ -396,16 +396,21 @@ class CompareRequest(BaseModel):
 
 
 @app.post("/ann/benchmark")
-async def ann_benchmark(request: BenchmarkRequest):
+async def ann_benchmark(request: BenchmarkRequest, http_request: Request):
     """Sweep HNSW and IVF-PQ against exact search over the live corpus.
 
     Heavy and synchronous under the hood -- it builds real indexes -- so it is a
     deliberate, on-demand call the UI makes when the benchmark view is opened,
     never part of answering a question. The model is never offered these tools;
     READABLE_TOOLS in agent.py sees to that.
+
+    Scoped like every other read even though today it returns only aggregate
+    numbers: the reason `/ann/compare` leaked was that one route called the
+    process-global host directly, and "this one has nothing to leak yet" is how
+    that happens again the next time a field is added to its result.
     """
     try:
-        return await host.call(
+        return await scoped(host, http_request.state.owner).call(
             "kb_ann_benchmark",
             {"k": request.k, "n_queries": request.n_queries, "grid": request.grid},
         )
@@ -414,10 +419,17 @@ async def ann_benchmark(request: BenchmarkRequest):
 
 
 @app.post("/ann/compare")
-async def ann_compare(request: CompareRequest):
-    """Run one query through exact, HNSW and IVF-PQ and return them side by side."""
+async def ann_compare(request: CompareRequest, http_request: Request):
+    """Run one query through exact, HNSW and IVF-PQ and return them side by side.
+
+    Its `passages` map is the most content-bearing thing any route returns --
+    every neighbour's title and opening 200 characters, keyed by chunk id -- so
+    this goes through the scoped host. The per-index recall figures do not move:
+    they measure an index against exact search over the whole store, which is
+    what an index is. See `scope.py`.
+    """
     try:
-        return await host.call(
+        return await scoped(host, http_request.state.owner).call(
             "kb_ann_compare",
             {"query": request.query, "k": request.k, "hnsw": request.hnsw, "ivfpq": request.ivfpq},
         )
@@ -431,6 +443,14 @@ async def ingest_documents(request: DocumentRequest, http_request: Request):
 
     Writes live here rather than in the agent's tool list: answering a question
     must not be able to change the corpus it is answering from.
+
+    The caller states the id outright -- that is what separates this from
+    `/upload`, which derives one from a filename -- and until 0.8.5 it was
+    stated without being checked. Since re-using an id *replaces* that
+    document, any gated user could overwrite any other's: the victim keeps
+    citing the forged text as their own file. So an id must be in the caller's
+    own namespace now, and a 403 says which prefix that is. A caller with no
+    identity is `shared` and owns the shared corpus, exactly as before.
     """
     _rate_limit(http_request)
 
@@ -445,7 +465,11 @@ async def ingest_documents(request: DocumentRequest, http_request: Request):
         )
 
     try:
-        result = await host.call("kb_ingest", {"documents": request.documents})
+        result = await scoped(host, http_request.state.owner).call(
+            "kb_ingest", {"documents": request.documents}
+        )
+    except ForbiddenWrite as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except ToolUnavailable as e:
         return DocumentResponse(
             success=False, message="", documents_added=0, collection_size=0, error=str(e)
@@ -508,7 +532,11 @@ async def upload_files(
         )
 
     try:
-        result = await host.call("kb_ingest", {"documents": documents})
+        # Through the scoped host like /ingest, though the ids were built from
+        # this owner's name a dozen lines up and cannot fail the check. One
+        # write path that is guarded and one that is trusted is how the guarded
+        # one ends up being the one nobody uses.
+        result = await scoped(host, owner).call("kb_ingest", {"documents": documents})
     except ToolUnavailable as e:
         return DocumentResponse(
             success=False, message="", documents_added=0, collection_size=0, error=str(e)

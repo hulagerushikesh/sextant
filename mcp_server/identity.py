@@ -195,6 +195,25 @@ def visible_to(owner: str, document_id: str | None) -> bool:
     return document_owner == DEFAULT_OWNER or document_owner == safe_owner(owner)
 
 
+def writable_by(owner: str, document_id: str | None) -> bool:
+    """Whether `owner` may *write* this document id.
+
+    Deliberately not `visible_to`. Reading is a deny-list -- everything minus
+    other people's uploads -- because the shared corpus is the product. Writing
+    is an allow-list: your own namespace, nothing else. The asymmetry is the
+    point. A document everyone may read is not a document everyone may replace,
+    and `_store` replaces: re-using an id clears that document's chunks first,
+    so a write to somebody else's id is a deletion of their document and a
+    forgery under their name in the same call. They keep citing it as theirs.
+
+    `shared` -- curl, the CLI, the eval harness, a box with no identity wired
+    up -- owns the shared corpus, which is exactly the behaviour every caller
+    had before owners existed. An *authenticated* caller does not inherit it:
+    on the box, seeding the shared corpus is `sextant-ingest`, run there.
+    """
+    return owner_of_document(document_id) == safe_owner(owner)
+
+
 def describe() -> str:
     """One line at startup saying which of the two worlds this process is in.
 

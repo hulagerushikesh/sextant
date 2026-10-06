@@ -305,6 +305,14 @@ trims *anything* in *any* result carrying a `document_id` the asker may not
 see, rather than naming the tools that leak. `kb_ann_compare` returns passages
 too, and nobody would have remembered it.
 
+> **Wrong, and corrected on 2026-10-06 by [`milestone-21.md`](milestone-21.md)
+> item 1.** `/ann/compare` did not route through the scope at all, and had it
+> done so nothing would have been trimmed: its `passages` is a mapping keyed by
+> chunk id whose values carry no `document_id`, which was the only shape 0.8.4
+> recognised. Deny by default denies only the shapes it recognises. 0.8.5 keys
+> the rule on the *id* — as a value, as a mapping key, as a bare string in a
+> list — and refuses any tool `scope.py` cannot classify.
+
 **The ownership rule is a deny-list, not an allow-list.** A document is
 visible unless it is an upload naming somebody else — so the corpus the
 operator ingested stays everybody's, which is the product. An allow-list would

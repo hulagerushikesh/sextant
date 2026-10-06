@@ -5,6 +5,38 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-06 — an id is an id wherever it appears (0.8.5)
+
+- **Milestone 21 item 1, shipped, ₹0.** Both doors the scope did not reach,
+  and — the part that matters more — the rule that let them exist.
+- **`trim()` recognises an id, not a field.** An id can reach a caller three
+  ways and 0.8.4 knew one of them: as a string value anywhere in an entry (it
+  checked only `document_id`), as a **key** of a mapping (`kb_ann_compare`'s
+  `passages`), and as a **bare string** in a list (`exact`, `missed`). The
+  check is anchored on `upload:<owner>:<stem>`, so prose that mentions an id
+  is not an id — over-trimming would delete content and look exactly like the
+  feature working.
+- **Every `/ann/*`, `/ingest` and `/upload` call crosses `ScopedHost`.** The
+  benchmark route returns only aggregates and is routed anyway: *"nothing to
+  leak yet"* is how `/ann/compare` came to be the one route on the global host.
+  A tool `scope.py` cannot classify is **refused**, and `READ_TOOLS |
+  WRITE_TOOLS` is pinned against the live server's tool list — the only honest
+  way to keep a list, after a docstring claimed `kb_ann_compare` was covered.
+- **Writes are an allow-list where reads are a deny-list.**
+  `identity.writable_by` is not `visible_to`: a document everyone may read is
+  not one everyone may *replace*, because `_store` clears a document's chunks
+  as the first step of writing it. So a write is a delete first, and it is
+  checked before the store is touched. `shared` still owns the unnamespaced
+  corpus — curl, the CLI, the eval harness are unchanged.
+- **One departure from the pre-registered rule**, written up in the milestone:
+  clause 2 said "an unnamespaced id still works for everybody". It does not —
+  an authenticated caller is refused `handbook`, because letting ada overwrite
+  the shared corpus is the same vandalism with a wider blast radius. Nothing
+  real loses: `sextant-ingest` never crosses the host.
+- **16 new tests**, including one that runs a real `ann_compare` over a real
+  three-document store and asserts the *serialised* payload holds nothing of
+  the other owner — after first asserting that it did before trimming.
+
 ## 2026-10-06 — milestone 21 planned: what else assumed there was one person
 
 - **Planned [`milestone-21.md`](milestone-21.md), ₹0 to plan.** Milestone 20
