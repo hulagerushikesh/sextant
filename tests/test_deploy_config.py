@@ -22,6 +22,7 @@ with two users rewrote a request that authenticated as `ada` while carrying
 from __future__ import annotations
 
 import os
+import pathlib
 import stat
 import subprocess
 import sys
@@ -141,6 +142,12 @@ case "$cmd" in
   true)                        exit 0 ;;
   *"X-Sextant-User: forged"*)  echo "${FAKE_FORGED_CODE:-403}" ;;
   *"tar -xzf"*)                cat >/dev/null; echo "   synced 1 files" ;;
+  *"STEM="*)                   cat >/dev/null
+                               sort -u "$FAKE_STATE.corpus" 2>/dev/null \
+                                 | sed 's/^/upload:/;s/$/:sextant-trip-probe/' ;;
+  *"sextant-forget"*)          if [ "${FAKE_FORGET_FAILS:-0}" != 1 ]; then
+                                 : > "$FAKE_STATE.corpus"
+                               fi ;;
   *"python -"*)                cat >/dev/null; echo "     audit ran" ;;
   *"up -d --build"*)           echo "built" ;;
   *" ps --format"*)            printf 'NAME\\tSTATUS\\nagenticrag-api-1\\tUp\\n' ;;
@@ -183,11 +190,13 @@ _CURL_STUB = """#!/usr/bin/env bash
 # same way Caddy would see it, and answers the way a correctly configured gate
 # would -- or, under FAKE_GATE_*, the way a broken one would.
 if [ "${FAKE_GATE_DOWN:-0}" = 1 ]; then echo 000; exit 7; fi
-auth=""; hdrs=""
+auth=""; hdrs=""; URL_PATH="/health"
 while [ $# -gt 0 ]; do
   case "$1" in
     --config) auth=$(sed -n 's/^user = "\\(.*\\)"$/\\1/p' "$2"); shift 2 ;;
     -H)       hdrs="$hdrs|$2"; shift 2 ;;
+    http*)    URL_PATH="/${1#*://*/}"; case "$1" in */health) URL_PATH=/health ;;
+                */stats) URL_PATH=/stats ;; */upload) URL_PATH=/upload ;; esac; shift ;;
     *)        shift ;;
   esac
 done
@@ -202,8 +211,33 @@ if [ -z "$auth" ]; then
   exit 0
 fi
 case "|${FAKE_GATE_USERS:-ada:pw|grace:pw}|" in
-  *"|$auth|"*) echo 200 ;;
-  *)           echo 401 ;;
+  *"|$auth|"*) ;;
+  *)           echo 401; exit 0 ;;
+esac
+
+# Past the gate. `who` is the name Caddy would have set from the credentials --
+# never the X-Sextant-User the client sent, unless FAKE_HONOURS_NAME models a
+# proxy that forwards the client's copy instead of overwriting it.
+who="${auth%%:*}"
+if [ "${FAKE_HONOURS_NAME:-0}" = 1 ]; then
+  case "$hdrs" in *"X-Sextant-User: "*) who="${hdrs##*X-Sextant-User: }"; who="${who%%|*}" ;; esac
+fi
+corpus="$FAKE_STATE.corpus"
+base="${FAKE_BASE_DOCS:-21}"
+
+case "$URL_PATH" in
+  /upload)
+    # FAKE_COLLIDING_IDS models the pre-0.8.2 scheme, where the id was
+    # `upload:<stem>` and the second upload replaced the first.
+    if [ "${FAKE_COLLIDING_IDS:-0}" = 1 ]; then : > "$corpus"; fi
+    echo "$who" >> "$corpus"
+    echo 200 ;;
+  /stats)
+    mine=$(grep -cx "$who" "$corpus" 2>/dev/null)
+    case "$mine" in ""|0) mine=0 ;; *) mine=1 ;; esac
+    printf '{"collection_size":79,"documents":%s,"summaries":21,"persist_dir":"/data/chroma"}\n' \
+      "$((base + mine))" ;;
+  *) echo 200 ;;
 esac
 """
 
@@ -227,6 +261,9 @@ def _run_trip(tmp_path, env_text, args=(), **extra_env):
     state = tmp_path / "vm-state"
     state.write_text("RUNNING\n")
     state.with_suffix(".ip").write_text("10.0.0.1\n")
+    # The box's corpus, as far as the probe scan is concerned: empty until
+    # step 7 uploads into it.
+    pathlib.Path(str(state) + ".corpus").write_text("")
 
     env = {
         **os.environ,
@@ -528,7 +565,7 @@ class TestTheGateIsCheckedFromOutside:
         # The deploy itself succeeded. It is still not a trip that passed.
         code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_GATE_OPEN="1", **self.AUTH)
         assert "no credentials" in out and "got 200, wanted 401" in out
-        assert "gate check(s) failed -- the box is deployed but not proven" in out
+        assert "check(s) failed -- the box is deployed but not proven" in out
         assert code != 0
 
     def test_a_caddy_that_appends_the_proof_header_is_caught(self, tmp_path):
@@ -589,6 +626,98 @@ class TestTheGateIsCheckedFromOutside:
         # 000 is not the code wanted, so it counts like any other failure.
         code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_GATE_DOWN="1", **self.AUTH)
         assert "got 000, wanted" in out
-        assert "gate check(s) failed" in out
+        assert "check(s) failed" in out
         assert "agenticrag is TERMINATED" in out
         assert code != 0
+
+
+class TestTheIsolationIsProvenFromOutside:
+    """Step 7 — milestone 21's pre-registered success criterion, run by the
+    script rather than by hand with the meter on:
+
+        two different basic_auth users each upload a file of the same name,
+        both survive, each sees their own and not the other's, and a
+        client-supplied X-Sextant-User is refused.
+
+    Step 6 proves the gate, and every check in it is a read, so it says nothing
+    about what is behind the gate. This is the only part of the trip that
+    writes: two small text files, removed in the EXIT trap rather than at the
+    end of the step, because the run that most needs the cleanup is the one
+    that died half way through.
+    """
+
+    AUTH = {"SEXTANT_TRIP_AUTH": "ada:pw", "SEXTANT_TRIP_AUTH_2": "grace:pw"}
+
+    def test_a_correct_box_proves_the_whole_criterion(self, tmp_path):
+        code, out = _run_trip(tmp_path, GOOD_ENV, **self.AUTH)
+        for line in (
+            "first user uploads sextant-trip-probe.txt    200",
+            "they see one more                            22",
+            "the second user sees nothing new             21",
+            "naming yourself the other user               22",
+            "second user uploads the same filename        200",
+            "the first user's copy survived               22",
+            "probe documents in the store                 2",
+            "owned by distinct names                      2",
+        ):
+            assert line in out, line
+        assert code == 0
+
+    def test_the_pre_0_8_2_id_scheme_is_caught(self, tmp_path):
+        # `upload:<stem>` was global, so the second upload replaced the first.
+        # That is the defect 0.8.2 fixed and the one this step exists to prove
+        # the box does not have.
+        code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_COLLIDING_IDS="1", **self.AUTH)
+        assert "the first user's copy survived               got 21, wanted 22" in out
+        assert "probe documents in the store                 got 1, wanted 2" in out
+        assert code != 0
+
+    def test_a_proxy_that_forwards_the_clients_name_is_caught(self, tmp_path):
+        # The whole point of the header: if Caddy passes the client's copy
+        # through instead of overwriting it, one person reads another's corpus
+        # by asking.
+        code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_HONOURS_NAME="1", **self.AUTH)
+        assert "naming yourself the other user               got 21, wanted 22" in out
+        assert code != 0
+
+    def test_the_forged_name_is_checked_while_the_two_views_differ(self, tmp_path):
+        # It has to run after the first upload and before the second: afterwards
+        # both users are at the same count, and a check whose two sides agree
+        # cannot fail. The first draft of this step passed against a proxy that
+        # forwarded the name for exactly that reason.
+        _, out = _run_trip(tmp_path, GOOD_ENV, **self.AUTH)
+        order = out.index("naming yourself the other user")
+        assert out.index("first user uploads") < order
+        assert order < out.index("second user uploads the same filename")
+
+    def test_the_probes_are_removed_even_when_the_trip_fails(self, tmp_path):
+        # Cleanup is in the trap, not at the end of the step.
+        code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_COLLIDING_IDS="1", **self.AUTH)
+        assert code != 0
+        assert "removing the probe documents step 7 uploaded" in out
+        assert "the corpus is back to what it was" in out
+
+    def test_probes_left_behind_are_not_a_successful_trip(self, tmp_path):
+        # Two documents left in the production corpus is not something an exit
+        # code of 0 should be able to say happened -- the same rule as the park.
+        code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_FORGET_FAILS="1", **self.AUTH)
+        assert "STILL THERE: upload:ada:sextant-trip-probe" in out
+        assert "probe documents are still in the production corpus" in out
+        assert "remove by hand" in out
+        assert code != 0
+
+    def test_nothing_is_uploaded_without_two_gate_users(self, tmp_path):
+        # One name cannot demonstrate isolation, so the step must not write to
+        # the corpus at all rather than write and prove nothing.
+        code, out = _run_trip(tmp_path, GOOD_ENV, SEXTANT_TRIP_AUTH="ada:pw")
+        assert "needs both gate users exported -- isolation is unproven" in out
+        assert "removing the probe documents" not in out
+        assert code == 0
+
+    def test_the_cleanup_finds_documents_by_scanning_not_by_guessing(self, tmp_path):
+        # The ids are read back off the store rather than rebuilt from the
+        # usernames here, so `safe_owner()` spelling a name differently cannot
+        # leave documents behind that the trip then reports as gone.
+        _, out = _run_trip(tmp_path, GOOD_ENV, **self.AUTH)
+        assert "removing upload:ada:sextant-trip-probe" in out
+        assert "removing upload:grace:sextant-trip-probe" in out

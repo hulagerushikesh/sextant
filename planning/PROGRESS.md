@@ -5,6 +5,42 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-06 — the success criterion is the script's job now (₹0)
+
+- **Milestone 21 item 7, shipped, ₹0 to write.** Item 6 proved the gate; every
+  check in it is a read, so it proved nothing about what is behind the gate —
+  and that half is this milestone's pre-registered success criterion, which was
+  otherwise going to be done by hand on the box with the meter running.
+- **Step 7 runs it.** Both gate users upload a file of the same name through
+  the public URL; each must see their own and not the other's; a
+  client-supplied `X-Sextant-User` must change nothing. Then the store is read
+  directly — two probe documents, two distinct owners — because `/stats`
+  reports what the asker can *see* and that is not the same question as what is
+  actually there.
+- **It is the only part of the trip that writes**, and only with both
+  credentials exported. ≈$0.006 of summaries when a model key is configured.
+- **Two defects of my own, found by running it rather than reading it.** The
+  forged-name check was after both uploads, where both counts are the same
+  number and the check's two sides agree whichever identity the request
+  resolved as — it passed against a simulated proxy that forwarded the client's
+  name, the exact failure it exists for. It now runs in the one window where
+  the views differ, and the test pins its *position*, not just its outcome.
+- **The second is item 5's defect, in code written the day after item 5.**
+  `forget_probes || echo "..."` printed a loud warning and returned 0, so a
+  trip that left two documents in the production corpus exited successfully. A
+  result read and not compared. It takes the 0 away now, like the park.
+- **The cleanup is in the EXIT trap**, before the box stops, not at the end of
+  step 7 — the run that most needs it is the one that died half way. It finds
+  the documents by scanning the store for the probe filename rather than
+  rebuilding `upload:<owner>:<stem>` from the usernames, so a name spelled
+  differently by `safe_owner()` cannot leave documents the trip reports as gone.
+- **All 8 new tests fail against the previous script.** Four simulated boxes run
+  end to end offline: correct, pre-0.8.2 ids, a proxy that forwards the name,
+  and a `sextant-forget` that does not take.
+- With this the whole of item 3's criterion is something the script decides.
+  What is left for a person is the key and the second gate user.
+- 579 passed, mypy clean (62 files), ruff clean, frontend builds. No VM.
+
 ## 2026-10-06 — the trip had never touched the gate (₹0)
 
 - **Milestone 21 item 6, shipped, ₹0.** Found by reading step 5 after item 5.

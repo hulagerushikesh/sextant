@@ -541,3 +541,77 @@ discipline item 5 just installed — so it is its own item rather than something
 bolted onto this one. Until then that half of the criterion is done by hand
 with the meter running, which is exactly the shape this milestone keeps
 finding.
+
+---
+
+## Item 7 — the criterion, run by the script (₹0 to write)
+
+Item 6 proved the gate. Every check in it is a read, so it proved nothing about
+what is behind the gate — and the half it left out is this milestone's
+pre-registered success criterion, which was going to be done by hand on the box
+with the meter running:
+
+> two different `basic_auth` users each upload a file of the same name and both
+> survive; each sees their own and not the other's; and a client-supplied
+> `X-Sextant-User` is refused.
+
+Step 7 runs it. It is the **only part of the trip that writes**: two small text
+files through the public URL, one per gate user, same filename. It only runs
+when both credentials are exported, which is already a deliberate act.
+
+| Check | Want |
+| --- | --- |
+| first user uploads `sextant-trip-probe.txt` | 200 |
+| they see one more document | `a0 + 1` |
+| the second user sees nothing new | `b0` |
+| **naming yourself the other user** | **still `a0 + 1`** |
+| second user uploads the same filename | 200 |
+| they see one more | `b0 + 1` |
+| **the first user's copy survived** | **still `a0 + 1`** |
+| probe documents in the store | 2 |
+| owned by distinct names | 2 |
+
+The last two are read straight off chroma rather than through `/stats`, because
+`/stats` reports what the asker can *see* and those two report what is actually
+*there*. Both matter and they are not the same question.
+
+### Two defects of my own, found by running it
+
+**The forged-name check was in the wrong place.** I had it after both uploads.
+At that point both users are at the same count, so the check's two sides agree
+no matter which identity the request resolved as — it passed against a simulated
+proxy that forwarded the client's name, which is the exact failure it exists
+for. It now runs in the one window where the two views differ: after the first
+upload and before the second. Pinned by position, not just by outcome
+(`test_the_forged_name_is_checked_while_the_two_views_differ`).
+
+**The cleanup failure was swallowed.** `forget_probes || echo "..."` printed a
+loud warning and returned 0, so a trip that left two documents in the production
+corpus exited successfully. That is item 5's defect, in code written the day
+after item 5 — a result read and not compared. It now takes the 0 away, the
+same way the park does.
+
+### Why the cleanup is in the trap
+
+Not at the end of step 7: the run that most needs the cleanup is the one that
+died half way through it. It happens in `park()`, before the box is stopped, and
+it reports what it removed and then re-reads to confirm nothing is left.
+
+The documents are found by **scanning the store for the probe filename**, not by
+rebuilding `upload:<owner>:<stem>` from the usernames here — so `safe_owner()`
+spelling a name differently cannot leave documents behind that the trip then
+reports as gone.
+
+### Cost
+
+₹0 to write and to test. When it runs: two uploads, each generating a summary
+when a model key is configured, ≈$0.006 total. Everything else in the step is a
+`GET /stats` or a metadata read.
+
+**All 8 new tests fail against the previous script.** Four simulated boxes are
+exercised end to end offline: a correct one, one on the pre-0.8.2 id scheme
+(the second upload replaces the first), one whose proxy forwards the client's
+name, and one where `sextant-forget` does not take.
+
+With this, the whole of item 3's success criterion is something the script
+decides. What is left for a person is creating the key and the second gate user.
