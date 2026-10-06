@@ -5,6 +5,38 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-06 — every route is now on one side of the boundary (0.8.7)
+
+- **Milestone 21 item 4, shipped, ₹0.** Unplanned. It came from asking, while
+  item 3 sat blocked on a key, whether there were more doors like the two
+  0.8.5 closed.
+- **There were not.** Every route that reaches the corpus hands the host to
+  `scoped()`, `/query` included — the agent is handed a `ScopedHost` — and
+  `SourceRegistry.restore()` sets `content=""` rather than resolving a
+  client-supplied key against the store, so replaying prior sources cannot
+  pull another owner's text. A result worth recording rather than leaving as
+  silence.
+- **What it found is that nothing stopped the next one.** The tool list was
+  pinned; the route list was not. All three defects this milestone fixed —
+  `/ann/compare` holding an unscoped host, `/ingest` writing without asking
+  whose document it was, `/ann/*` with no rate limit — were *routes*, and each
+  was caught only because somebody went looking.
+- **The route table is now read off the live app** and every path must be
+  declared. A corpus route must call `scoped(`, must never contain
+  `host.call(`, and must be rate limited; a route declared harmless must call
+  no tool; a handler whose source cannot be read counts as unclassified and
+  fails, the same fail-closed rule `scope.py` applies to a tool.
+- **Each of the five pins was verified by planting the defect it is for** — an
+  undeclared `/leak` route calling the process-global host — and watching it
+  fail. A pin that cannot fail is a comment.
+- **One real finding, mine again:** `/stats` was the last corpus route with no
+  rate limit. Defensible when it was a cheap count; 0.8.4 scoped it by
+  recomputing from a full listing, which made it walk the corpus on every
+  call, and the limit was never revisited. The same defect as `/ann/*`,
+  introduced by the fix for something else. Now limited — the UI calls it once
+  a page load and never polls.
+- 555 passed, mypy clean, ruff clean, frontend builds. No VM was started.
+
 ## 2026-10-06 — the trip's preconditions are the script's job now (₹0)
 
 - **Milestone 21 item 3 preflight, shipped, ₹0.** Item 3 itself is blocked on
