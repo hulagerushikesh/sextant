@@ -5,6 +5,40 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-06 — the trip's preconditions are the script's job now (₹0)
+
+- **Milestone 21 item 3 preflight, shipped, ₹0.** Item 3 itself is blocked on
+  a key only the owner can create. Its preconditions were prose in three
+  documents, so they moved into [`../deploy/trip.sh`](../deploy/trip.sh).
+- **New hard stop:** an empty or missing `SEXTANT_PROXY_SECRET`. Caddy has no
+  conditionals — it forwards `X-Sextant-User` on every proxied request whether
+  or not the app can verify it — so this is not a degraded mode, it is *every*
+  request refused with a 403, discovered after the build. The remediation line
+  it prints generates the value with `openssl` **on the box**, so the secret
+  never crosses this machine.
+- **Reported, not enforced:** filled `basic_auth` slots, model key present,
+  per-owner share set. Each changes what the trip can *prove*, not whether it
+  runs. No value is ever printed.
+- **After the build:** a forged `X-Sextant-User` sent straight at the api
+  container must be refused — going direct skips Caddy, which is exactly the
+  forged case — and the store's document ids are listed so a pre-0.8.2
+  `upload:<stem>` shows up by name. The audit reads chroma metadata only: no
+  embedder, no model, nothing to pay for.
+- **19 new tests, and the script now runs start-to-park offline.** A fake `ssh`
+  and `gcloud` on `PATH` let the real greps run against a fixture `.env`; the
+  id audit is extracted from the heredoc and run against a real store, which
+  pins that the two stay in step. A script that only ever executes with the
+  meter on was never once executed before being relied on.
+- **Three defects the dry run found**, none of which a reading had: two
+  stopped the verify step outright, and the `.env` names listing used
+  `[A-Z_]*`, so `BASIC_AUTH_USER_2` and `_3` — the users this trip exists to
+  add — were silently never shown.
+- **Corrections:** item 1 added **24** tests, not 16 (its own breakdown summed
+  to 22); item 2 added **19**, not 21. `pyproject.toml` still claimed the
+  `AGENTICRAG_` prefix "still stands" and that the box's `.env` used those
+  names; untrue since 0.8.1 and 2026-09-28.
+- 550 passed, mypy clean, ruff clean, frontend builds. No VM was started.
+
 ## 2026-10-06 — two ceilings, and only one of them is the wallet (0.8.6)
 
 - **Milestone 21 item 2, shipped, ₹0.** The design question the plan said to

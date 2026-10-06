@@ -92,7 +92,10 @@ echo "   up"
 
 if [ "$DEPLOY" = 1 ]; then
   say "2 - the box's .env, names only (values are never printed)"
-  ssh "$REMOTE" "cd $APP_DIR && sed -n 's/^\([A-Z_]*\)=.*/  \1/p' .env"
+  # [A-Z0-9_] and not [A-Z_]: the second and third gate users are spelled
+  # BASIC_AUTH_USER_2 / _3, and a class without digits silently dropped exactly
+  # the variables this trip exists to add.
+  ssh "$REMOTE" "cd $APP_DIR && sed -n 's/^\([A-Z0-9_]*\)=.*/  \1/p' .env"
   # 0.8.1 removed the AGENTICRAG_ fallback. A container built from this tree
   # against a pre-rename .env runs with no budget cap and no CORS allowlist, so
   # this check is a hard stop, not a warning.
