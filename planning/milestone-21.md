@@ -107,6 +107,91 @@ that is what it is for and what the CLI depends on.
 Two of three is not a pass. The first two are the doors; the third is the
 reason there were doors.
 
+### Shipped — 2026-10-06, 0.8.5, ₹0
+
+All three clauses, and one deliberate departure from the second.
+
+**The rule, not the doors.** `trim()` no longer looks for a field. It
+recognises an **id**, wherever an id can reach a caller, and there turned out
+to be three places:
+
+| Shape | Where it occurs | What 0.8.4 did |
+| --- | --- | --- |
+| a string value *anywhere* in an entry | `document_id`, `id`, `source`, a field invented next year | only `document_id` |
+| a **key** of a mapping | `passages` | nothing |
+| a **bare string** in a list | `exact`, `missed` | nothing |
+
+The check is anchored: `owner_of_document` reports an owner only for a string
+that *starts* `upload:<owner>:<stem>`, so a sentence that happens to mention an
+id is untouched and only something that genuinely is one is dropped. That
+matters in the other direction — over-trimming silently deletes content and
+looks exactly like the feature working. `test_prose_that_merely_mentions_an_id_
+is_not_an_id` pins it.
+
+**The doors.** `/ann/compare` and `/ann/benchmark` now go through
+`ScopedHost`. The benchmark returns only aggregates today and is routed anyway,
+because *"nothing to leak yet"* is precisely how `/ann/compare` came to be the
+one route calling the global host. `/ingest` and `/upload` go through it too,
+so every read and every write crosses one object.
+
+**Writes are an allow-list where reads are a deny-list.** `identity.
+writable_by` is not `visible_to`, and the asymmetry is the whole content of the
+fix: a document everyone may read is not a document everyone may *replace*,
+because `_store` clears a document's chunks as the first step of writing it. So
+a write is a delete first, and it is checked **before** the store is touched —
+a guard on the way back out has already destroyed what it was protecting.
+
+**The departure.** Clause 2 pre-registered "an unnamespaced id still works for
+everybody". It does not. An unnamespaced id — `handbook`, the CLI-ingested
+corpus — is writable by `shared` only: curl, the eval harness, a box with no
+identity wired up, exactly as before owners existed. An *authenticated* caller
+is refused it. Letting ada overwrite `handbook` is the same vandalism as
+letting her overwrite `upload:grace:notes`, with a worse blast radius: the
+shared corpus is everybody's. The clause as written would have closed one door
+and left the wider one open, and writing it down beforehand is not a reason to
+ship it. Nothing real loses: `sextant-ingest` constructs `KnowledgeBase`
+directly and never crosses the host (`ingest_cli.py:81`), the frontend never
+calls `/ingest`, and the 403 names the prefix the caller may use.
+
+**A tool `scope.py` cannot classify is refused.** `READ_TOOLS | WRITE_TOOLS` is
+pinned against the live server's tool list, so a tool added later fails a test
+rather than defaulting to either behaviour. That is the only honest way to keep
+a list — the alternative is the docstring that said `kb_ann_compare` was
+covered.
+
+**Left whole on purpose, and written down:** the Lab's measurements *of the
+indexes* — `recall`, `latency_ms`, `vectors`, `bytes`. Recall is an index's
+property against exact search over the whole store; scoring each index against
+a different subset per visitor would measure nothing, and the view exists to
+say which index to build over the corpus that exists.
+
+**Verified live**, against a real server on a scratch store with the proxy
+secret set, by the same method that found the defects -- not by the tests
+agreeing with themselves:
+
+```
+ada uploads notes.md, grace uploads secret.md
+
+/ann/compare as ada    exact:    ['upload:ada:sx_notes#0']
+                       passages: ['upload:ada:sx_notes#0']      no 'grace' anywhere
+/ann/compare as grace  passages: ['upload:grace:sx_secret#0']
+
+grace -> /ingest {"id": "upload:ada:sx_notes", …}
+  HTTP 403  'upload:ada:sx_notes' is not grace's to write: re-using an id
+            replaces that document. Ids grace may write start with 'upload:grace:'.
+grace -> /ingest {"id": "handbook", …}          HTTP 403
+/stats as ada          documents: 1             ada's document intact
+```
+
+₹0: neither path makes a model call.
+
+**Verification.** 16 new tests (8 in `TestTheShapesAnIdTakes`, 9 in
+`TestWrites`, 5 at the HTTP edge in `TestIngest`/`TestIndexLab`), plus
+`test_the_index_lab_shows_one_owner_nothing_of_the_others`, which runs a real
+`ann_compare` over a real three-document store and asserts the *serialised*
+payload — not three fields somebody thought of — contains nothing of the other
+owner, after first asserting it did before trimming.
+
 ## 2 · The limiter and the cap still count one person — ₹0
 
 Deferred by milestone 20 by name. Both are now one-line keys away from being

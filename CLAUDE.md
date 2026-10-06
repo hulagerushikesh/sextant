@@ -84,8 +84,8 @@ because each one was learned the expensive way.
   people behind the shared gate silently deleting each other's chunks, and it
   hides nothing from anyone's search. That header stays untrusted by
   construction — it is the fallback when nothing better is available.
-  `/ingest` is deliberately not
-  namespaced: its caller states the id outright.
+  `/ingest` is still not *namespaced* — its caller states the id outright —
+  but since 0.8.5 the id it states has to be one it owns (see below).
 - Since 0.8.3 there is a second, *trusted* name: `X-Sextant-User`, set by
   Caddy from `{http.auth.user.id}` and believed only when
   `X-Sextant-Proxy-Auth` matches `SEXTANT_PROXY_SECRET`. A name without the
@@ -109,6 +109,27 @@ because each one was learned the expensive way.
   its discovered schema, and **the corpus must never be a tool argument** —
   `tests/test_scope.py::TestTheInvariant` pins that. `collection_size` on a
   *search* result is knowingly left whole-store; `agent.py` reads it.
+- Since 0.8.5 the scope recognises an **id**, not a field: as a string value
+  anywhere in an entry, as a *key* of a mapping (`kb_ann_compare`'s `passages`),
+  and as a bare string in a list (`exact`, `missed`). 0.8.4 knew only the first,
+  and only when the field was called `document_id` — so `/ann/compare` leaked
+  every tenant's titles and opening 200 characters, and routing it through
+  `ScopedHost` alone would not have stopped it. The check is anchored on
+  `upload:<owner>:<stem>`, so prose mentioning an id is not an id; over-trimming
+  would delete content and look like the feature working. Every `/ann/*`,
+  `/ingest` and `/upload` call now crosses `ScopedHost`, and a tool it cannot
+  classify is **refused** — `READ_TOOLS | WRITE_TOOLS` is pinned against the
+  live server in `tests/test_scope.py`.
+- **Writes are an allow-list where reads are a deny-list** (`identity.writable_by`
+  vs `visible_to`), since 0.8.5. Re-using an id replaces that document, so a
+  write is a delete first: before this, any gated user could `/ingest`
+  `upload:<someone else>:<stem>` and the victim went on citing the forged text
+  as their own file. A caller may write only its own namespace, and the check
+  happens *before* the store is touched. `shared` — curl, the eval harness, a
+  box with no identity — still owns the unnamespaced corpus, so nothing that
+  worked before changed; an *authenticated* caller does not inherit it, and
+  seeding the shared corpus stays `sextant-ingest`, which constructs
+  `KnowledgeBase` directly on the box and never crosses the host.
 - Every frontend request carries `X-Sextant-Client` via the `sent()` helper in
   `lib/api.ts`, not just `/upload`. Leave it off one call and that call is
   answered as the anonymous `shared` caller — which, since 0.8.4, means the

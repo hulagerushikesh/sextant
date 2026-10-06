@@ -1,20 +1,35 @@
-"""Trimming a tool result to what the asker may see.
+"""Trimming a tool result to what the asker may see, and refusing a write
+that names a document the asker does not own.
 
 Milestone 20 item 4. Item 2 chose one collection filtered, and the thing that
 makes that real is not the retrieval filter -- it is that `kb_list` hands every
 tenant's titles, overviews and opening lines to the model in its prompt.
+
+Milestone 21 item 1 closes the two doors that item 4 left open, both of them
+defects in item 4's own week: `/ann/compare` never routed through the scope,
+and would not have been trimmed if it had, because its ids arrive as mapping
+keys and bare strings rather than as a `document_id` field. The class
+`TestTheShapesAnIdTakes` is the general rule that replaces the specific fix --
+without it this is one patched endpoint and the next shape walks through.
 """
 
 from __future__ import annotations
 
 import inspect
+import json
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from mcp_server.identity import DEFAULT_OWNER
-from mcp_server.scope import ScopedHost, trim
+from mcp_server.scope import (
+    READ_TOOLS,
+    WRITE_TOOLS,
+    ForbiddenWrite,
+    ScopedHost,
+    trim,
+)
 from mcp_server.uploads import to_document
 from tools.vector_db.vector_search import KnowledgeBase
 
@@ -78,6 +93,184 @@ class TestTrim:
         before = len(SEARCH["results"])
         trim(SEARCH, "ada")
         assert len(SEARCH["results"]) == before
+
+
+# What `_ann_compare_sync` actually returns, taken from a live run against a
+# three-document store rather than imagined: ids as bare strings in `exact`,
+# as an `id` field in each hit, and as the *keys* of `passages`, whose values
+# carry the document's title and its opening 200 characters and no id field at
+# all. None of these is a list entry with a `document_id`, which is every shape
+# 0.8.4 knew about.
+COMPARE: dict[str, Any] = {
+    "k": 5,
+    "exact": ["upload:ada:notes#0", "handbook#1", "upload:grace:secret#0"],
+    "results": {
+        "hnsw": {
+            "hits": [
+                {"id": "upload:ada:notes#0", "score": 0.52},
+                {"id": "handbook#1", "score": 0.47},
+                {"id": "upload:grace:secret#0", "score": -0.10},
+            ],
+            "missed": ["upload:grace:secret#0"],
+            "recall": 0.75,
+            "stats": {"name": "hnsw", "vectors": 4, "bytes": 6192},
+        }
+    },
+    "passages": {
+        "upload:ada:notes#0": {"title": "Notes", "excerpt": "# Notes\n\nada's own."},
+        "handbook#1": {"title": "Handbook", "excerpt": "The handbook."},
+        "upload:grace:secret#0": {
+            "title": "Grace Secret",
+            "excerpt": "# Grace Secret\n\nConfidential salary review notes.",
+        },
+    },
+}
+
+
+class TestTheShapesAnIdTakes:
+    """An id is an id wherever it appears: a field, a key, or a bare string.
+
+    The rule, not the endpoint. `test_nothing_of_the_other_owner_survives_any_of
+    _them` is the one that fails if a fourth shape is ever added.
+    """
+
+    def test_a_bare_id_in_a_list_is_dropped(self):
+        # `exact` is a plain list of chunk ids. The id itself is the leak: it
+        # carries the owner's name and the stem of the file they uploaded.
+        assert trim(COMPARE, "ada")["exact"] == ["upload:ada:notes#0", "handbook#1"]
+
+    def test_an_entry_identified_by_a_field_called_something_else_is_dropped(self):
+        # `id`, not `document_id`. A rule keyed on the field name misses this.
+        kept = trim(COMPARE, "ada")["results"]["hnsw"]["hits"]
+        assert [hit["id"] for hit in kept] == ["upload:ada:notes#0", "handbook#1"]
+
+    def test_a_mapping_keyed_by_id_loses_the_key_and_its_contents(self):
+        passages = trim(COMPARE, "ada")["passages"]
+        assert set(passages) == {"upload:ada:notes#0", "handbook#1"}
+
+    def test_nothing_of_the_other_owner_survives_any_of_them(self):
+        # The whole payload, serialised. Not "the three shapes I thought of".
+        assert "grace" not in json.dumps(trim(COMPARE, "ada"))
+
+    def test_the_other_owner_keeps_their_own_and_loses_ada(self):
+        trimmed = trim(COMPARE, "grace")
+        assert "ada" not in json.dumps(trimmed)
+        assert "upload:grace:secret#0" in trimmed["passages"]
+
+    def test_what_the_index_measures_about_itself_is_left_alone(self):
+        # Recall is a property of the index against the whole corpus. Scoring
+        # each index against a different subset per visitor measures nothing.
+        hnsw = trim(COMPARE, "ada")["results"]["hnsw"]
+        assert hnsw["recall"] == 0.75
+        assert hnsw["stats"]["vectors"] == 4
+
+    def test_prose_that_merely_mentions_an_id_is_not_an_id(self):
+        # The parse is anchored at the start of the string, so a sentence does
+        # not become a document. Over-trimming would quietly delete content
+        # and look exactly like the feature working.
+        payload = {"notes": [{"text": "see upload:grace:secret for the figures"}]}
+        assert trim(payload, "ada") == payload
+
+    def test_a_pre_0_8_2_id_still_belongs_to_everybody(self):
+        # `upload:<stem>` with no owner segment: the scheme before namespacing.
+        payload = {"ids": ["upload:notes", "upload:grace:notes"]}
+        assert trim(payload, "ada")["ids"] == ["upload:notes"]
+
+
+class TestWrites:
+    """Re-using an id replaces that document, so a write is a delete first.
+
+    Door two of milestone 21 item 1, reproduced before it was fixed: `ada`
+    uploads `notes.md`, `grace` posts `/ingest` with `id: upload:ada:notes`,
+    and ada's document now holds grace's text under ada's name, in ada's own
+    scoped listing, cited back to her as hers.
+    """
+
+    async def test_one_owner_cannot_write_over_anothers_document(self):
+        host = ScopedHost(FakeInner({"kb_ingest": {"success": True}}), "grace")
+        with pytest.raises(ForbiddenWrite):
+            await host.call(
+                "kb_ingest", {"documents": [{"id": "upload:ada:notes", "content": "x"}]}
+            )
+
+    async def test_the_store_is_never_reached(self):
+        # Checked before the call, not after: `_store` clears a document's
+        # chunks as the first step of writing it, so a guard on the way out
+        # has already deleted what it was protecting.
+        inner = FakeInner({"kb_ingest": {"success": True}})
+        with pytest.raises(ForbiddenWrite):
+            await ScopedHost(inner, "grace").call(
+                "kb_ingest", {"documents": [{"id": "upload:ada:notes", "content": "x"}]}
+            )
+        assert inner.calls == []
+
+    async def test_a_named_user_cannot_write_the_shared_corpus_either(self):
+        # Readable by everyone is not writable by everyone. Seeding the shared
+        # corpus is `sextant-ingest`, run on the box, with no identity.
+        host = ScopedHost(FakeInner({"kb_ingest": {"success": True}}), "ada")
+        with pytest.raises(ForbiddenWrite):
+            await host.call("kb_ingest", {"documents": [{"id": "handbook", "content": "x"}]})
+
+    async def test_an_id_left_off_is_judged_as_the_one_it_would_get(self):
+        # `doc_0`, which is a shared id. Waving it through for being absent
+        # would be the same hole with one field deleted.
+        host = ScopedHost(FakeInner({"kb_ingest": {"success": True}}), "ada")
+        with pytest.raises(ForbiddenWrite):
+            await host.call("kb_ingest", {"documents": [{"content": "x"}]})
+
+    async def test_writing_in_your_own_namespace_is_what_upload_does(self):
+        host = ScopedHost(FakeInner({"kb_ingest": {"success": True}}), "ada")
+        result = await host.call(
+            "kb_ingest", {"documents": [{"id": "upload:ada:notes", "content": "x"}]}
+        )
+        assert result == {"success": True}
+
+    async def test_a_box_with_no_identity_behaves_exactly_as_before(self):
+        # curl, the CLI, the eval harness: `shared` owns the shared corpus, so
+        # nothing that worked before 0.8.5 stopped working.
+        host = ScopedHost(FakeInner({"kb_ingest": {"success": True}}), DEFAULT_OWNER)
+        assert await host.call("kb_ingest", {"documents": [{"id": "handbook", "content": "x"}]})
+
+    async def test_a_batch_is_refused_whole(self):
+        # One bad id in ten does not get nine documents written and then fail.
+        inner = FakeInner({"kb_ingest": {"success": True}})
+        with pytest.raises(ForbiddenWrite):
+            await ScopedHost(inner, "ada").call(
+                "kb_ingest",
+                {
+                    "documents": [
+                        {"id": "upload:ada:one", "content": "mine"},
+                        {"id": "upload:grace:two", "content": "hers"},
+                    ]
+                },
+            )
+        assert inner.calls == []
+
+    async def test_a_tool_this_module_cannot_classify_is_refused(self):
+        # Fail closed. The alternative is that a write tool added next year is
+        # unguarded by default and nothing says so.
+        host = ScopedHost(FakeInner({"kb_delete_everything": {}}), "ada")
+        with pytest.raises(ForbiddenWrite):
+            await host.call("kb_delete_everything", {})
+
+    async def test_the_agent_hears_a_refusal_as_a_tool_error_not_a_crash(self):
+        # Only READABLE_TOOLS are ever declared, so this means the model named
+        # something it was not offered. Telling it so lets the turn finish; a
+        # raised exception would 500 a question somebody asked in good faith.
+        from mcp_server.agent import _execute
+        from mcp_server.sources import SourceRegistry
+
+        host = ScopedHost(FakeInner({}), "ada")
+        text, is_error, _ = await _execute("kb_wipe", {}, host, SourceRegistry())
+        assert is_error and "kb_wipe" in text
+
+    def test_every_tool_the_server_exposes_is_classified(self):
+        # The pin that makes an allow-list honest: adding a tool fails here
+        # until somebody decides which half of the boundary it is on.
+        from tools.vector_db import server
+
+        exposed = {name for name in dir(server) if name.startswith("kb_")}
+        assert exposed == READ_TOOLS | WRITE_TOOLS
 
 
 class FakeInner:
@@ -187,3 +380,26 @@ class TestAgainstARealStore:
         for owner, theirs in (("ada", "upload:ada:notes"), ("grace", "upload:grace:notes")):
             visible = {hit["document_id"] for hit in trim(found, owner)["results"]}
             assert visible == {theirs, "handbook"}
+
+    async def test_the_index_lab_shows_one_owner_nothing_of_the_others(self, kb):
+        # The payload trimmed here is one a real `ann_compare` built over real
+        # vectors, not a fixture agreeing with the fixture above it. This is
+        # the test that would have failed on 2026-10-06, when asking as `ada`
+        # returned grace's title and the opening line of her salary review.
+        await kb.add_documents(
+            [
+                to_document(
+                    "notes.md", b"# Notes\n\nA Kalman filter estimates state.\n", owner="ada"
+                ),
+                to_document(
+                    "secret.md",
+                    b"# Grace Secret\n\nConfidential salary review notes.\n",
+                    owner="grace",
+                ),
+                {"id": "handbook", "content": "The Kalman filter, as the handbook has it."},
+            ]
+        )
+        whole = await kb.ann_compare("Kalman filter", k=5)
+        assert "grace" in json.dumps(whole), "nothing to scope -- the fixture is wrong"
+        assert "grace" not in json.dumps(trim(whole, "ada"))
+        assert "upload:ada" in json.dumps(trim(whole, "ada"))
