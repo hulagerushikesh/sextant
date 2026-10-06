@@ -45,6 +45,7 @@ from typing import Any
 from mcp_server.conversation import replay
 from mcp_server.mcp_host import ToolHost, ToolUnavailable
 from mcp_server.pricing import estimate_cost
+from mcp_server.scope import ForbiddenWrite
 from mcp_server.sources import Source, SourceRegistry
 from tools import settings
 
@@ -362,11 +363,15 @@ async def _execute(name: str, arguments: dict[str, Any], host: ToolHost, registr
 
     A tool failure is reported back to the model as a tool result rather than
     raised: it can try a different query, and a knowledge base that is down
-    should not take the whole answer with it.
+    should not take the whole answer with it. A refusal from the scope is the
+    same kind of thing -- only READABLE_TOOLS are ever declared, so reaching
+    this means the model named something it was not offered, and the honest
+    answer is to tell it so and let the turn continue rather than 500 the
+    request.
     """
     try:
         result = await host.call(name, arguments)
-    except ToolUnavailable as e:
+    except (ToolUnavailable, ForbiddenWrite) as e:
         return str(e), True, {"status": "error", "error": str(e)}
 
     summary = _summarise(name, result, is_error=False)
