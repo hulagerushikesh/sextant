@@ -362,3 +362,55 @@ as a configuration file nobody exercised.
   The caveat is recorded above instead.
 - **Public signup, OAuth, password reset, per-user billing.** Out of scope by
   milestone 20 item 3's argument, unchanged.
+
+---
+
+## Item 4 — the pin that would have caught all three (0.8.7)
+
+Not planned. It came out of asking a question nobody had asked while item 3
+sat blocked: **are there more doors?**
+
+There were not. Every route that reaches the corpus hands the host to
+`scoped()`, `/query` included — the agent is given a `ScopedHost`, and
+`SourceRegistry.restore()` sets `content=""` rather than looking a
+client-supplied key up in the store, so replaying prior sources cannot pull
+another owner's text. That half of the audit found nothing, which is worth
+writing down as a result rather than silence.
+
+What it found instead is that **nothing stops the next one.**
+`test_every_tool_the_server_exposes_is_classified` makes adding a *tool* fail
+until somebody decides which half of the boundary it is on. The route list had
+no such pin — and all three defects this milestone fixed were routes:
+
+| Defect | Shape |
+| --- | --- |
+| `/ann/compare` (item 1) | had a host; it was not the scoped one |
+| `/ingest` (item 1) | wrote without asking whose document it was |
+| `/ann/*` (item 2) | the heaviest call on the box, with no rate limit |
+
+Every one was found because somebody went looking. So the route table is now
+read off the live app and each path must be declared as reaching the corpus or
+not. A corpus route must call `scoped(`, must never contain `host.call(`, and
+must be rate limited. A route declared harmless must call no tool. A handler
+whose source cannot be read counts as unclassified and fails — the same
+fail-closed rule `scope.py` applies to a tool it does not recognise.
+
+**Each pin was verified by planting the defect it is for** — an undeclared
+`/leak` route calling the process-global host — and watching all five fail.
+A pin that cannot fail is a comment.
+
+**One real finding, and it is mine again.** `/stats` was the last corpus route
+with no rate limit. That was defensible when it was a cheap count; 0.8.4
+scoped it by recomputing from a full listing, which made it walk the corpus
+on every call, and the limit was never revisited. Same defect as `/ann/*`,
+introduced by the fix for something else. Now limited; the UI calls it once a
+page load and never polls, so nothing legitimate is near the limit.
+
+**Departure worth stating:** the classification reads handler *source*, which
+is crude and would be the wrong tool for a subtle question. The question is
+not subtle — somebody writes an endpoint and reaches for `host` instead of
+`scoped(host, ...)` — and a crude check that runs in the gate beats a precise
+one that nobody runs.
+
+₹0; no model call on either path.
+

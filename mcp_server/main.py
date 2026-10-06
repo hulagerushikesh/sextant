@@ -422,7 +422,13 @@ async def collection_stats(http_request: Request):
     Counted as the asker sees it. Telling someone the store holds 1,660 chunks
     when they can search 52 of them is not a leak so much as a wrong answer,
     and it is this number the UI prints under "documents".
+
+    Rate limited since 0.8.7, for the reason `/ann/*` was in 0.8.6: scoping it
+    made it expensive. The count is recomputed from a full scoped listing on
+    every call, so this walks the corpus -- it is no longer the cheap read its
+    lack of a limit assumed. The UI calls it once a page load and never polls.
     """
+    _rate_limit(http_request)
     try:
         return await scoped(host, http_request.state.owner).call("kb_stats", {})
     except ToolUnavailable as e:
