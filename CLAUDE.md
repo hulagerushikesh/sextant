@@ -82,11 +82,21 @@ because each one was learned the expensive way.
   nothing sends one — so curl, the eval harness and the CLI all land in one
   namespace, as before. **This is namespacing, not isolation**: it stops two
   people behind the shared gate silently deleting each other's chunks, and it
-  hides nothing from anyone's search. The header is untrusted by construction;
-  a trusted source is milestone 20 item 3. `mcp_server/identity.py` is the
-  seam — do not start reading a proxy-set header there until the proxy sets
-  it, or any caller can claim any name. `/ingest` is deliberately not
+  hides nothing from anyone's search. That header stays untrusted by
+  construction — it is the fallback when nothing better is available.
+  `/ingest` is deliberately not
   namespaced: its caller states the id outright.
+- Since 0.8.3 there is a second, *trusted* name: `X-Sextant-User`, set by
+  Caddy from `{http.auth.user.id}` and believed only when
+  `X-Sextant-Proxy-Auth` matches `SEXTANT_PROXY_SECRET`. A name without the
+  matching secret is a **403**, never a quiet fallback. **`SEXTANT_PROXY_SECRET`
+  must be in the box's `.env` before this tree is built on it** — Caddy has no
+  conditionals, so it forwards the name regardless and every request is refused
+  until the secret exists. Same shape of prerequisite as the 0.8.1 rename, and
+  the 403 names the variable. `deploy/Caddyfile` has three `basic_auth` slots;
+  empty ones vanish before parsing (`caddy validate`), a user without its hash
+  stops Caddy. `tests/test_deploy_config.py` pins the header names on both
+  sides, because renaming one in Python breaks nothing a Python test can see.
 - faiss + torch OpenMP: `server.py` must import faiss before anything that
   pulls torch, or the KB subprocess segfaults (exit 139).
 - PDFs go through PyMuPDF (`loaders._page_lines`), not pypdf: pypdf guesses

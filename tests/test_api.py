@@ -13,9 +13,17 @@ import pytest
 from fastapi.testclient import TestClient
 
 from mcp_server import main
-from mcp_server.identity import CLIENT_HEADER, DEFAULT_OWNER
+from mcp_server.identity import (
+    CLIENT_HEADER,
+    DEFAULT_OWNER,
+    PROXY_HEADER,
+    PROXY_SECRET,
+    USER_HEADER,
+)
 from mcp_server.mcp_host import ToolUnavailable
+from mcp_server.observability import REQUEST_ID_HEADER
 from tests.fakes import FakeHost
+from tools import settings
 
 
 def sse_events(body: str) -> list[tuple[str, dict]]:
@@ -429,6 +437,65 @@ class TestUpload:
         }
         client.post("/upload", files={"files": ("notes.md", b"# A\n\ntext\n", "text/markdown")})
         assert host.calls[-1][1]["documents"][0]["id"] == f"upload:{DEFAULT_OWNER}:notes"
+
+
+class TestIdentity:
+    """Who the proxy says you are, and what happens when you say it yourself.
+
+    Milestone 20 item 3's pre-registered rule: this lands only with a test that
+    a client-supplied identity header is refused.
+    """
+
+    def test_a_name_the_proxy_did_not_set_is_refused(self, client, host, monkeypatch):
+        monkeypatch.delenv(settings.env_name(PROXY_SECRET), raising=False)
+        before = len(host.calls)
+        response = client.post(
+            "/upload",
+            files={"files": ("notes.md", b"# A\n\ntext\n", "text/markdown")},
+            headers={USER_HEADER: "ada"},
+        )
+        assert response.status_code == 403
+        # Not merely refused a name -- refused the request. Nothing was stored
+        # under anybody, which is the difference between a boundary and a label.
+        assert len(host.calls) == before
+
+    def test_the_refusal_covers_every_route_not_just_upload(self, client, monkeypatch):
+        # The check is middleware for this reason: a route added later inherits
+        # it rather than having to remember it.
+        monkeypatch.delenv(settings.env_name(PROXY_SECRET), raising=False)
+        assert client.get("/stats", headers={USER_HEADER: "ada"}).status_code == 403
+        assert client.get("/health", headers={USER_HEADER: "ada"}).status_code == 403
+
+    def test_a_refusal_still_carries_a_request_id(self, client, monkeypatch):
+        # The identity middleware sits inside the tagging one on purpose; a 403
+        # with no id is a 403 nobody can find in the logs.
+        monkeypatch.delenv(settings.env_name(PROXY_SECRET), raising=False)
+        response = client.get("/stats", headers={USER_HEADER: "ada"})
+        assert response.headers.get(REQUEST_ID_HEADER)
+
+    def test_the_proxys_name_namespaces_the_upload(self, client, host, monkeypatch):
+        monkeypatch.setenv(settings.env_name(PROXY_SECRET), "shared-with-caddy")
+        host.results["kb_ingest"] = {
+            "success": True, "message": "Stored 1 document(s)",
+            "documents_added": 1, "chunks_added": 1, "collection_size": 1,
+        }
+        client.post(
+            "/upload",
+            files={"files": ("notes.md", b"# A\n\ntext\n", "text/markdown")},
+            headers={
+                USER_HEADER: "grace",
+                PROXY_HEADER: "shared-with-caddy",
+                # What Caddy would have overwritten; here it loses on precedence.
+                CLIENT_HEADER: "b9xk2",
+            },
+        )
+        assert host.calls[-1][1]["documents"][0]["id"] == "upload:grace:notes"
+
+    def test_a_request_with_no_identity_at_all_is_still_served(self, client, host, monkeypatch):
+        # The health check, the CLI and curl go straight to the app. They claim
+        # nothing, so they are refused nothing -- they land in the shared name.
+        monkeypatch.setenv(settings.env_name(PROXY_SECRET), "shared-with-caddy")
+        assert client.get("/health").status_code in (200, 503)
 
 
 class TestStats:
