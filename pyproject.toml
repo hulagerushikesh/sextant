@@ -37,8 +37,10 @@ sextant-eval-agent = "eval.agent_harness:main"
 sextant-judge = "eval.judge:main"
 # The pre-rename `agenticrag-*` aliases were removed in 0.8, one release after
 # the rename, as promised in milestone 15. The AGENTICRAG_ *environment* prefix
-# is a different promise and still stands: `tools/settings.py` falls back to it,
-# and the deployed box's .env still uses those names.
+# outlived them by one release and was removed in 0.8.1; the box's .env was
+# rewritten onto SEXTANT_* before that tree was deployed, 2026-09-28. A
+# leftover is now a startup warning from `settings.legacy_warning()`, never a
+# silent default.
 
 [project.optional-dependencies]
 dev = [

@@ -30,7 +30,7 @@ story is the root README.
   the spend card shows as 40% unspent is a bug report. `/health` carries the
   asker's own share; the card labels itself *Your daily share*, tracks
   whichever figure is closer to stopping them, and shows the box's beside it.
-- **21 new tests**, one named for each pre-registered clause, plus
+- **19 new tests**, one named for each pre-registered clause, plus
   `test_an_unproven_name_does_not_buy_a_fresh_bucket` — the one the plan did
   not ask for and needed most.
 
@@ -62,7 +62,7 @@ story is the root README.
   an authenticated caller is refused `handbook`, because letting ada overwrite
   the shared corpus is the same vandalism with a wider blast radius. Nothing
   real loses: `sextant-ingest` never crosses the host.
-- **16 new tests**, including one that runs a real `ann_compare` over a real
+- **24 new tests**, including one that runs a real `ann_compare` over a real
   three-document store and asserts the *serialised* payload holds nothing of
   the other owner — after first asserting that it did before trimming.
 

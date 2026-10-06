@@ -24,6 +24,27 @@ export REGION=us-central1
 gcloud config set project "$PROJECT"
 ```
 
+**For a box that already exists, use [`trip.sh`](trip.sh), not the steps
+below.** It starts the VM, ships the tree, rebuilds, verifies, and parks —
+parking is an `EXIT` trap, so it happens on success, on failure and on Ctrl-C.
+The steps below are the first-time build-out.
+
+Two of its checks stop the trip *before* the build, because both failures are
+only visible afterwards and both take the box down:
+
+- **`AGENTICRAG_*` names still in the box's `.env`.** The fallback went in
+  0.8.1; a container built from this tree against a pre-rename file runs with
+  no budget cap and no CORS allowlist.
+- **`SEXTANT_PROXY_SECRET` missing or empty.** Caddy has no conditionals — it
+  forwards `X-Sextant-User` on every proxied request regardless — so the app
+  sees a name it cannot verify and refuses *every* request with a 403.
+
+It then prints, without printing any value: how many `basic_auth` slots are
+filled, whether the model key is set, and whether a per-owner share is
+configured. After the build it checks that a forged `X-Sextant-User` sent
+straight at the api container is refused, and lists the store's document ids
+so a pre-0.8.2 `upload:<stem>` leftover shows up by name.
+
 ---
 
 ## B1–B2 · Provision (static IP, disk, firewall, VM)
