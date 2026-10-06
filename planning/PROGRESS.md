@@ -5,6 +5,39 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-06 — the park is checked now, not just performed (₹0)
+
+- **Milestone 21 item 5, shipped, ₹0.** Also unplanned, and the same shape as
+  item 4: not a new door, but the thing that would notice one.
+- **`deploy/trip.sh` did not do what its own header claims.** It exists
+  because of 2026-09-28, when a checklist's last step — park the box — was
+  never reached and ₹703 went to a VM nobody was using; the fix made parking
+  an `EXIT` trap so that *"the script returned"* means *"the box is parked"*.
+  An offline run of the current script ends `agenticrag is RUNNING;
+  reserved addresses: 0` and **exits 0**. The state was read back and printed,
+  never compared. The checklist became a trap, and the trap's result became
+  the new line nobody read.
+- **Half the reason it stayed invisible was the test stub.** The offline
+  harness answered `RUNNING` to every `instances describe` and ignored
+  `instances stop`, so the happy-path test asserted `code == 0` against a box
+  that never parked, and "the trip parked the box" was not an assertion
+  anybody could have written. The stub keeps state now: `RUNNING` until a stop
+  succeeds, the address present until a delete succeeds, and either can be
+  told to refuse.
+- **`park()` now compares.** The stop is retried once — a single transient API
+  error is the dullest explanation for a bad readback and the cheapest to rule
+  out. A state that is not `TERMINATED`/`STOPPED` prints the hourly rate, the
+  daily rate and the manual command on stderr and **takes the 0 away**. The
+  reserved address is checked by name rather than counted, because ₹21/day for
+  an address attached to nothing is the same silence in smaller type. The
+  check may only turn a 0 into a 1, so a trip that already failed keeps its own
+  reason. `--keep-up` is untouched — that one is typed on purpose.
+- **4 of the 7 new tests fail against the previous script.** The other three
+  are the no-regression clauses; the happy path reaching `TERMINATED` only
+  became a real assertion once the stub could say otherwise.
+- 562 passed, mypy clean (62 files), ruff clean, frontend builds. No VM was
+  started.
+
 ## 2026-10-06 — every route is now on one side of the boundary (0.8.7)
 
 - **Milestone 21 item 4, shipped, ₹0.** Unplanned. It came from asking, while

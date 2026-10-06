@@ -414,3 +414,63 @@ one that nobody runs.
 
 ₹0; no model call on either path.
 
+
+---
+
+## Item 5 — the trap's own result (₹0)
+
+Also unplanned, and the same shape as item 4: not a new door, but the thing
+that would notice one.
+
+`deploy/trip.sh` exists because of 2026-09-28, when a checklist's last step —
+park the box — was never reached and ₹703 went to a VM nobody was using. The
+fix made parking an `EXIT` trap, so that *"the script returned"* means *"the
+box is parked"*.
+
+**It did not mean that.** `park()` ran `instances stop ... || true`, then read
+the state back and printed it:
+
+```
+== parking agenticrag (this runs even on failure or Ctrl-C)
+   agenticrag is RUNNING; reserved addresses: 0
+   trip took 0 min; VM time ~Rs0
+```
+
+Exit code **0**. That is a real offline run of the current script, and this
+module's own happy-path test asserted `code == 0` against exactly it. Printing
+a state is not checking it. The checklist became a trap, and then the trap's
+outcome became the new line nobody read — one level down, same failure.
+
+Two reasons it stayed invisible:
+
+- **`|| true` on the stop.** Correct in itself: a trap that aborts half way
+  leaves the address reserved too. But it means the stop's failure has to be
+  caught by the readback, and the readback was only printed.
+- **A stub that could not fail.** The offline harness answered `RUNNING` to
+  every `instances describe` and ignored `instances stop`, so "the trip parked
+  the box" was not an assertion anybody could have written. The stub now keeps
+  state: the instance answers `RUNNING` until a stop succeeds, the address
+  exists until a delete succeeds, and both can be told to refuse.
+
+What changed, in `park()`:
+
+- the stop is **retried once** — a single transient API error is the dullest
+  explanation for a bad readback and the cheapest to rule out;
+- a state that is not `TERMINATED`/`STOPPED` prints the hourly rate, the daily
+  rate and the manual command **on stderr**, and **takes the 0 away**;
+- the reserved address is checked **by name** rather than counted, because
+  ₹21/day for an address attached to nothing is the same silence in smaller
+  type;
+- the check may only turn a 0 into a 1. A trip that already failed keeps its
+  own exit code, so the park never overwrites the reason.
+
+`--keep-up` is untouched: a box left up on purpose is a decision somebody had
+to type, not the failure this guards.
+
+**Four of the seven new tests fail against the previous script**; the other
+three are the no-regression clauses (`--keep-up`, a failing trip keeping its
+code, and the happy path now reaching `TERMINATED` — which only became a real
+assertion once the stub could say otherwise).
+
+₹0, and it is the only kind of work that pays for itself before item 3 runs:
+the next trip is the one that will be read for whether the box came back down.

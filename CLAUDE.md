@@ -160,6 +160,15 @@ because each one was learned the expensive way.
 - `/stats` is rate limited since 0.8.7: scoping it in 0.8.4 made it recompute
   from a full listing, so it walks the corpus and is no longer the cheap read
   its missing limit assumed. The UI calls it once a page load, never polls.
+- `deploy/trip.sh` **verifies the park, it does not just perform it.** The
+  stop is `|| true` (a trap that aborts half way leaves the address reserved),
+  so the state is read back, retried once if it is not `TERMINATED`, and then
+  *compared*: a box still up, or an address still reserved, prints the rate and
+  the manual command on stderr and makes the script exit non-zero. 0 is how a
+  person reads "parked". Until 2026-10-06 the readback was only printed, and an
+  offline run ended `agenticrag is RUNNING` with exit 0 -- the 2026-09-28 ₹703
+  failure one level down. The check may only turn a 0 into a 1, never mask a
+  reason. `--keep-up` is exempt: that one is typed on purpose.
 - `/ann/benchmark` and `/ann/compare` are rate limited since 0.8.6. They were
   the only routes with no limit, and an index build over every vector is the
   heaviest thing the box does.

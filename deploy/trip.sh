@@ -48,6 +48,13 @@ quiet() { grep -v 'ubyP' || true; }
 
 started_at=$(date +%s)
 
+# The instance's status, or `?` when the API could not be asked -- which is
+# not "parked" and must never be read as it.
+vm_state() {
+  "${GC[@]}" instances describe "$INSTANCE" --zone="$ZONE" \
+    --format='value(status)' 2>/dev/null || echo '?'
+}
+
 park() {
   local code=$?
   if [ "$KEEP_UP" = 1 ]; then
@@ -56,17 +63,46 @@ park() {
     return $code
   fi
   say "parking $INSTANCE (this runs even on failure or Ctrl-C)"
-  "${GC[@]}" instances stop "$INSTANCE" --zone="$ZONE" --quiet >/dev/null 2>&1 || true
+  local state attempt
+  # Twice. The readback below is only worth having once the dullest reason for
+  # a bad one -- a single transient API error -- has been ruled out, and a
+  # second stop costs nothing when the first one worked.
+  for attempt in 1 2; do
+    "${GC[@]}" instances stop "$INSTANCE" --zone="$ZONE" --quiet >/dev/null 2>&1 || true
+    state=$(vm_state)
+    case "$state" in TERMINATED|STOPPED) break ;; esac
+    if [ "$attempt" = 1 ]; then printf '   stop did not take (%s), retrying\n' "$state"; fi
+  done
   "${GC[@]}" instances delete-access-config "$INSTANCE" --zone="$ZONE" \
     --access-config-name="$ACCESS_CONFIG" >/dev/null 2>&1 || true
   # The reserved address bills ~Rs21/day on its own while nothing uses it.
   "${GC[@]}" addresses delete "$ADDRESS" --region="$REGION" --quiet >/dev/null 2>&1 || true
-  local state ips
-  state=$("${GC[@]}" instances describe "$INSTANCE" --zone="$ZONE" --format='value(status)' 2>/dev/null || echo '?')
+  local ips held=no
+  "${GC[@]}" addresses describe "$ADDRESS" --region="$REGION" >/dev/null 2>&1 && held=yes
   ips=$("${GC[@]}" addresses list --format='value(name)' 2>/dev/null | wc -l | tr -d ' ')
   printf '   %s is %s; reserved addresses: %s\n' "$INSTANCE" "$state" "$ips"
   local mins=$(( ($(date +%s) - started_at) / 60 ))
   printf '   trip took %s min; VM time ~Rs%s\n' "$mins" "$(( (mins * 56 + 599) / 600 ))"
+
+  # Reading the state back and printing it is not the same as checking it.
+  # This trap exists so that "the script returned" means "the box is parked",
+  # and an exit code of 0 is how a caller -- a person, a shell, a later `&&` --
+  # reads that claim. On 2026-09-28 the cost was not a wrong command; it was
+  # that nobody looked at what happened after it. So a box that is still up,
+  # or an address still reserved, takes the 0 away whatever the trip itself did.
+  if [ "$state" != TERMINATED ] && [ "$state" != STOPPED ]; then
+    echo "   STILL $state -- the meter is running at ~Rs5.6/hour (Rs134/day)." >&2
+    echo "   stop it by hand, now:" >&2
+    echo "   gcloud compute instances stop $INSTANCE --zone=$ZONE --project=$PROJECT" >&2
+    if [ "$code" = 0 ]; then code=1; fi
+  # elif, not a second if: deleting an address attached to a running instance
+  # fails, so a box that would not stop reports as both. Fix the box first.
+  elif [ "$held" = yes ]; then
+    echo "   $ADDRESS is still reserved -- ~Rs21/day for an address nothing uses." >&2
+    echo "   release it by hand:" >&2
+    echo "   gcloud compute addresses delete $ADDRESS --region=$REGION --project=$PROJECT" >&2
+    if [ "$code" = 0 ]; then code=1; fi
+  fi
   return $code
 }
 trap park EXIT
