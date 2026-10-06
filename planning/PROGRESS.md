@@ -5,6 +5,33 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-06 — an upload is judged by what it stored (₹0)
+
+- **Milestone 21 item 8, shipped, ₹0.** Item 7 shipped with a check that could
+  not fail for the thing it named.
+- **`/upload` answers HTTP 200 with `"success": false`** when the file was
+  unreadable, the tool was unavailable, or the ingest failed. The status code
+  says the request arrived, not that anything was stored — and step 7 compared
+  the status code. Against a box refusing both uploads it printed two ticks on
+  the lines describing the action, then two unexplained count mismatches, with
+  the box's own reason (*No readable files in the upload*) nowhere on screen.
+- **The trip still failed**, so this was a reporting defect rather than a
+  correctness one — but an operator reading that output goes looking in the
+  wrong place with the meter running.
+- **The verdict comes out of the body now:** `stored 1` on success, `refused:
+  <the box's own reason>` otherwise, `http <code>` when the request did not
+  return 200, and `200 with an unreadable body` when it did but said nothing
+  parseable.
+- **The harness was lying too.** The first attempt to plant this against the
+  previous script failed: the curl stub printed the body regardless of
+  `-o /dev/null` and appended a status line regardless of `-w`, so the old
+  code path could not be simulated. It honours both flags now — which is
+  precisely what separates the three call sites in `trip.sh` — and reverting
+  the script reproduces the bad output exactly.
+- **3 of the 4 new tests fail against the previous script.** The fourth passes
+  either way: a refused upload stores nothing to clean up under both versions.
+- 583 passed, mypy clean (62 files), ruff clean, frontend builds. No VM.
+
 ## 2026-10-06 — the success criterion is the script's job now (₹0)
 
 - **Milestone 21 item 7, shipped, ₹0 to write.** Item 6 proved the gate; every

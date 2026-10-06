@@ -160,6 +160,11 @@ because each one was learned the expensive way.
 - `/stats` is rate limited since 0.8.7: scoping it in 0.8.4 made it recompute
   from a full listing, so it walks the corpus and is no longer the cheap read
   its missing limit assumed. The UI calls it once a page load, never polls.
+- `/upload` answers **200 with `"success": false`** for an unreadable file, an
+  unavailable tool or a failed ingest. The status code only says the request
+  arrived, so anything checking an upload must read `success` /
+  `documents_added` out of the body -- `trip.sh` step 7 compared the code and
+  reported a tick for uploads that stored nothing.
 - `deploy/trip.sh` **step 7 proves the isolation and is the only part that
   writes.** Both gate users upload the same filename through the public URL;
   each must see their own and not the other's; then the store is read directly
