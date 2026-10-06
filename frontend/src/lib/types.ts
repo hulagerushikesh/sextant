@@ -62,6 +62,14 @@ export interface Budget {
   budget_usd: number
   spent_usd: number
   remaining_usd: number
+  /**
+   * Present only when the box caps what one authenticated user may spend in a
+   * day (SEXTANT_DAILY_BUDGET_SHARE). When it is set, this is the figure that
+   * stops *you*, and the box-wide one above can still show money left.
+   */
+  owner_budget_usd?: number
+  owner_spent_usd?: number
+  owner_remaining_usd?: number
 }
 
 export interface Health {

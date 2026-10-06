@@ -246,8 +246,19 @@ gcloud compute disks add-resource-policies agenticrag-data \
   --zone="$ZONE" --resource-policies=agenticrag-daily
 ```
 
-App-level, the rate limiter (`SEXTANT_RATE_LIMIT` / `_WINDOW`) already caps
-per-IP request rate; tighten it in `.env` if the gate is shared widely.
+App-level, the rate limiter (`SEXTANT_RATE_LIMIT` / `_WINDOW`) caps the
+request rate per **authenticated user** where Caddy supplies one, and per
+client address otherwise; tighten it in `.env` if the gate is shared widely.
+Keying on the name is why an office behind one address no longer shares a
+bucket -- and why an unauthenticated box still keys on the address, since a
+name the caller types is a bucket the caller can swap.
+
+`SEXTANT_DAILY_BUDGET_SHARE` is the other half: the largest fraction of
+`SEXTANT_DAILY_BUDGET_USD` any one authenticated user may spend in a day. The
+cap protects your wallet, the share protects everybody else's access to it --
+without it the first person to spend the day's allowance silences the rest
+until 00:00 UTC. Default 1 (no per-user limit); `env.example` has the
+arithmetic for a gate with three users.
 
 ### Uptime check (only if the VM runs 24/7)
 

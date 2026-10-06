@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from mcp_server import main
+from mcp_server.identity import CLIENT_HEADER, PROXY_HEADER, PROXY_SECRET, USER_HEADER
 from mcp_server.observability import (
     REQUEST_ID_HEADER,
     DailyBudget,
@@ -20,11 +21,18 @@ from mcp_server.observability import (
 )
 from mcp_server.pricing import estimate_cost
 from tests.fakes import FakeHost
+from tools import settings
 
 
 @pytest.fixture
-def client(monkeypatch) -> Iterator[TestClient]:
-    monkeypatch.setattr(main, "host", FakeHost())
+def host(monkeypatch) -> FakeHost:
+    fake = FakeHost()
+    monkeypatch.setattr(main, "host", fake)
+    return fake
+
+
+@pytest.fixture
+def client(host) -> Iterator[TestClient]:
     main.limiter.reset()
     with TestClient(main.app) as test_client:
         yield test_client
@@ -114,6 +122,210 @@ class TestRateLimit:
     def test_a_limit_of_zero_disables_it(self):
         limiter = RateLimiter(limit=0, window=60)
         assert all(limiter.check("a")[0] for _ in range(100))
+
+
+SECRET = "shared-with-caddy"
+
+
+@pytest.fixture
+def gated(monkeypatch):
+    """A box with identity wired up, the way the VM has it."""
+    monkeypatch.setenv(settings.env_name(PROXY_SECRET), SECRET)
+    return lambda name: {USER_HEADER: name, PROXY_HEADER: SECRET}
+
+
+def quiet_agent(monkeypatch, cost: float = 0.0):
+    async def answer(query, host, *_):
+        yield {
+            "type": "done", "sources": [], "turns": 1, "truncated": False,
+            "usage": {"input_tokens": 1, "output_tokens": 1, "cost_usd": cost},
+        }
+
+    monkeypatch.setattr(main, "run_agent", answer)
+
+
+class TestWhatTheLimiterCounts:
+    """Milestone 21 item 2. The name is the thing being limited; the address
+    it arrived from is an accident -- but only once something has checked the
+    name."""
+
+    def test_two_users_behind_one_address_do_not_throttle_each_other(
+        self, client, monkeypatch, gated
+    ):
+        # The NAT case, and the reason this was wrong: an office is one
+        # address, and one person's open tab stopped everybody else's work.
+        monkeypatch.setattr(main.limiter, "limit", 1)
+        quiet_agent(monkeypatch)
+        assert client.post("/query", json={"query": "q"}, headers=gated("ada")).status_code == 200
+        assert client.post("/query", json={"query": "q"}, headers=gated("ada")).status_code == 429
+        assert client.post("/query", json={"query": "q"}, headers=gated("grace")).status_code == 200
+
+    def test_an_unproven_name_does_not_buy_a_fresh_bucket(self, client, monkeypatch):
+        # The whole hazard of keying on a name: without the proxy's proof the
+        # caller picks the key, so keying on it would be weaker than the
+        # address it replaced. Changing the client header must not reset it.
+        monkeypatch.delenv(settings.env_name(PROXY_SECRET), raising=False)
+        monkeypatch.setattr(main.limiter, "limit", 1)
+        quiet_agent(monkeypatch)
+        first = client.post("/query", json={"query": "q"}, headers={CLIENT_HEADER: "b9"})
+        second = client.post("/query", json={"query": "q"}, headers={CLIENT_HEADER: "zz"})
+        assert first.status_code == 200
+        assert second.status_code == 429
+
+    def test_a_name_cannot_collide_with_an_address(self, client, monkeypatch, gated):
+        # The keys are prefixed, so a user called after the test client's own
+        # address does not inherit its bucket.
+        monkeypatch.setattr(main.limiter, "limit", 1)
+        quiet_agent(monkeypatch)
+        assert client.post("/query", json={"query": "q"}).status_code == 200
+        named = client.post("/query", json={"query": "q"}, headers=gated("testclient"))
+        assert named.status_code == 200
+
+    def test_the_index_lab_is_limited_like_everything_else(self, client, host, monkeypatch):
+        # Building two ANN indexes over every vector is the heaviest thing the
+        # box does, and it was the one route with no limit on it at all.
+        monkeypatch.setattr(main.limiter, "limit", 1)
+        host.results["kb_ann_benchmark"] = {"rows": []}
+        assert client.post("/ann/benchmark", json={}).status_code == 200
+        assert client.post("/ann/benchmark", json={}).status_code == 429
+
+
+class TestPerOwnerShare:
+    """The cap protects the wallet; the share protects everybody else's
+    access to it. Both, in that order -- a share that replaced the cap would
+    make the bill scale with the number of users."""
+
+    def test_disabled_by_default(self):
+        b = DailyBudget(budget_usd=1.0)
+        assert b.share == 1.0 and b.owner_budget == 0.0
+        b.record(0.99, "ada")
+        assert b.check_owner("ada")[0] is True
+
+    def test_one_owner_cannot_take_more_than_their_share(self):
+        b = DailyBudget(budget_usd=1.0, share=0.5)
+        b.record(0.4, "ada")
+        assert b.check_owner("ada")[0] is True
+        b.record(0.2, "ada")
+        assert b.check_owner("ada")[0] is False
+
+    def test_exhausting_a_share_leaves_the_other_owner_able_to_ask(self):
+        # Clause 1 of the pre-registered rule, and the entire point.
+        b = DailyBudget(budget_usd=1.0, share=0.5)
+        b.record(0.9, "ada")
+        assert b.check_owner("ada")[0] is False
+        assert b.check_owner("grace")[0] is True
+
+    def test_the_global_ceiling_still_holds(self):
+        # Clause 2: the wallet guarantee is not traded away for fairness.
+        # Three owners, each inside their own third, together over the cap.
+        b = DailyBudget(budget_usd=1.0, share=0.4)
+        for name in ("ada", "grace", "alan"):
+            b.record(0.35, name)
+            assert b.check_owner(name)[0] is True
+        # 1.05 between them. Each is inside their share and the box is shut.
+        assert b.check()[0] is False
+
+    def test_an_untrusted_caller_is_held_by_the_cap_alone(self):
+        # None means nothing vouched for the name. Attributing spend to it
+        # would promise a limit that is reset by typing a different header.
+        b = DailyBudget(budget_usd=1.0, share=0.5)
+        b.record(0.9)
+        assert b.check_owner(None)[0] is True
+        assert b.check()[0] is True
+        b.record(0.2)
+        assert b.check()[0] is False
+
+    def test_unattributed_spend_still_counts_against_the_day(self):
+        b = DailyBudget(budget_usd=1.0, share=0.5)
+        b.record(1.0)
+        assert b.check()[0] is False
+
+    def test_a_new_day_clears_every_owners_tally(self):
+        import datetime as _dt
+
+        b = DailyBudget(budget_usd=1.0, share=0.5)
+        b.record(0.9, "ada")
+        b._day = _dt.date(2000, 1, 1)
+        assert b.check_owner("ada")[0] is True
+
+    def test_a_share_outside_the_range_is_ignored_rather_than_obeyed(self):
+        # A share of 0 would refuse everybody, which is not what anybody meant
+        # by setting it. Off is the safe reading of a nonsense value.
+        for bad in (0.0, -1.0, 1.5):
+            assert DailyBudget(budget_usd=1.0, share=bad).share == 1.0
+
+    def test_status_tells_the_asker_about_their_own_share(self):
+        # Being refused at 20% of a cap you can see is unspent, with no way to
+        # tell why, gets reported as the box being broken.
+        b = DailyBudget(budget_usd=1.0, share=0.5)
+        b.record(0.3, "ada")
+        mine = b.status("ada")
+        assert mine["owner_budget_usd"] == pytest.approx(0.5)
+        assert mine["owner_remaining_usd"] == pytest.approx(0.2)
+        assert "owner_spent_usd" not in b.status()
+
+
+class TestTheSharedGate:
+    """The three pre-registered clauses, at the HTTP edge this time."""
+
+    def test_one_user_spending_their_share_does_not_silence_another(
+        self, client, monkeypatch, gated
+    ):
+        monkeypatch.setattr(main, "budget", DailyBudget(budget_usd=1.0, share=0.5))
+        main.budget.record(0.6, "ada")
+        quiet_agent(monkeypatch)
+        refused = client.post("/query", json={"query": "q"}, headers=gated("ada"))
+        assert refused.status_code == 429
+        assert "other users are unaffected" in refused.json()["detail"]
+        assert client.post("/query", json={"query": "q"}, headers=gated("grace")).status_code == 200
+
+    def test_the_two_refusals_do_not_read_the_same(self, client, monkeypatch, gated):
+        # One says the box is done for the day; the other says you are and
+        # somebody else is not. Same status code, different thing to do.
+        monkeypatch.setattr(main, "budget", DailyBudget(budget_usd=1.0, share=0.5))
+        main.budget.record(1.0, "ada")
+        quiet_agent(monkeypatch)
+        detail = client.post("/query", json={"query": "q"}, headers=gated("grace")).json()["detail"]
+        assert "Daily spend cap" in detail
+
+    def test_a_box_with_no_identity_behaves_exactly_as_before(self, client, monkeypatch):
+        # Clause 3: a single-user deployment must not acquire a second kind of
+        # limit it never asked for.
+        monkeypatch.delenv(settings.env_name(PROXY_SECRET), raising=False)
+        monkeypatch.setattr(main, "budget", DailyBudget(budget_usd=1.0, share=0.5))
+        quiet_agent(monkeypatch, cost=0.9)
+        assert client.post("/query", json={"query": "q"}).status_code == 200
+        # 0.9 spent, over any share of 0.5, and still served: the share was
+        # never applied, because nothing vouched for a name to apply it to.
+        assert client.post("/query", json={"query": "q"}).status_code == 200
+
+    def test_spend_is_attributed_to_the_authenticated_name(
+        self, client, monkeypatch, gated
+    ):
+        monkeypatch.setattr(main, "budget", DailyBudget(budget_usd=1.0, share=0.5))
+        quiet_agent(monkeypatch, cost=0.6)
+        client.post("/query", json={"query": "q"}, headers=gated("ada"))
+        assert main.budget.check_owner("ada")[0] is False
+        assert main.budget.check_owner("grace")[0] is True
+
+    def test_a_streamed_query_counts_against_the_same_share(
+        self, client, monkeypatch, gated
+    ):
+        # The stream charges the cap from inside a generator that outlives the
+        # request object, so the owner has to be captured before it runs.
+        monkeypatch.setattr(main, "budget", DailyBudget(budget_usd=1.0, share=0.5))
+        quiet_agent(monkeypatch, cost=0.6)
+        client.post("/query/stream", json={"query": "q"}, headers=gated("ada"))
+        assert main.budget.check_owner("ada")[0] is False
+
+    def test_health_shows_the_asker_their_own_remaining_share(
+        self, client, monkeypatch, gated
+    ):
+        monkeypatch.setattr(main, "budget", DailyBudget(budget_usd=1.0, share=0.5))
+        main.budget.record(0.1, "ada")
+        got = client.get("/health", headers=gated("ada")).json()["budget"]
+        assert got["owner_remaining_usd"] == pytest.approx(0.4)
+        assert client.get("/health").json()["budget"].get("owner_remaining_usd") is None
 
 
 class TestLogging:
