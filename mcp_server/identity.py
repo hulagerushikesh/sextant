@@ -156,6 +156,45 @@ def owner_of(headers: object) -> str:
     return safe_owner(get(CLIENT_HEADER))
 
 
+# The id scheme `upload:<owner>:<stem>` is parseable precisely because
+# `safe_owner` cannot emit a colon. Reading the owner back out of the id is
+# therefore exact, and -- unlike a new metadata field -- it is already true of
+# every document in every store written since 0.8.2, with nothing to migrate.
+_UPLOAD_PREFIX = "upload:"
+
+
+def owner_of_document(document_id: str | None) -> str:
+    """Who uploaded this document, or `DEFAULT_OWNER` for the shared corpus.
+
+    The inverse of the id `to_document` builds. Anything that is not an
+    owner-namespaced upload -- a document ingested from `/data/corpus` by the
+    CLI, one stated outright through `/ingest`, or a pre-0.8.2 `upload:<stem>`
+    -- belongs to nobody in particular and is part of what everyone can see.
+    """
+    text = (document_id or "").strip()
+    if not text.startswith(_UPLOAD_PREFIX):
+        return DEFAULT_OWNER
+    rest = text[len(_UPLOAD_PREFIX) :]
+    owner, sep, stem = rest.partition(":")
+    if not sep or not stem:
+        # `upload:notes` -- the pre-0.8.2 scheme. Nobody's in particular, which
+        # is the same answer the store gave before owners existed.
+        return DEFAULT_OWNER
+    return safe_owner(owner)
+
+
+def visible_to(owner: str, document_id: str | None) -> bool:
+    """Whether `owner` may see this document.
+
+    A deny-list on other people's uploads, not an allow-list on your own. The
+    shared corpus is the product -- an allow-list would hide every document the
+    operator ingested from everybody, which is the opposite of what the box is
+    for. So: everything, minus uploads that name somebody else.
+    """
+    document_owner = owner_of_document(document_id)
+    return document_owner == DEFAULT_OWNER or document_owner == safe_owner(owner)
+
+
 def describe() -> str:
     """One line at startup saying which of the two worlds this process is in.
 

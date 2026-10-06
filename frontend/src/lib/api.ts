@@ -10,6 +10,22 @@ import type { CompareResult, Health, Stats, StreamHandlers, SweepResult } from '
 export const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:8000'
 export const MOCK = import.meta.env.VITE_MOCK === '1'
 
+/**
+ * Headers every request carries, not just the ones that obviously need to.
+ *
+ * `X-Sextant-Client` names the namespace this browser's uploads are stored
+ * under. Since the server scopes what it returns to that namespace, a request
+ * that omits it is answered as the anonymous `shared` caller — so leaving it
+ * off /stats or /query/stream would hide this browser's own uploads from its
+ * own search results. One helper, used everywhere, so a call site added later
+ * does not have to remember. Untrusted by the server: it namespaces, it does
+ * not authenticate — see mcp_server/identity.py.
+ */
+const sent = (extra?: Record<string, string>): Record<string, string> => {
+  const id = clientId()
+  return { ...extra, ...(id ? { 'X-Sextant-Client': id } : {}) }
+}
+
 const describeFailure = async (response: Response) => {
   const fallback = `Server returned ${response.status}`
   try {
@@ -29,7 +45,7 @@ export async function streamQuery(query: string, h: StreamHandlers): Promise<voi
   const { history = [], sources = [], webSearch = false, signal } = h
   const response = await fetch(`${SERVER_URL}/query/stream`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: sent({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({
       query,
       history,
@@ -82,14 +98,10 @@ export async function uploadFiles(files: File[]): Promise<{ success: boolean; me
   }
   const form = new FormData()
   for (const f of files) form.append('files', f, f.name)
-  // Namespaces the stored document id so two people behind the shared gate
-  // stop overwriting each other's uploads. Untrusted by the server, and it
-  // hides nothing from search — see mcp_server/identity.py.
-  const id = clientId()
   const response = await fetch(`${SERVER_URL}/upload`, {
     method: 'POST',
     body: form,
-    headers: id ? { 'X-Sextant-Client': id } : undefined,
+    headers: sent(),
   })
   if (!response.ok) throw new Error(await describeFailure(response))
   return response.json()
@@ -98,7 +110,7 @@ export async function uploadFiles(files: File[]): Promise<{ success: boolean; me
 export async function fetchStats(): Promise<Stats | null> {
   if (MOCK) return new Promise((r) => setTimeout(() => r(mockStats), 500))
   try {
-    const response = await fetch(`${SERVER_URL}/stats`)
+    const response = await fetch(`${SERVER_URL}/stats`, { headers: sent() })
     return response.ok ? response.json() : null
   } catch {
     return null
@@ -108,7 +120,7 @@ export async function fetchStats(): Promise<Stats | null> {
 export async function checkHealth(): Promise<Health | null> {
   if (MOCK) return new Promise((r) => setTimeout(() => r(mockHealth), 300))
   try {
-    const response = await fetch(`${SERVER_URL}/health`)
+    const response = await fetch(`${SERVER_URL}/health`, { headers: sent() })
     return response.ok ? response.json() : null
   } catch {
     return null
@@ -118,7 +130,7 @@ export async function checkHealth(): Promise<Health | null> {
 export async function runBenchmark(body: { k?: number; n_queries?: number; grid?: object }): Promise<SweepResult> {
   if (MOCK) return new Promise((r) => setTimeout(() => r(mockSweep()), 1800))
   const response = await fetch(`${SERVER_URL}/ann/benchmark`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    method: 'POST', headers: sent({ 'Content-Type': 'application/json' }), body: JSON.stringify(body),
   })
   if (!response.ok) throw new Error(await describeFailure(response))
   return response.json()
@@ -127,7 +139,7 @@ export async function runBenchmark(body: { k?: number; n_queries?: number; grid?
 export async function compareIndexes(query: string, opts: { k?: number; hnsw?: object; ivfpq?: object }): Promise<CompareResult> {
   if (MOCK) return new Promise((r) => setTimeout(() => r(mockCompare(query)), 700))
   const response = await fetch(`${SERVER_URL}/ann/compare`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query, ...opts }),
+    method: 'POST', headers: sent({ 'Content-Type': 'application/json' }), body: JSON.stringify({ query, ...opts }),
   })
   if (!response.ok) throw new Error(await describeFailure(response))
   return response.json()

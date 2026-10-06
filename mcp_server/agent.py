@@ -43,7 +43,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from mcp_server.conversation import replay
-from mcp_server.mcp_host import MCPHost, ToolUnavailable
+from mcp_server.mcp_host import ToolHost, ToolUnavailable
 from mcp_server.pricing import estimate_cost
 from mcp_server.sources import Source, SourceRegistry
 from tools import settings
@@ -206,7 +206,7 @@ def _client():
     return genai.Client(api_key=key).aio
 
 
-def declare_tools(host: MCPHost, web_search: bool | None = None) -> list[dict[str, Any]]:
+def declare_tools(host: ToolHost, web_search: bool | None = None) -> list[dict[str, Any]]:
     """Turn discovered MCP schemas into Gemini tool declarations.
 
     Still a filter and a rename. `parameters_json_schema` takes the MCP server's
@@ -357,7 +357,7 @@ def _summarise(name: str, result: dict[str, Any], is_error: bool) -> dict[str, A
     return {"status": "ok"}
 
 
-async def _execute(name: str, arguments: dict[str, Any], host: MCPHost, registry: SourceRegistry):
+async def _execute(name: str, arguments: dict[str, Any], host: ToolHost, registry: SourceRegistry):
     """Run one MCP tool. Returns (text for the model, is_error, trace summary).
 
     A tool failure is reported back to the model as a tool result rather than
@@ -439,7 +439,7 @@ def _label_grounded(text: str, metadata: Any, registered: list[Source | None]) -
 
 async def run(
     query: str,
-    host: MCPHost,
+    host: ToolHost,
     history: list[dict[str, Any]] | None = None,
     prior_sources: list[dict[str, Any]] | None = None,
     web_search: bool | None = None,

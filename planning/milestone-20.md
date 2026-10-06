@@ -283,6 +283,60 @@ passes while the box quietly loses its identities.
 IP and the budget cap is still global; both are wrong under tenancy and both
 are now cheap, but neither is this item.
 
+## 4 · The leak item 2 found — ₹0
+
+Not planned. Item 2's measurement said A's retrieval holds up; reading the
+code to write that up said the retrieval filter was never the hard part.
+`kb_list` returns every document's title, overview and opening 240 characters,
+and `kb_stats` the whole store's counts. Under A, a tenant asking "what do my
+documents cover?" is handed everybody's.
+
+**Where the filter can and cannot go.** Not into the knowledge base: anything
+an MCP tool function accepts appears in its discovered schema, and the
+invariant below forbids a corpus the model can name. Not into the subprocess
+either, which would be one process per owner — arm B, rejected on memory. So
+it goes **above the tool boundary and below the model**: `mcp_server/scope.py`
+wraps the process-global host per request and trims the result. The knowledge
+base stays owner-agnostic, and nothing the model emits can widen what it sees,
+because the model is never asked.
+
+**Deny by default**, for the same reason item 3's refusal is middleware: it
+trims *anything* in *any* result carrying a `document_id` the asker may not
+see, rather than naming the tools that leak. `kb_ann_compare` returns passages
+too, and nobody would have remembered it.
+
+**The ownership rule is a deny-list, not an allow-list.** A document is
+visible unless it is an upload naming somebody else — so the corpus the
+operator ingested stays everybody's, which is the product. An allow-list would
+have hidden every shared document from every user. `shared` is scoped like any
+other name: if it saw everything, any tenant could read any other's uploads by
+deleting one header.
+
+**Shipped 2026-10-06 (0.8.4), ₹0.** `identity.owner_of_document` reads the
+owner back out of the id — exact, because `safe_owner` cannot emit a colon,
+and already true of every document written since 0.8.2, so there is nothing to
+migrate. `kb_stats` is recomputed from the scoped listing rather than trimmed,
+because reporting the whole store's size to someone who can see a fraction of
+it is a wrong answer before it is a leak, and that number is what the UI
+prints. `agent.py` now takes a `ToolHost` protocol so it cannot tell which
+host it has.
+
+**The frontend was half-wired and scoping exposed it.** It sent
+`X-Sextant-Client` on `/upload` only, so once the server scoped `/stats` and
+`/query`, a browser would have stopped seeing its own uploads. One `sent()`
+helper now puts it on every request. Verified in the browser against a
+scratch store: four documents stored, the UI showed **2 documents · 2 chunks**
+(the shared one plus its own), `ada` saw 2, and a caller with no header saw 1.
+
+**Not closed, deliberately:** `collection_size` riding along on a *search*
+result. It is a count of the whole store, not content, and `agent.py` reads it
+to tell the model "the knowledge base is empty" apart from "nothing matched".
+Recomputing it would cost a listing on every search and dropping it would make
+that message wrong. One integer, written down rather than overlooked.
+
+Also still whole-store: the per-IP rate limiter and the global budget cap.
+Both are wrong under tenancy and both are now cheap. Neither is this item.
+
 ## Not in this milestone
 
 - **Deploying any of it.** A VM trip, ≈₹2, and it should ride with the
