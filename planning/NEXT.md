@@ -5,6 +5,25 @@ before it can start and what it costs; anything with a ₹ or $ figure is
 asked for before it runs. Move a line to [`PROGRESS.md`](PROGRESS.md) when it
 ships; move it to the bottom section when it is decided against.
 
+## Now — Milestone 21 ([`milestone-21.md`](milestone-21.md))
+
+Planned 2026-10-06. Milestone 20 gave the box an identity and scoped what a
+tool returns. This one closes the two doors that scoping does not reach —
+both mine, both from this week, both reproduced against a running server —
+fixes the two counters that still assume one person, and then puts three
+versions of undeployed work on the box.
+
+| # | Step | Needs | Cost | State |
+| --- | --- | --- | --- | --- |
+| 1 | Two doors the scope does not reach: `/ann/*` bypasses `ScopedHost` **and** `trim()` cannot see a `passages` map keyed by chunk id; `/ingest` lets any caller overwrite any owner's document | — | ₹0 | **not started** — lands only with all three tests: no cross-owner read through `/ann/*`, no cross-owner write through `/ingest`, and a trim rule that catches a content-bearing shape carrying no `document_id`. Two of three is not a pass |
+| 2 | Key the rate limiter on the owner, not the IP; give the daily cap a per-owner share under the global ceiling | item 1 first | ₹0 | **not started** — a design choice, so the *behaviour* is pre-registered: one owner exhausting their share must not silence another, the global wallet guarantee must survive, and a box with no identity configured must behave exactly as today |
+| 3 | Deploy it: 0.8.2 + 0.8.3 + 0.8.4 + the M19 key rotation | you create and paste the key; VM up | ≈₹2 VM | **not started** — `SEXTANT_PROXY_SECRET` and the extra `basic_auth` users go into `.env` **before** the build, or every request 403s. Confirm `kb_list` holds no pre-0.8.2 `upload:<stem>` ids. Use `deploy/trip.sh`. Succeeds only if two real users upload the same filename from the public URL and both survive, each seeing only their own |
+
+**Every number in `learning/` is an unscoped number**: the eval harness builds
+a `KnowledgeBase` directly and never crosses the host, so no eval run would
+catch a scoping bug. That is correct — the scope is a boundary, not a
+retrieval change — and it is why item 1's rule leans on tests.
+
 ## Done — Milestone 20 ([`milestone-20.md`](milestone-20.md))
 
 Planned and closed 2026-10-06, ₹0 end to end. "Per-user upload" turned out to be three questions, not
@@ -29,14 +48,14 @@ A `kb_search(corpus=…)` in a discovered schema lets a sentence inside an
 uploaded PDF read another person's corpus. Isolation is enforced below the
 tool boundary — pinned into the KB subprocess at spawn.
 
-## Now — Milestone 19 ([`milestone-19.md`](milestone-19.md))
+## Open — Milestone 19 ([`milestone-19.md`](milestone-19.md))
 
 | # | Step | Needs | Cost | State |
 | --- | --- | --- | --- | --- |
 | 1 | Review `ui-redesign/sextant` and port it into `frontend/` | — | ₹0 | **shipped** 2026-09-27 — four post-scan gaps closed first (tables, Markdown export, `sextant.*` storage keys, growing composer); verified live against `:8100`; bundle 61.5 → 186.8 kB gzip after lazy-loading the Lab |
 | 2 | Drop the `AGENTICRAG_` env fallback; a leftover is a printed warning, not a silent default | — | ₹0 | **shipped** 2026-09-28 (0.8.1) — done off the box so the trip below is shorter; `settings.legacy_warning()` names every stale variable at startup |
 | 3 | Deploy it and rewrite the box's `.env` onto `SEXTANT_*` | VM up | ₹703 spent (≈₹2 of work, ₹701 of a VM left running five days) | **shipped** 2026-09-28 — `.env` rewritten first, tree shipped, stack rebuilt; `/health` reports `budget_usd: 0.6` under the new name, logs clean, new bundle served, two live queries |
-| 4 | Rotate the `GEMINI_API_KEY` exposed in a screenshot 2026-09-23 | you create and paste the key; VM up to install it | ≈₹2 VM | **deferred by you 2026-10-03** — the key is wired into several places, so revocation waits on that work. It is still live until then |
+| 4 | Rotate the `GEMINI_API_KEY` exposed in a screenshot 2026-09-23 | you create and paste the key; VM up to install it | ≈₹2 VM | **deferred by you 2026-10-03**, now folded into M21 item 3 so one trip carries both. The key is still live |
 
 ## Done — Milestone 18 ([`milestone-18.md`](milestone-18.md))
 
@@ -62,6 +81,7 @@ runs; none is started on a hunch.
 | Idea | Why it is on the list | Needs | Cost |
 | --- | --- | --- | --- |
 | Request-level index tier (`exact` flat / `fast` hnsw / `lean` ivfpq_rerank) | caller states a budget, server maps to index + params; only meaningful past ~25k chunks, where HNSW overtakes flat (`../learning/ivfpq-100k.md`) | corpus ≥ 25k | ₹0 |
+| Let a person delete their own upload | `sextant-forget` is an operator command on the box; re-uploading replaces but nothing takes a file back. A gap, not a defect — design it against a deployment that has actually had two users | M21 item 3 | ₹0 |
 
 ## Decided against (with the reason, so it is not re-litigated)
 

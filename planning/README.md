@@ -7,15 +7,15 @@ product.
 | | Read |
 | --- | --- |
 | **Next** | [`NEXT.md`](NEXT.md) — the queue: what is in progress, what waits on a key or a go-ahead, what was decided against and why |
-| **Now** | [`milestone-19.md`](milestone-19.md) — the redesigned UI is the UI; one item left, a VM trip that carries four jobs |
+| **Now** | [`milestone-21.md`](milestone-21.md) — what else assumed there was one person: two doors the scope does not reach, two counters that still count one, and the trip that puts 0.8.2–0.8.4 on the box |
 | **Progress** | [`PROGRESS.md`](PROGRESS.md) — what shipped, by date |
-| **Past plans** | [`milestone-17.md`](milestone-17.md) — cap, `kb_list`, three candidates closed, done · [`milestone-16.md`](milestone-16.md) — five retrieval experiments, done · [`milestone-15.md`](milestone-15.md) — ship, prove, rename, done · [`go-live-proof.md`](go-live-proof.md) — what was observed when the site went live |
+| **Past plans** | [`milestone-20.md`](milestone-20.md) — what a corpus belongs to; four items, ₹0, done · [`milestone-19.md`](milestone-19.md) — the redesigned UI is the UI; the key rotation is its one open item · [`milestone-18.md`](milestone-18.md) — re-ingest, summaries by default, 0.8, done · [`milestone-17.md`](milestone-17.md) — cap, `kb_list`, three candidates closed, done · [`milestone-16.md`](milestone-16.md) — five retrieval experiments, done · [`milestone-15.md`](milestone-15.md) — ship, prove, rename, done · [`go-live-proof.md`](go-live-proof.md) — what was observed when the site went live |
 | **History** | [`trackers/`](trackers/) — HTML checklists from phases 9–13 · [`archive/`](archive/) — course-era docs describing features never built (`archive/README.md`) |
 
 Operational runbooks stay next to what they operate: [`../deploy/README.md`](../deploy/README.md)
 (GCP + Caddy), [`../eval/README.md`](../eval/README.md) (golden set + metrics).
 
-## Status (2026-09-27)
+## Status (2026-10-06)
 
 | Phase | What | State |
 | --- | --- | --- |
@@ -29,11 +29,15 @@ Operational runbooks stay next to what they operate: [`../deploy/README.md`](../
 | 18 | Re-ingest the deployed store; `--summaries` by default; 0.8 | **Done** 2026-09-27 — 0.8 cut and summaries defaulted 09-24; a re-ingest made a replacement plus `sextant-forget` 09-25; the deployed store re-ingested 09-27 (61 chunks/22 docs → 79/21 with 21 overviews, résumé removed, ₹8). See `milestone-18.md` |
 | 19 | Port the redesigned UI into `frontend/` | **Port done** 2026-09-27 — React 19 + TS + Tailwind v4 + shadcn replaces 747 lines of `App.jsx` and 1,952 of `App.css`; four post-scan gaps closed first, three more bugs found by running it; bundle 61.5 → 186.8 kB gzip. Deploy still open. See `milestone-19.md` |
 
-Numbers that describe the system today: 409 tests, mypy clean, two golden
-sets (65 questions / 58 chunks; 39 page-labelled / 1,602 chunks), hit@1 0.94
-and 0.93 for the full pipeline, ~$0.0015/query on `gemini-3.1-flash-lite`,
-22 docs / 1,602 chunks in the local store. Package is `sextant` 0.7.0. The
-repo has been public since 2026-09-20 (MIT).
+| 20 | What a corpus belongs to: the upload collision, one-collection-vs-one-each, identity, the listing leak | **Done** 2026-10-06, ₹0 across all four — uploads namespaced by owner (0.8.2); **A, one collection filtered**, decided on a measurement that passed and could not have failed (`../learning/multi-corpus.md`); identity forwarded by Caddy and refused without proof (0.8.3); every tool result scoped to the asker (0.8.4). See `milestone-20.md` |
+| 21 | What else assumed there was one person | **Planned** 2026-10-06 — two doors the scope does not reach (both reproduced), the limiter and cap that still count one person, and the VM trip carrying 0.8.2–0.8.4 plus the key rotation. See `milestone-21.md` |
+
+Numbers that describe the system today: 488 tests, mypy clean (62 files), two
+golden sets (65 questions / 58 chunks; 39 page-labelled / 1,608 chunks), hit@1
+0.94 and 0.93 for the full pipeline, ~$0.0015/query on
+`gemini-3.1-flash-lite`, 22 docs / 1,660 chunks in the local store. Package is
+`sextant` 0.8.4; the deployed box is still on 0.8.1. The repo has been public
+since 2026-09-20 (MIT).
 
 ## Cost position
 
