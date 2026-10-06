@@ -5,7 +5,24 @@ before it can start and what it costs; anything with a ₹ or $ figure is
 asked for before it runs. Move a line to [`PROGRESS.md`](PROGRESS.md) when it
 ships; move it to the bottom section when it is decided against.
 
-## Now — Milestone 19 ([`milestone-19.md`](milestone-19.md))
+## Now — Milestone 20 ([`milestone-20.md`](milestone-20.md))
+
+Planned 2026-10-06. "Per-user upload" turned out to be three questions, not
+one, plus a defect that exists today with a single corpus. Nothing here
+costs money: no VM, no model calls, and `sextant-eval` does not spend.
+
+| # | Step | Needs | Cost | State |
+| --- | --- | --- | --- | --- |
+| 1 | Namespace upload ids by owner — two people uploading `notes.pdf` currently destroy each other's chunks | — | ₹0 | **not started** — a defect, not an experiment; lands with a test for both halves (different owners both survive, same owner still replaces) |
+| 2 | Decide what a corpus is: metadata filter (A) vs collection-per-corpus (B) vs deployment-per-corpus (C) | — | ₹0 | **not started** — measured on `eval/golden.jsonl` with synthetic owners; rule pre-registered: A is accepted only if at a 10% corpus share with a 10×k over-fetch budget it reaches B's hit@5 within 0.02 |
+| 3 | Identity: multiple Caddy `basic_auth` users, the authenticated name forwarded as a header | — | ₹0 | **not started** — lands only with a test that a client-supplied identity header is refused |
+
+**Invariant, not up for measurement:** the corpus is never a tool argument.
+A `kb_search(corpus=…)` in a discovered schema lets a sentence inside an
+uploaded PDF read another person's corpus. Isolation is enforced below the
+tool boundary — pinned into the KB subprocess at spawn.
+
+## Open — Milestone 19 ([`milestone-19.md`](milestone-19.md))
 
 | # | Step | Needs | Cost | State |
 | --- | --- | --- | --- | --- |
@@ -37,7 +54,6 @@ runs; none is started on a hunch.
 
 | Idea | Why it is on the list | Needs | Cost |
 | --- | --- | --- | --- |
-| Per-user upload (multi-corpus) | the app is one corpus per deployment; a hosted version needs `category` to mean a person | design | ₹0 |
 | Request-level index tier (`exact` flat / `fast` hnsw / `lean` ivfpq_rerank) | caller states a budget, server maps to index + params; only meaningful past ~25k chunks, where HNSW overtakes flat (`../learning/ivfpq-100k.md`) | corpus ≥ 25k | ₹0 |
 
 ## Decided against (with the reason, so it is not re-litigated)
