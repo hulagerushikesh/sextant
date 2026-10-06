@@ -69,9 +69,41 @@ uploads of the same filename under different owners both survive, and that
 re-uploading the same filename under the *same* owner still replaces. Both
 halves, or the fix has only moved the bug.
 
-**Open question to settle while writing it:** what the existing deployed
-store does with ids written under the old scheme. A migration, or a documented
-one-way break, but not silence.
+**Shipped 2026-10-06 (0.8.2), ₹0.** `mcp_server/identity.py` holds the owner
+and the reason it is not a permission; `to_document` takes it and the id
+becomes `upload:<owner>:<stem>`; `/upload` reads it from `X-Sextant-Client`,
+which the frontend sets from a random per-browser id in localStorage. Nothing
+that does not send the header changes behaviour -- the CLI, curl and the eval
+harness all land in `upload:shared:<stem>`.
+
+Both halves are pinned, at the store and not only on the id: two owners
+uploading `notes.md` both keep their chunks *and* both stay findable, and the
+same owner re-uploading still collapses a many-chunk document to one with the
+old text gone from the index (`tests/test_removal.py::TestUploadsOfTheSame
+Filename`). The owner is sanitised because it reaches a document id and from
+there a chunk id — an owner carrying `:` or `#` could otherwise name a
+document that is not theirs.
+
+**The old-id question, settled: a documented one-way break, no migration.**
+A store written before 0.8.2 keeps its `upload:<stem>` documents — they are
+searchable and `sextant-forget` still removes them — but a re-upload of the
+same file lands beside them rather than replacing them. The deployed store is
+not affected in practice: the 2026-09-27 re-ingest rebuilt it from
+`/data/corpus` through the CLI, whose ids are bare stems, and dropped the one
+`upload:` document it held. **Worth confirming with `kb_list` on the next
+trip** rather than assumed.
+
+**Found while fixing it:** the test rate limiter is module-level state keyed on
+client IP, and every API test arrives as the same `testclient`. Adding two
+tests 429'd an unrelated one and the failure pointed at the wrong file. The
+`client` fixture now resets it.
+
+**Verified in the browser, not only in tests.** The frontend half has no test
+coverage, so it was run: `clientId()` returned `bmuwdv257cib2ds2z`, stable
+across calls and persisted; the real `uploadFiles` posted a real file to the
+real server on `:8100` (`VITE_MOCK=0`); and the store held
+`upload:bmuwdv257cib2ds2z:ownership-check`. Removed with `sextant-forget`
+afterwards -- the local store is back to 22 documents / 1,660 chunks.
 
 ## 2 · Decide what a corpus is — ₹0, one measurement
 

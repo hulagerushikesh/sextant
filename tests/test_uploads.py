@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import pytest
 
+from mcp_server.identity import CLIENT_HEADER, DEFAULT_OWNER, owner_of, safe_owner
 from mcp_server.uploads import MAX_UPLOAD_BYTES, SUPPORTED_SUFFIXES, safe_name, to_document
 from tools.vector_db.loaders import UnsupportedDocument
 
@@ -46,9 +47,28 @@ class TestParsing:
         assert document["source"] == "notes.md"
 
     def test_the_id_is_stable_so_a_re_upload_replaces(self):
-        first = to_document("notes.md", MARKDOWN)
-        second = to_document("notes.md", MARKDOWN + b"\nmore\n")
-        assert first["id"] == second["id"] == "upload:notes"
+        first = to_document("notes.md", MARKDOWN, owner="ada")
+        second = to_document("notes.md", MARKDOWN + b"\nmore\n", owner="ada")
+        assert first["id"] == second["id"] == "upload:ada:notes"
+
+    def test_the_same_filename_from_two_people_is_two_documents(self):
+        # The defect this fixes: ids were `upload:<stem>`, global across the
+        # store, and `_store` clears a document's chunks before rewriting them.
+        # So the second `notes.md` silently deleted the first one's chunks and
+        # /upload still answered success.
+        ada = to_document("notes.md", MARKDOWN, owner="ada")
+        grace = to_document("notes.md", MARKDOWN, owner="grace")
+        assert ada["id"] != grace["id"]
+
+    def test_an_upload_with_no_owner_lands_in_the_shared_namespace(self):
+        # curl, the eval harness, a browser with storage switched off.
+        assert to_document("notes.md", MARKDOWN)["id"] == f"upload:{DEFAULT_OWNER}:notes"
+
+    def test_an_owner_cannot_forge_a_different_document(self):
+        # `:` separates the id and `#` separates the chunk, so an owner that
+        # carried either could name a document that is not theirs.
+        forged = to_document("notes.md", MARKDOWN, owner="ada:evil#9")
+        assert forged["id"] == "upload:ada_evil_9:notes"
 
     def test_plain_text_has_no_locators_and_that_is_fine(self):
         assert to_document("log.txt", b"nothing structured here")["locators"] == []
@@ -73,3 +93,31 @@ class TestParsing:
     def test_pdf_is_among_the_formats_offered(self):
         # The whole point of moving parsing to the server.
         assert ".pdf" in SUPPORTED_SUFFIXES
+
+
+class TestOwner:
+    """Namespacing, not isolation -- see `mcp_server/identity.py`."""
+
+    @pytest.mark.parametrize(
+        "given, expected",
+        [
+            ("ada", "ada"),
+            ("  ada  ", "ada"),
+            ("ada:evil", "ada_evil"),
+            ("ada#9", "ada_9"),
+            ("../../etc", "etc"),
+            ("", DEFAULT_OWNER),
+            (None, DEFAULT_OWNER),
+            ("___", DEFAULT_OWNER),
+            ("x" * 200, "x" * 64),
+        ],
+    )
+    def test_an_owner_is_cleaned_to_something_an_id_can_hold(self, given, expected):
+        assert safe_owner(given) == expected
+
+    def test_the_owner_comes_from_the_client_header(self):
+        assert owner_of({CLIENT_HEADER: "ada"}) == "ada"
+
+    def test_no_header_is_the_shared_namespace(self):
+        assert owner_of({}) == DEFAULT_OWNER
+        assert owner_of(None) == DEFAULT_OWNER

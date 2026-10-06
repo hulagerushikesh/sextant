@@ -13,6 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from mcp_server import main
+from mcp_server.identity import CLIENT_HEADER, DEFAULT_OWNER
 from mcp_server.mcp_host import ToolUnavailable
 from tests.fakes import FakeHost
 
@@ -52,6 +53,10 @@ def host(monkeypatch) -> FakeHost:
 
 @pytest.fixture
 def client(host) -> Iterator[TestClient]:
+    # The limiter is module-level state keyed on client IP, and every test here
+    # arrives as the same "testclient". Without this, adding a test eventually
+    # 429s an unrelated one and the failure points at the wrong file.
+    main.limiter.reset()
     with TestClient(main.app) as test_client:
         yield test_client
 
@@ -403,6 +408,27 @@ class TestUpload:
     def test_too_many_files_at_once(self, client):
         files = [("files", (f"f{i}.md", b"# t\n\nx\n", "text/markdown")) for i in range(30)]
         assert client.post("/upload", files=files).status_code == 413
+
+    def test_the_client_header_namespaces_the_stored_id(self, client, host):
+        host.results["kb_ingest"] = {
+            "success": True, "message": "Stored 1 document(s)",
+            "documents_added": 1, "chunks_added": 1, "collection_size": 1,
+        }
+        client.post(
+            "/upload",
+            files={"files": ("notes.md", b"# A\n\ntext\n", "text/markdown")},
+            headers={CLIENT_HEADER: "ada"},
+        )
+        assert host.calls[-1][1]["documents"][0]["id"] == "upload:ada:notes"
+
+    def test_an_upload_with_no_client_header_still_works(self, client, host):
+        # curl and the eval harness never send one; they share one namespace.
+        host.results["kb_ingest"] = {
+            "success": True, "message": "Stored 1 document(s)",
+            "documents_added": 1, "chunks_added": 1, "collection_size": 1,
+        }
+        client.post("/upload", files={"files": ("notes.md", b"# A\n\ntext\n", "text/markdown")})
+        assert host.calls[-1][1]["documents"][0]["id"] == f"upload:{DEFAULT_OWNER}:notes"
 
 
 class TestStats:

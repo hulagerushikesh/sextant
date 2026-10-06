@@ -76,12 +76,17 @@ because each one was learned the expensive way.
   document that now makes fewer chunks leaves the surplus embedded and
   searchable (measured: 11 → 1 left ten stale chunks holding the top hits).
   Removal is a command, never an MCP tool — the model gets read tools only.
-- **Upload ids collide across people** (open defect, live on the box). An
-  upload is stored as `upload:<filename stem>`, which is global, and `_store`
-  clears a document's existing chunks first. Two people behind the shared gate
-  who upload the same filename destroy each other's chunks, silently —
-  `/upload` returns success. Fix is milestone 20 item 1; until then, treat the
-  deployed store as single-owner.
+- Uploads are stored as `upload:<owner>:<stem>` since 0.8.2, not
+  `upload:<stem>`. The owner comes from the `X-Sextant-Client` header the
+  frontend sends (a random per-browser id in localStorage), or `shared` when
+  nothing sends one — so curl, the eval harness and the CLI all land in one
+  namespace, as before. **This is namespacing, not isolation**: it stops two
+  people behind the shared gate silently deleting each other's chunks, and it
+  hides nothing from anyone's search. The header is untrusted by construction;
+  a trusted source is milestone 20 item 3. `mcp_server/identity.py` is the
+  seam — do not start reading a proxy-set header there until the proxy sets
+  it, or any caller can claim any name. `/ingest` is deliberately not
+  namespaced: its caller states the id outright.
 - faiss + torch OpenMP: `server.py` must import faiss before anything that
   pulls torch, or the KB subprocess segfaults (exit 139).
 - PDFs go through PyMuPDF (`loaders._page_lines`), not pypdf: pypdf guesses
