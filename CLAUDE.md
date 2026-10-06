@@ -76,6 +76,12 @@ because each one was learned the expensive way.
   document that now makes fewer chunks leaves the surplus embedded and
   searchable (measured: 11 → 1 left ten stale chunks holding the top hits).
   Removal is a command, never an MCP tool — the model gets read tools only.
+- **Upload ids collide across people** (open defect, live on the box). An
+  upload is stored as `upload:<filename stem>`, which is global, and `_store`
+  clears a document's existing chunks first. Two people behind the shared gate
+  who upload the same filename destroy each other's chunks, silently —
+  `/upload` returns success. Fix is milestone 20 item 1; until then, treat the
+  deployed store as single-owner.
 - faiss + torch OpenMP: `server.py` must import faiss before anything that
   pulls torch, or the KB subprocess segfaults (exit 139).
 - PDFs go through PyMuPDF (`loaders._page_lines`), not pypdf: pypdf guesses
