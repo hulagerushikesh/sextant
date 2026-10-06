@@ -134,6 +134,26 @@ because each one was learned the expensive way.
   `lib/api.ts`, not just `/upload`. Leave it off one call and that call is
   answered as the anonymous `shared` caller — which, since 0.8.4, means the
   browser stops seeing its own uploads.
+- Since 0.8.6 the rate limiter keys on the **authenticated** name
+  (`user:<name>`) and on the client address (`ip:<addr>`) otherwise — prefixed
+  so the two cannot collide. Not a fallback, a choice: an *unproven* name is a
+  bucket the caller can swap by retyping a header, which is weaker than the
+  address it would replace. `identity.resolve()` returns `Identity(name,
+  trusted)`; `owner_of` is the name half.
+- `SEXTANT_DAILY_BUDGET_SHARE` (0.8.6, default `1` = off) is the largest
+  fraction of `SEXTANT_DAILY_BUDGET_USD` one authenticated name may spend in a
+  day. It sits **under** the global cap, never replacing it — the cap is the
+  wallet guarantee a leaked gate cannot get past, the share stops the first
+  user of the day silencing everybody else. Applied only to a vouched-for
+  name; an untrusted caller's spend still counts against the day but is not
+  attributed. A share below 1 leaves part of the cap unspendable when one
+  person is asking, which is why the default is off and the value belongs in
+  the box's `.env`. `/health` reports the asker's own share, and the spend
+  card tracks it — without that, being refused while the card shows money left
+  reads as a bug.
+- `/ann/benchmark` and `/ann/compare` are rate limited since 0.8.6. They were
+  the only routes with no limit, and an index build over every vector is the
+  heaviest thing the box does.
 - faiss + torch OpenMP: `server.py` must import faiss before anything that
   pulls torch, or the KB subprocess segfaults (exit 139).
 - PDFs go through PyMuPDF (`loaders._page_lines`), not pypdf: pypdf guesses

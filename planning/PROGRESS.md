@@ -5,6 +5,35 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-06 — two ceilings, and only one of them is the wallet (0.8.6)
+
+- **Milestone 21 item 2, shipped, ₹0.** The design question the plan said to
+  settle first: the per-owner cap sits **under** the global one, it does not
+  replace it. `check` is the wallet — the thing a leaked gate can never get
+  past — and `check_owner` is the fairness. A query passes both.
+- **The plan guessed "one line" and was wrong.** Keying the limiter on the
+  owner is only right for an owner something *checked*. Without the proxy
+  secret the name is a header the caller types, so a bucket keyed on it is one
+  the caller empties by typing another — **weaker than the client address it
+  replaced**. So: `user:<name>` when the proxy vouched for it, `ip:<address>`
+  otherwise, prefixed so the two can never collide.
+  `identity.resolve()` returns `Identity(name, trusted)` now.
+- **`SEXTANT_DAILY_BUDGET_SHARE`**, default 1 (off): the largest fraction of
+  the day's cap one authenticated name may spend. Not a division between
+  whoever turns up — this process cannot see the user list, which is in
+  Caddy's `.env`. `cap ÷ owners-seen-today` was rejected for shrinking a share
+  retroactively; an absolute figure for drifting out of step with the cap.
+- **Scope added deliberately:** `/ann/benchmark` and `/ann/compare` are rate
+  limited. Building two ANN indexes over every vector is the heaviest call the
+  box serves and they were the only routes with no limit at all.
+- **The UI had to change or the fix reads as a bug:** refused at 60% of a cap
+  the spend card shows as 40% unspent is a bug report. `/health` carries the
+  asker's own share; the card labels itself *Your daily share*, tracks
+  whichever figure is closer to stopping them, and shows the box's beside it.
+- **21 new tests**, one named for each pre-registered clause, plus
+  `test_an_unproven_name_does_not_buy_a_fresh_bucket` — the one the plan did
+  not ask for and needed most.
+
 ## 2026-10-06 — an id is an id wherever it appears (0.8.5)
 
 - **Milestone 21 item 1, shipped, ₹0.** Both doors the scope did not reach,

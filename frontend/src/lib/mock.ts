@@ -20,7 +20,12 @@ export const mockHealth: Health = {
   model_configured: true,
   supported_uploads: ['.pdf', '.md', '.txt', '.html', '.docx'],
   web_search_enabled: false,
-  budget: { enabled: true, budget_usd: 2.0, spent_usd: 0.4312, remaining_usd: 1.5688 },
+  // Carries a per-user share so the design mode renders that branch too:
+  // the bar tracks the asker's own figure, with the box's beside it.
+  budget: {
+    enabled: true, budget_usd: 2.0, spent_usd: 0.4312, remaining_usd: 1.5688,
+    owner_budget_usd: 1.0, owner_spent_usd: 0.3104, owner_remaining_usd: 0.6896,
+  },
   mcp_error: null,
   tools_discovered: ['kb_search', 'kb_ingest', 'kb_stats'],
   tools_offered_to_model: ['kb_search', 'kb_stats', 'google_search'],

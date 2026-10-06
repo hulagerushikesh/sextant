@@ -39,6 +39,23 @@ RATE_LIMIT_WINDOW_SECONDS = int(settings.getenv("RATE_WINDOW", "60") or "60")
 # locally. Set it in a public deployment so a leaked URL can never run up a bill.
 DAILY_BUDGET_USD = float(settings.getenv("DAILY_BUDGET_USD", "0") or "0")
 
+# The largest fraction of the day's cap any one *authenticated* name may spend.
+# 1.0 (the default) means no per-owner limit at all, which is the behaviour of
+# every version before 0.8.6 and the right default for a box with one user: a
+# share below 1 leaves part of a wallet the operator paid for unspendable when
+# they are the only person asking. Set it on a deployment that has users --
+# `deploy/env.example` explains the arithmetic. Only applied to a name the
+# proxy vouched for; see `DailyBudget.check_owner`.
+DAILY_BUDGET_SHARE = float(settings.getenv("DAILY_BUDGET_SHARE", "1") or "1")
+if not 0 < DAILY_BUDGET_SHARE <= 1:
+    logging.getLogger(__name__).warning(
+        "%s is %s, which is not a fraction in (0, 1]; no per-owner share will be "
+        "applied. The global daily cap is unaffected.",
+        settings.env_name("DAILY_BUDGET_SHARE"),
+        DAILY_BUDGET_SHARE,
+    )
+    DAILY_BUDGET_SHARE = 1.0
+
 
 class RequestIdFilter(logging.Filter):
     """Attach the current request id to every record."""
@@ -138,13 +155,44 @@ class DailyBudget:
     and the loop needs no mid-flight accounting.
 
     Disabled when the cap is <= 0, which is the default.
+
+    ## Two guarantees, two checks
+
+    The cap above protects the operator's wallet, and it is the one thing a
+    shared or leaked gate can never get past. It does nothing at all for the
+    other people behind that gate: the first person to spend the day silences
+    everybody until 00:00 UTC, which is a denial of service any authenticated
+    user can perform by accident, just by working for an afternoon.
+
+    So there is a second, *per-owner* ceiling at `share` x `budget`, and it
+    sits **under** the global one rather than replacing it. `check` is the
+    wallet, `check_owner` is the fairness; a query has to pass both. Written
+    that way round deliberately -- a per-owner cap that replaced the global one
+    would make the bill scale with the number of users, which is exactly the
+    guarantee `deploy/env.example` promises it will not do.
+
+    What it does not do is divide the day equally between whoever turns up.
+    That needs to know how many people there are, and this process does not:
+    the user list lives in Caddy's `.env`. A fixed fraction is a number the
+    operator sets with the user list in front of them, and the cost of getting
+    it wrong is legible -- too low wastes the wallet, too high lets one person
+    take more of it.
     """
 
-    def __init__(self, budget_usd: float = DAILY_BUDGET_USD):
+    def __init__(
+        self, budget_usd: float = DAILY_BUDGET_USD, share: float = DAILY_BUDGET_SHARE
+    ):
         self.budget = budget_usd
+        self.share = share if 0 < share <= 1 else 1.0
         self._day = self._today()
         self._spent = 0.0
+        self._by_owner: dict[str, float] = defaultdict(float)
         self._lock = threading.Lock()
+
+    @property
+    def owner_budget(self) -> float:
+        """What one name may spend in a day, or 0.0 when there is no share."""
+        return 0.0 if self.share >= 1 else self.budget * self.share
 
     @staticmethod
     def _today() -> date:
@@ -164,6 +212,7 @@ class DailyBudget:
         if today != self._day:
             self._day = today
             self._spent = 0.0
+            self._by_owner.clear()
 
     def check(self) -> tuple[bool, float, int]:
         """(allowed, spent_today, seconds_until_reset). Always allowed when off."""
@@ -173,29 +222,71 @@ class DailyBudget:
             self._rollover()
             return self._spent < self.budget, self._spent, self._seconds_to_reset()
 
-    def record(self, cost_usd: float) -> None:
-        """Add a finished query's cost to today's tally. No-op when off."""
+    def check_owner(self, owner: str | None) -> tuple[bool, float, int]:
+        """(allowed, this owner's spend today, seconds until reset).
+
+        Separate from `check` rather than folded into it, because the two
+        refusals mean different things to whoever reads them: one says the box
+        is done for the day, the other says *you* are and somebody else is not.
+
+        `owner` is None for a name nothing vouched for. A bucket keyed on a
+        header anybody can retype is emptied by retyping it, so an untrusted
+        caller is held only by the global cap -- the same protection they had
+        before this existed, and no false promise of a second one.
+        """
+        if self.budget <= 0 or self.share >= 1 or not owner:
+            return True, 0.0, 0
+        with self._lock:
+            self._rollover()
+            spent = self._by_owner.get(owner, 0.0)
+            return spent < self.owner_budget, spent, self._seconds_to_reset()
+
+    def record(self, cost_usd: float, owner: str | None = None) -> None:
+        """Add a finished query's cost to today's tally. No-op when off.
+
+        An untrusted caller's spend still counts against the day -- it is real
+        money -- it is simply not attributed to a name, because the name is
+        not worth attributing to.
+        """
         if self.budget <= 0 or cost_usd <= 0:
             return
         with self._lock:
             self._rollover()
             self._spent += cost_usd
+            if owner:
+                self._by_owner[owner] += cost_usd
 
-    def status(self) -> dict[str, object]:
-        """A snapshot for /health, so the UI can show the day's spend."""
+    def status(self, owner: str | None = None) -> dict[str, object]:
+        """A snapshot for /health, so the UI can show the day's spend.
+
+        With a trusted `owner` and a share configured, it also reports what is
+        left of *their* share -- otherwise someone refused at 20% of a cap they
+        can see is unspent has no way to tell why.
+        """
         if self.budget <= 0:
             return {"enabled": False}
         with self._lock:
             self._rollover()
-            return {
+            snapshot: dict[str, object] = {
                 "enabled": True,
                 "budget_usd": round(self.budget, 4),
                 "spent_usd": round(self._spent, 6),
                 "remaining_usd": round(max(0.0, self.budget - self._spent), 6),
                 "resets_in_seconds": self._seconds_to_reset(),
             }
+            if self.share < 1:
+                snapshot["share"] = round(self.share, 4)
+                snapshot["owner_budget_usd"] = round(self.owner_budget, 6)
+                if owner:
+                    mine = self._by_owner.get(owner, 0.0)
+                    snapshot["owner_spent_usd"] = round(mine, 6)
+                    snapshot["owner_remaining_usd"] = round(
+                        max(0.0, self.owner_budget - mine), 6
+                    )
+            return snapshot
 
     def reset(self) -> None:
         with self._lock:
             self._day = self._today()
             self._spent = 0.0
+            self._by_owner.clear()
