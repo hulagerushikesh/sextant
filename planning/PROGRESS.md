@@ -5,6 +5,45 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-06 — the trip had never touched the gate (₹0)
+
+- **Milestone 21 item 6, shipped, ₹0.** Found by reading step 5 after item 5.
+- **Every check in the trip ran through `docker exec` at `localhost:8000`** —
+  inside the box, behind Caddy. The trip that exists to deploy the gate 0.8.3
+  built had never once gone through it. A box whose Caddy was misconfigured,
+  pointed at the wrong upstream, or not running passes every check in step 5
+  and reports green. Even the forged-name check was the easy half: `docker
+  exec` to localhost always skips the proxy, so it proves the *app* refuses an
+  unvouched name and says nothing about whether the *proxy* would let one
+  through.
+- **Step 6 runs from the operator's machine** against `PUBLIC_URL`, read off
+  the box rather than hardcoded because the repo is public: no credentials →
+  401, wrong password → 401, a real user → 200, a forged
+  `X-Sextant-Proxy-Auth` → **200**, naming yourself with no password → 401, a
+  second user → 200.
+- **The forged-proof row reads backwards and is the one worth having.**
+  `header_up` in Caddy is a *set*: the client's copy is replaced before the app
+  sees it, so a forged proof that still succeeds is Caddy doing its job. A 403
+  means it appended instead, or is not in the path — and then anyone can send
+  the header themselves. No test in the suite could catch that; it is a
+  property of the deployment, not of the code.
+- **Credentials are the operator's**, exported as `SEXTANT_TRIP_AUTH` /
+  `SEXTANT_TRIP_AUTH_2`, handed to `curl` through a config file on a pipe
+  rather than argv so they are not in `ps`, and never printed. Unset is a skip
+  that says the gate is unproven; a missing `PUBLIC_URL` is a failure, because
+  that is the box being wrong rather than the operator declining.
+- **Any failed check exits non-zero** and the park still happens — it is a
+  trap, not a step.
+- **An unreachable box counts as a failed check, not a crash.** curl exits
+  non-zero on a refused connection and `set -o pipefail` would have made that
+  the script's problem; it prints `000`, which is not the code wanted, so it
+  counts like any other failure.
+- **8 of the 9 new tests fail against the previous script.** The ninth passes
+  trivially when nothing uses a password; it is a no-regression clause.
+- **What it still does not prove:** the isolation behind the gate. Every check
+  in step 6 is a read. Two users uploading the same filename is now item 7.
+- 571 passed, mypy clean (62 files), ruff clean, frontend builds. No VM.
+
 ## 2026-10-06 — the park is checked now, not just performed (₹0)
 
 - **Milestone 21 item 5, shipped, ₹0.** Also unplanned, and the same shape as

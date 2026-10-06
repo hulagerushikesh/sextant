@@ -474,3 +474,70 @@ assertion once the stub could say otherwise).
 
 ₹0, and it is the only kind of work that pays for itself before item 3 runs:
 the next trip is the one that will be read for whether the box came back down.
+
+---
+
+## Item 6 — the trip had never touched the gate (₹0)
+
+Found by reading step 5 after item 5: **every check in the trip runs through
+`docker exec` at `localhost:8000`.** That is inside the box and behind Caddy.
+
+So the trip that exists to deploy the gate 0.8.3 built had never once gone
+through it. A box whose Caddy was misconfigured, pointed at the wrong
+upstream, or simply not running passes every check in step 5 and reports
+green. Even the forged-name check is the easy half: `docker exec` to localhost
+always skips the proxy, so it proves the *app* refuses an unvouched name — it
+cannot say whether the *proxy* would have let one through.
+
+Step 6 runs from the operator's machine against `PUBLIC_URL`, read off the box
+rather than hardcoded because this repo is public.
+
+| Check | Want |
+| --- | --- |
+| no credentials | 401 |
+| a wrong password | 401 |
+| a real user | 200 |
+| a real user, **forged `X-Sextant-Proxy-Auth`** | **200** |
+| naming yourself, no password | 401 |
+| a second user | 200 |
+
+**The fourth row reads backwards and is the one worth having.** `header_up` in
+Caddy is a *set*: the client's own proof header is replaced by the real secret
+before the app ever sees it. A request that forges the proof and still succeeds
+is Caddy doing its job. A 403 would mean it appended instead of replacing, or
+is not in the path at all — and then the header is worthless, because anyone
+can send it. Nothing in the test suite could have caught that: it is a property
+of the deployment, not of the code.
+
+**Credentials are the operator's.** Exported as `SEXTANT_TRIP_AUTH` and
+`SEXTANT_TRIP_AUTH_2`, passed to `curl` through a config file on a pipe rather
+than argv so they are not in `ps` while the trip runs, and never printed.
+Unset, the step says the gate is unproven and the trip still passes — choosing
+not to prove something is not a defect. A box with **no `PUBLIC_URL`** does
+fail, because that is the box being wrong.
+
+Any failed check exits non-zero; the park is a trap, so it still happens.
+Nothing here writes to the corpus or calls the model — every request is a
+`GET /health`, so the step costs nothing but seconds.
+
+A late read of the diff found two more of my own: `curl` exits non-zero on a
+refused connection or a DNS failure, and `set -o pipefail` would have made
+that the *script's* problem rather than the check's. It is the check's --
+curl still prints `000`, which is not the code wanted, so an unreachable box
+counts as a gate failure like any other. There is a test for that now.
+
+**8 of the 9 new tests fail against the previous script.** The ninth
+(`test_the_password_never_reaches_the_output`) passes trivially when nothing
+uses a password; it is a no-regression clause, not a pin.
+
+### What this still does not prove
+
+The pre-registered success criterion for item 3 is two users uploading the
+same filename from the public URL, both surviving, each seeing only their own.
+Step 6 proves the gate; it does not prove the isolation behind it, because
+every check in it is a read. That needs two uploads into the production corpus
+and a cleanup that itself has to be checked rather than assumed — the same
+discipline item 5 just installed — so it is its own item rather than something
+bolted onto this one. Until then that half of the criterion is done by hand
+with the meter running, which is exactly the shape this milestone keeps
+finding.

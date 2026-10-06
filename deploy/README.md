@@ -45,6 +45,34 @@ configured. After the build it checks that a forged `X-Sextant-User` sent
 straight at the api container is refused, and lists the store's document ids
 so a pre-0.8.2 `upload:<stem>` leftover shows up by name.
 
+**Step 6 runs from your machine, not the box.** Every other check goes
+through `docker exec` at `localhost:8000` — inside the box, behind Caddy — so
+until this step existed the trip never touched the gate it exists to deploy,
+and a box whose Caddy was misconfigured or not running reported green. Export
+the gate credentials before the trip and the step runs:
+
+```bash
+export SEXTANT_TRIP_AUTH='ada:her-password'
+export SEXTANT_TRIP_AUTH_2='grace:her-password'
+```
+
+They go to `curl` through a config file on a pipe, never argv, so they are not
+in `ps` while the trip runs, and nothing prints them. Unset, the step says the
+gate is unproven rather than passing quietly — supplying them is your call, so
+that is a skip. A box with **no `PUBLIC_URL`** is a failure, because that is
+the box being wrong rather than you declining to prove something.
+
+It checks: no credentials → 401; a wrong password → 401; a real user → 200; a
+**forged `X-Sextant-Proxy-Auth` → 200**; and naming yourself with no password
+→ 401. The fourth reads backwards and is the point — `header_up` in Caddy is a
+*set*, so the client's copy is replaced before the app sees it. A forged proof
+that still succeeds is Caddy working. A 403 would mean it appended instead,
+and then anyone can send the header themselves. Any failed check makes the
+script exit non-zero: the box is deployed, but it is not proven.
+
+Nothing in step 6 writes to the corpus or calls the model — every request is a
+`GET /health`.
+
 **The park is checked, not just performed.** `park()` has always read the
 instance's state back; it now compares it. If the box is not `TERMINATED` the
 stop is retried once — a transient API error is the dullest explanation and

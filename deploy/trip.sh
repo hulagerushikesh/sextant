@@ -245,4 +245,93 @@ print("     %d documents; owners with uploads: %s" % (len(ids), ", ".join(owners
 print("     pre-0.8.2 upload ids: %s" % (", ".join(stale) if stale else "none"))
 AUDIT
 
+# ---------------------------------------------------------------------------
+# 6 - the gate, from outside
+#
+# Everything above went through `docker exec` at localhost:8000 -- inside the
+# box, behind Caddy. So until now this trip never once touched the thing it
+# exists to deploy. A box whose Caddy is misconfigured, or not running at all,
+# passes every check in step 5 and reports green.
+#
+# These run from here, over the public URL. They need credentials, which only
+# you have, so export them before the trip and they run:
+#
+#   export SEXTANT_TRIP_AUTH='ada:her-password'
+#   export SEXTANT_TRIP_AUTH_2='grace:her-password'
+#
+# Unset, the step says what it could not prove rather than passing quietly.
+# Nothing here writes to the corpus and nothing calls the model: every request
+# is a GET /health, so this costs nothing beyond the seconds it takes.
+#
+# What a 200 means in checks 4 and 5 is worth stating, because it reads
+# backwards. `header_up` in Caddy is a *set*: the client's own
+# X-Sextant-Proxy-Auth is replaced by the real secret before the app sees it.
+# So a request that forges the proof and still succeeds is Caddy doing its job.
+# If it 403s, Caddy appended instead of replacing, or is not in the path --
+# and then anyone can send the header themselves.
+# ---------------------------------------------------------------------------
+say "6 - the gate, from outside"
+GATE_FAILURES=0
+# The URL is read off the box rather than hardcoded: this repo is public.
+URL=$(ssh "$REMOTE" "cd $APP_DIR && sed -n 's/^PUBLIC_URL=//p' .env" 2>/dev/null | tr -d '\r')
+
+# Credentials go through a config file on a pipe, never argv, so they are not
+# in `ps` output on this machine while the trip runs.
+# `|| true` on both: a refused connection or a DNS failure exits curl non-zero,
+# and `set -o pipefail` would make that the script's problem rather than the
+# check's. It is the check's -- curl still prints 000, which is not the code
+# wanted, so the box being unreachable counts as a gate failure like any other.
+gate() {
+  local auth="$1"; shift
+  if [ -n "$auth" ]; then
+    curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
+      --config <(printf 'user = "%s"\n' "$auth") "$@" "$URL/health" 2>/dev/null \
+      | tr -d '\r' || true
+  else
+    curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$@" "$URL/health" 2>/dev/null \
+      | tr -d '\r' || true
+  fi
+}
+
+# A check that only prints is the defect item 5 fixed, so each one counts.
+expect() {
+  local what="$1" want="$2" got="$3"
+  if [ "$got" = "$want" ]; then
+    printf '   %-44s %s\n' "$what" "$got"
+  else
+    printf '   %-44s got %s, wanted %s\n' "$what" "$got" "$want" >&2
+    GATE_FAILURES=$((GATE_FAILURES + 1))
+  fi
+}
+
+if [ -z "$URL" ]; then
+  echo "   no PUBLIC_URL on the box -- the gate is unproven" >&2
+  GATE_FAILURES=$((GATE_FAILURES + 1))
+elif [ -z "${SEXTANT_TRIP_AUTH:-}" ]; then
+  echo "   SEXTANT_TRIP_AUTH unset -- nothing here ran. The gate is unproven:"
+  echo "   every check above was inside the box, behind Caddy."
+else
+  expect "no credentials"                401 "$(gate '')"
+  expect "wrong password"                401 "$(gate 'nobody:wrong')"
+  expect "a real user"                   200 "$(gate "$SEXTANT_TRIP_AUTH")"
+  # Caddy sets the proof header, so a client's own copy is overwritten and the
+  # request still succeeds. A 403 here means it is appending, or absent.
+  expect "a forged proof is overwritten"  200 \
+    "$(gate "$SEXTANT_TRIP_AUTH" -H 'X-Sextant-Proxy-Auth: forged')"
+  # And naming yourself is not a way in: the gate refuses before the app looks.
+  expect "naming yourself, no password"  401 \
+    "$(gate '' -H 'X-Sextant-User: admin' -H 'X-Sextant-Proxy-Auth: forged')"
+  if [ -n "${SEXTANT_TRIP_AUTH_2:-}" ]; then
+    expect "a second user"               200 "$(gate "$SEXTANT_TRIP_AUTH_2")"
+  else
+    echo "   SEXTANT_TRIP_AUTH_2 unset -- one name at the gate, so isolation is unproven"
+  fi
+fi
+
 say "done - the trap parks the box next"
+# The park happens either way -- it is a trap, not a step. But a box whose
+# gate did not hold is not a successful trip, and 0 would say it was.
+if [ "${GATE_FAILURES:-0}" != 0 ]; then
+  echo "$GATE_FAILURES gate check(s) failed -- the box is deployed but not proven." >&2
+  exit 1
+fi
