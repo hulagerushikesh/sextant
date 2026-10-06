@@ -18,7 +18,7 @@ import os
 import sys
 from contextlib import AsyncExitStack
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from mcp import Client, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -39,6 +39,21 @@ PERSIST_DIR_ENV = settings.env_name("CHROMA_DIR")
 ANN_BACKEND_ENV = settings.env_name("ANN_INDEX")
 
 # Variables the subprocess needs but MCP's stdio client would otherwise strip.
+class ToolHost(Protocol):
+    """What the agent actually needs: the schemas, and a way to call one.
+
+    Narrower than `MCPHost` on purpose. `scope.ScopedHost` wraps the real host
+    to trim another owner's documents out of every result, and the agent must
+    accept either without knowing which it has -- the whole point being that
+    nothing above this line can tell, and nothing below it is asked.
+    """
+
+    @property
+    def tools(self) -> list[dict[str, Any]]: ...
+
+    async def call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]: ...
+
+
 _FORWARDED_ENV = tuple(
     settings.env_name(key)
     for key in (

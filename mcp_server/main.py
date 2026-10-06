@@ -43,6 +43,7 @@ from mcp_server.observability import (
     new_request_id,
     request_id,
 )
+from mcp_server.scope import scoped
 from mcp_server.sources import MAX_RESTORED
 from mcp_server.uploads import MAX_FILES, SUPPORTED_SUFFIXES, to_document
 from tools import settings
@@ -357,15 +358,19 @@ async def list_tools():
 
 
 @app.get("/stats")
-async def collection_stats():
+async def collection_stats(http_request: Request):
     """Size and backing models of the knowledge base, via the MCP `kb_stats` tool.
 
     Separate from /health because they answer different questions: /health is
     "is the pipe open", this is "is there anything in the collection". A UI that
     cannot tell an empty corpus from a failed search will blame the search.
+
+    Counted as the asker sees it. Telling someone the store holds 1,660 chunks
+    when they can search 52 of them is not a leak so much as a wrong answer,
+    and it is this number the UI prints under "documents".
     """
     try:
-        return await host.call("kb_stats", {})
+        return await scoped(host, http_request.state.owner).call("kb_stats", {})
     except ToolUnavailable as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
 
@@ -539,7 +544,11 @@ async def process_query(request: QueryRequest, http_request: Request):
 
     try:
         async for event in run_agent(
-            request.query, host, history, prior_sources, request.web_search
+            request.query,
+            scoped(host, http_request.state.owner),
+            history,
+            prior_sources,
+            request.web_search,
         ):
             kind = event["type"]
             if kind == "token":
@@ -633,12 +642,15 @@ async def process_query_stream(request: QueryRequest, http_request: Request):
     # The context var is read inside the generator, which runs after the
     # middleware's `finally` has reset it -- so capture the value here.
     current = request_id.get()
+    # Captured out here for the same reason as the request id: the generator
+    # runs after the request object's scope has been torn down.
+    kb = scoped(host, http_request.state.owner)
 
     async def events():
         token = request_id.set(current)
         try:
             async for event in run_agent(
-                request.query, host, history, prior_sources, request.web_search
+                request.query, kb, history, prior_sources, request.web_search
             ):
                 # Charge the cap as the closing event goes past, so a streamed
                 # query counts against the day exactly like a non-streamed one.

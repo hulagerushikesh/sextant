@@ -5,6 +5,44 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-06 — the listing was the leak (0.8.4), and milestone 20 closes
+
+- **Milestone 20 item 4, shipped: every result is trimmed to what the asker
+  may see.** Item 2's measurement said A's retrieval holds up; reading the
+  code to write that up said the retrieval filter was never the hard part.
+  `kb_list` returns every document's title, overview and opening 240
+  characters, so under one shared collection a tenant asking "what do my
+  documents cover?" was handed everybody's.
+- **The filter sits above the tool boundary and below the model**, in
+  `mcp_server/scope.py`. It cannot go into the knowledge base: anything an MCP
+  tool accepts appears in its discovered schema, and the milestone's hard
+  invariant is that the model can never name a corpus — otherwise a sentence
+  inside an uploaded PDF can. It cannot go into the subprocess either without
+  one process per owner, which is arm B. So the knowledge base stays
+  owner-agnostic and the host trims on the way out.
+- **Deny by default**, like item 3's refusal: it trims *anything* in *any*
+  result carrying a `document_id` the asker may not see, rather than naming
+  the tools that leak. `kb_ann_compare` returns passages too.
+- **A deny-list, not an allow-list.** A document is visible unless it is an
+  upload naming somebody else, so the corpus the operator ingested stays
+  everybody's — an allow-list would have hidden every shared document from
+  every user. `shared` is scoped like any other name, or any tenant could read
+  any other's uploads by deleting one header.
+- **`kb_stats` is recomputed, not trimmed.** Telling someone the store holds
+  1,660 chunks when they can search 52 is a wrong answer before it is a leak,
+  and it is the number the UI prints. Derived from the scoped listing, so the
+  knowledge base still needs no notion of an owner.
+- **Scoping exposed a half-wired frontend.** It sent `X-Sextant-Client` on
+  `/upload` only; once the server scoped `/stats` and `/query`, a browser would
+  have stopped seeing its own uploads. One `sent()` helper now puts it on every
+  request. Verified in a browser against a scratch store: four documents
+  stored, the UI showed **2 documents · 2 chunks**, `ada` saw 2, no header saw 1.
+- **Not closed, deliberately:** `collection_size` riding along on a search
+  result — a count of the whole store, read by `agent.py` to tell the model
+  "the knowledge base is empty" apart from "nothing matched". Recomputing it
+  costs a listing per search; dropping it makes that message wrong.
+- **Milestone 20 is closed**, all four items, ₹0 end to end. Nothing deployed.
+
 ## 2026-10-06 — a name is worth what set it (0.8.3)
 
 - **Milestone 20 item 3, shipped: identity arrives from the transport.**

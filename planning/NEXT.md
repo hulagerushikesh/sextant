@@ -5,9 +5,9 @@ before it can start and what it costs; anything with a ₹ or $ figure is
 asked for before it runs. Move a line to [`PROGRESS.md`](PROGRESS.md) when it
 ships; move it to the bottom section when it is decided against.
 
-## Now — Milestone 20 ([`milestone-20.md`](milestone-20.md))
+## Done — Milestone 20 ([`milestone-20.md`](milestone-20.md))
 
-Planned 2026-10-06. "Per-user upload" turned out to be three questions, not
+Planned and closed 2026-10-06, ₹0 end to end. "Per-user upload" turned out to be three questions, not
 one, plus a defect that exists today with a single corpus. Nothing here
 costs money: no VM, no model calls, and `sextant-eval` does not spend.
 
@@ -16,7 +16,7 @@ costs money: no VM, no model calls, and `sextant-eval` does not spend.
 | 1 | Namespace upload ids by owner — two people uploading `notes.pdf` destroyed each other's chunks | — | ₹0 | **shipped** 2026-10-06 (0.8.2) — `upload:<owner>:<stem>`, owner from the `X-Sextant-Client` header the frontend sets from a per-browser id; both halves pinned at the store. Namespacing, not isolation — nothing is hidden from search |
 | 2 | Decide what a corpus is: metadata filter (A) vs collection-per-corpus (B) vs deployment-per-corpus (C) | — | ₹0 | **decided** 2026-10-06 — **A**, filter pushed inside the dense query. At a 3.1% tenant A is +0.0091 recall@5 behind B and *ahead* on hit@1; the rule passed and could not have failed (filtering only promotes; the answer is at global rank 1). Over-fetch is bounded at `CANDIDATES`=30 regardless. [`../learning/multi-corpus.md`](../learning/multi-corpus.md) |
 | 3 | Identity: multiple Caddy `basic_auth` users, the authenticated name forwarded as a header | — | ₹0 | **shipped** 2026-10-06 (0.8.3) — three `basic_auth` slots; `X-Sextant-User` from `{http.auth.user.id}`, believed only alongside `X-Sextant-Proxy-Auth` matching `SEXTANT_PROXY_SECRET`; an unproven name is a 403 in middleware, not a quiet fallback. Verified against a real Caddy (`validate`, `adapt`, and a live two-user proxy rewriting a forged name) |
-| 4 | Scope `kb_list` and `kb_stats` to the owner | — (item 3 shipped) | ₹0 | **not started, and now unblocked** — added by item 2's result: both report the whole collection, so under A every tenant's document titles reach the model's prompt. This is the leak that makes A real work, and it is a correctness bug the moment a second person has documents |
+| 4 | Scope `kb_list` and `kb_stats` to the owner | — | ₹0 | **shipped** 2026-10-06 (0.8.4) — `scope.ScopedHost` trims every result carrying a `document_id` the asker may not see, above the tool boundary and below the model, so no schema ever names a corpus. Deny by default; the shared corpus stays everybody's; `kb_stats` recomputed from the scoped listing. The frontend sent its header on `/upload` only — now on every request, verified in a browser |
 
 **Deploy precondition, new with item 3:** `SEXTANT_PROXY_SECRET` must be in
 the box's `.env` **before** this tree is built there. Caddy has no
@@ -29,7 +29,7 @@ A `kb_search(corpus=…)` in a discovered schema lets a sentence inside an
 uploaded PDF read another person's corpus. Isolation is enforced below the
 tool boundary — pinned into the KB subprocess at spawn.
 
-## Open — Milestone 19 ([`milestone-19.md`](milestone-19.md))
+## Now — Milestone 19 ([`milestone-19.md`](milestone-19.md))
 
 | # | Step | Needs | Cost | State |
 | --- | --- | --- | --- | --- |
