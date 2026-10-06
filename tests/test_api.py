@@ -501,7 +501,27 @@ class TestIdentity:
 class TestStats:
     def test_the_collection_size_is_reported(self, client, host):
         host.results["kb_stats"] = {"status": "healthy", "documents": 3, "collection_size": 40}
+        host.results["kb_list"] = {
+            "documents": [{"document_id": f"d{i}", "chunks": 13} for i in range(3)],
+            "count": 3,
+        }
         assert client.get("/stats").json()["documents"] == 3
+
+    def test_the_numbers_are_the_askers_own_not_the_whole_store(self, client, host):
+        # Milestone 20 item 4: the UI prints these under "documents", and
+        # telling someone the store holds 22 when they can search 1 is a wrong
+        # answer before it is a leak.
+        host.results["kb_stats"] = {"status": "healthy", "documents": 22, "collection_size": 1660}
+        host.results["kb_list"] = {
+            "documents": [
+                {"document_id": "handbook", "chunks": 4},
+                {"document_id": "upload:grace:secret", "chunks": 90, "overview": "hers"},
+            ],
+            "count": 2,
+        }
+        body = client.get("/stats", headers={CLIENT_HEADER: "ada"}).json()
+        assert body["documents"] == 1
+        assert body["collection_size"] == 4
 
     def test_an_unreachable_knowledge_base_is_a_503_not_an_empty_corpus(self, client, host):
         # The distinction the UI depends on: "nothing ingested" and "cannot ask"

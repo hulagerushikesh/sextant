@@ -97,6 +97,22 @@ because each one was learned the expensive way.
   empty ones vanish before parsing (`caddy validate`), a user without its hash
   stops Caddy. `tests/test_deploy_config.py` pins the header names on both
   sides, because renaming one in Python breaks nothing a Python test can see.
+- Since 0.8.4 what a tool returns is **scoped to the asker**:
+  `mcp_server/scope.ScopedHost` wraps the process-global host per request and
+  drops any entry carrying a `document_id` the owner may not see. Deny by
+  default — it trims every result, not a named list of tools. A document is
+  visible unless it is an `upload:<someone else>:*`, so the CLI-ingested
+  corpus stays shared; `shared` is scoped like any other name or the whole
+  thing is bypassable by dropping a header. `kb_stats` is *recomputed* from
+  the scoped listing (so `/stats` now triggers a listing, which warms the
+  index). The filter cannot move into the KB: an MCP tool's parameters become
+  its discovered schema, and **the corpus must never be a tool argument** —
+  `tests/test_scope.py::TestTheInvariant` pins that. `collection_size` on a
+  *search* result is knowingly left whole-store; `agent.py` reads it.
+- Every frontend request carries `X-Sextant-Client` via the `sent()` helper in
+  `lib/api.ts`, not just `/upload`. Leave it off one call and that call is
+  answered as the anonymous `shared` caller — which, since 0.8.4, means the
+  browser stops seeing its own uploads.
 - faiss + torch OpenMP: `server.py` must import faiss before anything that
   pulls torch, or the KB subprocess segfaults (exit 139).
 - PDFs go through PyMuPDF (`loaders._page_lines`), not pypdf: pypdf guesses
