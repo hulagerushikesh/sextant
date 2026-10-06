@@ -424,15 +424,37 @@ except Exception:
     print(-1)'
 }
 
+# `/upload` answers 200 with `"success": false` when the file was unreadable,
+# the tool was unavailable, or the ingest failed -- the status code says the
+# request arrived, not that anything was stored. Checking the code alone makes
+# "the user uploaded a file" a check that passes when they did not, and the
+# only symptom would be the count assertions below failing for no stated
+# reason. So the verdict comes out of the body, and a refusal says why.
 upload_probe() {
-  local auth="$1" body="$2" dir file
+  local auth="$1" body="$2" dir file answer code
   dir=$(mktemp -d)
   file="$dir/$PROBE_STEM.txt"
   printf '%s\n' "$body" > "$file"
-  curl -s -o /dev/null -w '%{http_code}' --max-time 120 \
-    --config <(printf 'user = "%s"\n' "$auth") -F "files=@$file" "$URL/upload" 2>/dev/null \
-    | tr -d '\r' || true
+  answer=$({ curl -s -w '\n%{http_code}' --max-time 120 \
+      --config <(printf 'user = "%s"\n' "$auth") -F "files=@$file" \
+      "$URL/upload" 2>/dev/null || true; })
   rm -rf "$dir"
+  code=$(printf '%s' "$answer" | tail -1 | tr -d '\r')
+  printf '%s' "$answer" | sed '$d' | CODE="$code" python3 -c 'import json, os, sys
+
+code = os.environ["CODE"]
+if code != "200":
+    print("http %s" % (code or "000"))
+    raise SystemExit
+try:
+    body = json.load(sys.stdin)
+except Exception:
+    print("200 with an unreadable body")
+    raise SystemExit
+if not body.get("success"):
+    print("refused: %s" % (body.get("error") or "no reason given"))
+    raise SystemExit
+print("stored %s" % body.get("documents_added", 0))'
 }
 
 if [ -z "$URL" ] || [ -z "${SEXTANT_TRIP_AUTH:-}" ] || [ -z "${SEXTANT_TRIP_AUTH_2:-}" ]; then
@@ -447,7 +469,7 @@ else
   # From here on the corpus has been written to, so the trap has work to do
   # whatever happens next.
   PROBES_UPLOADED=1
-  expect "first user uploads $PROBE_STEM.txt" 200 \
+  expect "first user uploads $PROBE_STEM.txt" "stored 1" \
     "$(upload_probe "$SEXTANT_TRIP_AUTH" 'Probe from the first gate user.')"
   expect "they see one more"            "$((a0 + 1))" "$(stats_docs "$SEXTANT_TRIP_AUTH")"
   expect "the second user sees nothing new" "$b0"     "$(stats_docs "$SEXTANT_TRIP_AUTH_2")"
@@ -465,7 +487,7 @@ else
     GATE_FAILURES=$((GATE_FAILURES + 1))
   fi
 
-  expect "second user uploads the same filename" 200 \
+  expect "second user uploads the same filename" "stored 1" \
     "$(upload_probe "$SEXTANT_TRIP_AUTH_2" 'Probe from the second gate user.')"
   expect "they see one more"            "$((b0 + 1))" "$(stats_docs "$SEXTANT_TRIP_AUTH_2")"
   # The one that matters. Before 0.8.2 the id was `upload:<stem>`, so the second

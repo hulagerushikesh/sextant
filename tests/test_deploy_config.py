@@ -190,11 +190,19 @@ _CURL_STUB = """#!/usr/bin/env bash
 # same way Caddy would see it, and answers the way a correctly configured gate
 # would -- or, under FAKE_GATE_*, the way a broken one would.
 if [ "${FAKE_GATE_DOWN:-0}" = 1 ]; then echo 000; exit 7; fi
-auth=""; hdrs=""; URL_PATH="/health"
+auth=""; hdrs=""; URL_PATH="/health"; discard_body=0; want_code=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --config) auth=$(sed -n 's/^user = "\\(.*\\)"$/\\1/p' "$2"); shift 2 ;;
     -H)       hdrs="$hdrs|$2"; shift 2 ;;
+    # Honoured, because `-o /dev/null -w %{http_code}` is precisely how a
+    # caller sees only the status and never the body -- and a 200 whose body
+    # says `"success": false` is the thing step 7 has to be able to catch.
+    -o)       if [ "$2" = /dev/null ]; then discard_body=1; fi; shift 2 ;;
+    # Without -w curl prints the body and nothing else, which is how
+    # `stats_docs` reads /stats -- appending a status line there would hand
+    # json.load trailing junk and make every count -1.
+    -w)       want_code=1; shift 2 ;;
     http*)    URL_PATH="/${1#*://*/}"; case "$1" in */health) URL_PATH=/health ;;
                 */stats) URL_PATH=/stats ;; */upload) URL_PATH=/upload ;; esac; shift ;;
     *)        shift ;;
@@ -227,18 +235,32 @@ base="${FAKE_BASE_DOCS:-21}"
 
 case "$URL_PATH" in
   /upload)
-    # FAKE_COLLIDING_IDS models the pre-0.8.2 scheme, where the id was
-    # `upload:<stem>` and the second upload replaced the first.
-    if [ "${FAKE_COLLIDING_IDS:-0}" = 1 ]; then : > "$corpus"; fi
-    echo "$who" >> "$corpus"
-    echo 200 ;;
+    # 200 with "success": false is what the real endpoint answers for a file it
+    # could not read or an ingest that failed -- the status code only says the
+    # request arrived. Nothing is stored in that case.
+    if [ "${FAKE_UPLOAD_REJECTS:-0}" = 1 ]; then
+      body='{"success":false,"documents_added":0,'
+      body="$body"'"error":"No readable files in the upload."}'
+    else
+      # FAKE_COLLIDING_IDS models the pre-0.8.2 scheme, where the id was
+      # `upload:<stem>` and the second upload replaced the first.
+      if [ "${FAKE_COLLIDING_IDS:-0}" = 1 ]; then : > "$corpus"; fi
+      echo "$who" >> "$corpus"
+      body='{"success":true,"documents_added":1,"collection_size":80}'
+    fi ;;
   /stats)
     mine=$(grep -cx "$who" "$corpus" 2>/dev/null)
     case "$mine" in ""|0) mine=0 ;; *) mine=1 ;; esac
-    printf '{"collection_size":79,"documents":%s,"summaries":21,"persist_dir":"/data/chroma"}\n' \
-      "$((base + mine))" ;;
-  *) echo 200 ;;
+    body=$(printf '{"collection_size":79,"documents":%s,"summaries":21,' "$((base + mine))")
+    body="$body"'"persist_dir":"/data/chroma"}' ;;
+  *) body="" ;;
 esac
+if [ "$discard_body" = 1 ]; then
+  echo 200
+else
+  if [ -n "$body" ]; then echo "$body"; fi
+  if [ "$want_code" = 1 ]; then echo 200; fi
+fi
 """
 
 
@@ -651,11 +673,11 @@ class TestTheIsolationIsProvenFromOutside:
     def test_a_correct_box_proves_the_whole_criterion(self, tmp_path):
         code, out = _run_trip(tmp_path, GOOD_ENV, **self.AUTH)
         for line in (
-            "first user uploads sextant-trip-probe.txt    200",
+            "first user uploads sextant-trip-probe.txt    stored 1",
             "they see one more                            22",
             "the second user sees nothing new             21",
             "naming yourself the other user               22",
-            "second user uploads the same filename        200",
+            "second user uploads the same filename        stored 1",
             "the first user's copy survived               22",
             "probe documents in the store                 2",
             "owned by distinct names                      2",
@@ -721,3 +743,34 @@ class TestTheIsolationIsProvenFromOutside:
         _, out = _run_trip(tmp_path, GOOD_ENV, **self.AUTH)
         assert "removing upload:ada:sextant-trip-probe" in out
         assert "removing upload:grace:sextant-trip-probe" in out
+
+
+class TestAnUploadIsJudgedByWhatItStored:
+    """`/upload` answers 200 with `"success": false` when the file was
+    unreadable, the tool was unavailable, or the ingest failed. The status code
+    says the request arrived, not that anything was stored -- so checking it
+    alone makes "the user uploaded a file" a check that passes when they did
+    not, and the only symptom is the count assertions failing with no stated
+    reason.
+    """
+
+    AUTH = {"SEXTANT_TRIP_AUTH": "ada:pw", "SEXTANT_TRIP_AUTH_2": "grace:pw"}
+
+    def test_a_stored_upload_says_what_it_stored(self, tmp_path):
+        _, out = _run_trip(tmp_path, GOOD_ENV, **self.AUTH)
+        assert "first user uploads sextant-trip-probe.txt    stored 1" in out
+
+    def test_a_refused_upload_is_not_a_pass(self, tmp_path):
+        code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_UPLOAD_REJECTS="1", **self.AUTH)
+        assert code != 0
+        assert "wanted stored 1" in out
+
+    def test_a_refusal_says_why_on_the_line_that_names_the_action(self, tmp_path):
+        # Otherwise the operator reads "200" and then four unexplained count
+        # mismatches, with the actual reason nowhere on screen.
+        _, out = _run_trip(tmp_path, GOOD_ENV, FAKE_UPLOAD_REJECTS="1", **self.AUTH)
+        assert "got refused: No readable files in the upload." in out
+
+    def test_nothing_is_left_behind_when_nothing_was_stored(self, tmp_path):
+        _, out = _run_trip(tmp_path, GOOD_ENV, FAKE_UPLOAD_REJECTS="1", **self.AUTH)
+        assert "nothing to remove" in out

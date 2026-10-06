@@ -89,6 +89,12 @@ users have uploaded, their counts are the same number, and a check whose two
 sides agree cannot fail — the first draft of this step passed against a proxy
 that forwarded the client's name for exactly that reason.
 
+**An upload is judged by what it stored.** `/upload` answers 200 with
+`"success": false` for a file it could not read or an ingest that failed, so
+the step reads the body: `stored 1`, or `refused: <the box's own reason>`, or
+`http <code>`. Checking the status code alone reported a tick for uploads that
+stored nothing and left the operator with unexplained count mismatches.
+
 **The probe documents are removed in the `EXIT` trap, before the box stops** —
 not at the end of step 7, because the run that most needs the cleanup is the
 one that died half way through. They are found by scanning the store for the
