@@ -160,6 +160,18 @@ because each one was learned the expensive way.
 - `/stats` is rate limited since 0.8.7: scoping it in 0.8.4 made it recompute
   from a full listing, so it walks the corpus and is no longer the cheap read
   its missing limit assumed. The UI calls it once a page load, never polls.
+- `deploy/trip.sh` **checks the gate from outside the box** (step 6, since
+  2026-10-06). Every other check in it runs through `docker exec` at
+  `localhost:8000`, which is behind Caddy -- so the trip that deploys the gate
+  had never gone through it, and a misconfigured or stopped Caddy reported
+  green. The row that matters: a real user sending a **forged
+  `X-Sextant-Proxy-Auth` must get 200**, because `header_up` is a *set* and the
+  client's copy is replaced before the app sees it. A 403 there means Caddy
+  appended instead, and the header is worthless. Credentials come from
+  `SEXTANT_TRIP_AUTH` / `_2` in the operator's environment, reach curl through
+  a pipe not argv, and are never printed; unset is a skip, a missing
+  `PUBLIC_URL` is a failure. Still unproven: the isolation *behind* the gate --
+  every check in step 6 is a read.
 - `deploy/trip.sh` **verifies the park, it does not just perform it.** The
   stop is `|| true` (a trap that aborts half way leaves the address reserved),
   so the state is read back, retried once if it is not `TERMINATED`, and then
