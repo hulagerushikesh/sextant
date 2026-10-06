@@ -5,6 +5,58 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-06 — an upload belongs to someone (0.8.2)
+
+- **Milestone 20 item 1.** Uploads were stored as `upload:<filename stem>`,
+  which is global across the store, and `_store` clears a document's existing
+  chunks before writing its new ones. Both are right alone -- a re-ingest
+  *should* be a replacement -- and together they meant two people behind the
+  one shared Basic-auth password who each uploaded `notes.pdf` destroyed each
+  other's chunks, with `/upload` answering success and no symptom but
+  citations that stopped appearing. The id is now `upload:<owner>:<stem>`.
+- **The owner comes from the transport, not the payload.** `/upload` reads
+  `X-Sextant-Client`, which the frontend sets from a random per-browser id
+  kept in localStorage; anything that sends no header -- the CLI, curl, the
+  eval harness, a browser with storage switched off -- lands in
+  `upload:shared:<stem>`, which is exactly the old behaviour. So the fix is
+  invisible to every non-browser caller.
+- **It is namespacing, and `mcp_server/identity.py` says so in the file.** The
+  header is untrusted by construction: anything can send it, so an owner is a
+  name people pick, not one they prove, and one owner's chunks are still
+  returned by another's search. Nothing was hidden, because hiding is item 2
+  and it has a measurement attached. The trusted source -- Caddy forwarding
+  `{http.auth.user.id}` -- is item 3, and the module deliberately does **not**
+  read a proxy header yet: reading one before anything sets it would let any
+  caller claim any identity by typing it.
+- **Both halves are pinned at the store, not only on the id.** Two owners
+  uploading `notes.md` keep their chunks and both stay findable by search; the
+  same owner re-uploading still collapses a many-chunk document to one with
+  the old text gone from the index. A fix that only separated the two people
+  would have broken the replacement the stable id was for. The owner is
+  sanitised on the way in: it reaches a document id and from there a chunk id
+  (`<document_id>#<n>`), so an owner carrying `:` or `#` could otherwise name
+  a document that is not theirs.
+- **The old ids: a documented one-way break, no migration.** A store written
+  before 0.8.2 keeps its `upload:<stem>` documents -- searchable, and
+  `sextant-forget` still removes them -- but a re-upload lands beside them
+  rather than replacing them. The deployed store should hold none: the
+  2026-09-27 re-ingest rebuilt it from `/data/corpus` through the CLI, whose
+  ids are bare stems, and dropped the one `upload:` document it had. To be
+  confirmed with `kb_list` on the next trip rather than assumed.
+- **Found while fixing it:** the test rate limiter is module-level state keyed
+  on client IP, and every API test arrives as the same `testclient`. Adding
+  two tests 429'd an unrelated one, and the failure pointed at the wrong file.
+  The `client` fixture resets it now, so test order stops mattering.
+- **Verified in the browser, not only in tests**, because the frontend half
+  has none: `clientId()` returned `bmuwdv257cib2ds2z`, stable and persisted;
+  the real `uploadFiles` posted a real file to the real server on `:8100`
+  with `VITE_MOCK=0`; the store held
+  `upload:bmuwdv257cib2ds2z:ownership-check`. Removed afterwards -- the local
+  store is back to 22 documents / 1,660 chunks.
+- Gate green: 449 passed, mypy clean on 58 files, ruff clean, frontend builds.
+- Cost ₹0 -- local, no VM, no model calls. Not deployed; it rides the next
+  trip with the key rotation. Frontend bundle 186.8 -> 186.9 kB gzip.
+
 ## 2026-10-06 — milestone 20 planned, and "one corpus per deployment" turns out to hide a live defect
 
 - **Milestone 20 is planned, not started** ([`milestone-20.md`](milestone-20.md)).

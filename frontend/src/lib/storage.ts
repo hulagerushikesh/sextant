@@ -33,3 +33,33 @@ export function storageKey(suffix: string): string {
   }
   return key
 }
+
+const CLIENT_KEY = PREFIX + 'client.v1'
+
+/**
+ * A stable random name for this browser, sent with uploads.
+ *
+ * It exists so two people behind the one shared password stop overwriting
+ * each other's documents: before 0.8.2 an upload was stored as
+ * `upload:<filename>`, so the second `notes.pdf` deleted the first. It is a
+ * namespace, not a login — the server treats it as untrusted, and it hides
+ * nothing from anyone's search. See `mcp_server/identity.py`.
+ *
+ * Random rather than anything about the person: it needs to be unique and
+ * stable, and nothing more. If storage is unavailable, the server's own
+ * default applies and the old shared behaviour is what you get — which is the
+ * right failure, because the alternative is a new id per page load and a
+ * duplicate document on every re-upload.
+ */
+export function clientId(): string | null {
+  try {
+    let id = localStorage.getItem(CLIENT_KEY)
+    if (!id) {
+      id = `b${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
+      localStorage.setItem(CLIENT_KEY, id)
+    }
+    return id
+  } catch {
+    return null
+  }
+}
