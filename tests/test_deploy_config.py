@@ -177,11 +177,42 @@ exit 0
 """
 
 
+_CURL_STUB = """#!/usr/bin/env bash
+# Stands in for curl in step 6, which runs from the laptop rather than over
+# ssh. It reads the config file the script passes so the user:pass arrives the
+# same way Caddy would see it, and answers the way a correctly configured gate
+# would -- or, under FAKE_GATE_*, the way a broken one would.
+if [ "${FAKE_GATE_DOWN:-0}" = 1 ]; then echo 000; exit 7; fi
+auth=""; hdrs=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --config) auth=$(sed -n 's/^user = "\\(.*\\)"$/\\1/p' "$2"); shift 2 ;;
+    -H)       hdrs="$hdrs|$2"; shift 2 ;;
+    *)        shift ;;
+  esac
+done
+# Caddy appending the proof header instead of setting it: the app then sees the
+# client's forged copy beside the real one and refuses.
+case "$hdrs" in
+  *X-Sextant-Proxy-Auth*)
+    if [ "${FAKE_GATE_APPENDS:-0}" = 1 ]; then echo 403; exit 0; fi ;;
+esac
+if [ -z "$auth" ]; then
+  if [ "${FAKE_GATE_OPEN:-0}" = 1 ]; then echo 200; else echo 401; fi
+  exit 0
+fi
+case "|${FAKE_GATE_USERS:-ada:pw|grace:pw}|" in
+  *"|$auth|"*) echo 200 ;;
+  *)           echo 401 ;;
+esac
+"""
+
+
 def _run_trip(tmp_path, env_text, args=(), **extra_env):
     """Run the whole script offline. Returns (exit code, stdout+stderr)."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    for name, body in (("ssh", _SSH_STUB), ("gcloud", _GCLOUD_STUB)):
+    for name, body in (("ssh", _SSH_STUB), ("gcloud", _GCLOUD_STUB), ("curl", _CURL_STUB)):
         f = bin_dir / name
         f.write_text(body)
         f.chmod(f.stat().st_mode | stat.S_IEXEC)
@@ -461,3 +492,103 @@ class TestTheTripProvesItParkedTheBox:
         assert "SEXTANT_PROXY_SECRET is missing or empty" in out
         assert "agenticrag is TERMINATED" in out
         assert "STILL" not in out
+
+
+class TestTheGateIsCheckedFromOutside:
+    """Step 6, which until now did not exist at all.
+
+    Every other check in the trip goes through `docker exec` at
+    `localhost:8000` -- inside the box, behind Caddy. So the trip that exists to
+    deploy the gate never touched it: a box whose Caddy was misconfigured, or
+    not running, passed every check in step 5 and reported green. These run from
+    the operator's machine over the public URL.
+
+    The two 200s read backwards and are the point: `header_up` in Caddy is a
+    *set*, so a client's own `X-Sextant-Proxy-Auth` is replaced before the app
+    sees it. A forged proof that still succeeds is Caddy working. A 403 would
+    mean it appended instead -- and then anyone can send the header themselves.
+    """
+
+    AUTH = {"SEXTANT_TRIP_AUTH": "ada:pw", "SEXTANT_TRIP_AUTH_2": "grace:pw"}
+
+    def test_a_correctly_configured_gate_passes_every_check(self, tmp_path):
+        code, out = _run_trip(tmp_path, GOOD_ENV, **self.AUTH)
+        for line in (
+            "no credentials                               401",
+            "wrong password                               401",
+            "a real user                                  200",
+            "a forged proof is overwritten                200",
+            "naming yourself, no password                 401",
+            "a second user                                200",
+        ):
+            assert line in out, line
+        assert code == 0
+
+    def test_a_gate_that_lets_anyone_in_fails_the_trip(self, tmp_path):
+        # The deploy itself succeeded. It is still not a trip that passed.
+        code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_GATE_OPEN="1", **self.AUTH)
+        assert "no credentials" in out and "got 200, wanted 401" in out
+        assert "gate check(s) failed -- the box is deployed but not proven" in out
+        assert code != 0
+
+    def test_a_caddy_that_appends_the_proof_header_is_caught(self, tmp_path):
+        # Appending rather than setting leaves the client's forged copy beside
+        # the real one, which is the whole header being worthless.
+        code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_GATE_APPENDS="1", **self.AUTH)
+        assert "a forged proof is overwritten" in out
+        assert "got 403, wanted 200" in out
+        assert code != 0
+
+    def test_a_box_with_no_public_url_is_a_failure_not_a_skip(self, tmp_path):
+        # Unlike missing credentials, this is the box being wrong, not the
+        # operator declining to prove something.
+        code, out = _run_trip(
+            tmp_path,
+            "\n".join(
+                x for x in GOOD_ENV.splitlines() if not x.startswith("PUBLIC_URL")
+            ),
+            **self.AUTH,
+        )
+        assert "no PUBLIC_URL on the box -- the gate is unproven" in out
+        assert code != 0
+
+    def test_no_credentials_exported_is_a_skip_that_says_so(self, tmp_path):
+        # Not a failure: supplying them is the operator's call. But it must not
+        # read as a pass, because nothing about the gate was exercised.
+        code, out = _run_trip(tmp_path, GOOD_ENV)
+        assert "SEXTANT_TRIP_AUTH unset -- nothing here ran" in out
+        assert "every check above was inside the box, behind Caddy" in out
+        assert code == 0
+
+    def test_one_name_at_the_gate_says_isolation_is_unproven(self, tmp_path):
+        code, out = _run_trip(tmp_path, GOOD_ENV, SEXTANT_TRIP_AUTH="ada:pw")
+        assert "one name at the gate, so isolation is unproven" in out
+        assert code == 0
+
+    def test_the_password_never_reaches_the_output(self, tmp_path):
+        # It goes to curl through a config file on a pipe, never argv, so it is
+        # not in `ps` either while the trip runs.
+        secret = "sentinel0gate0password0do0not0print"
+        _, out = _run_trip(
+            tmp_path, GOOD_ENV, FAKE_GATE_USERS=f"ada:{secret}",
+            SEXTANT_TRIP_AUTH=f"ada:{secret}",
+        )
+        assert secret not in out
+
+    def test_a_failed_gate_still_parks_the_box(self, tmp_path):
+        # The gate's verdict is an `exit`, and the park is a trap, so the order
+        # is not something either one has to remember.
+        code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_GATE_OPEN="1", **self.AUTH)
+        assert code != 0
+        assert "agenticrag is TERMINATED" in out
+
+    def test_a_box_that_cannot_be_reached_is_a_failed_check_not_a_crash(self, tmp_path):
+        # curl exits non-zero on a refused connection, and `set -o pipefail`
+        # would turn that into the script dying mid-step with the park never run --
+        # except the trap. It is still the check's problem, not the script's:
+        # 000 is not the code wanted, so it counts like any other failure.
+        code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_GATE_DOWN="1", **self.AUTH)
+        assert "got 000, wanted" in out
+        assert "gate check(s) failed" in out
+        assert "agenticrag is TERMINATED" in out
+        assert code != 0
