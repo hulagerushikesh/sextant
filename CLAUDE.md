@@ -160,6 +160,16 @@ because each one was learned the expensive way.
 - `/stats` is rate limited since 0.8.7: scoping it in 0.8.4 made it recompute
   from a full listing, so it walks the corpus and is no longer the cheap read
   its missing limit assumed. The UI calls it once a page load, never polls.
+- `deploy/trip.sh` **step 7 proves the isolation and is the only part that
+  writes.** Both gate users upload the same filename through the public URL;
+  each must see their own and not the other's; then the store is read directly
+  for two probe documents under two distinct owners. **The forged-name check
+  runs between the two uploads, never after** -- afterwards both counts are the
+  same number and the check cannot fail, which is how the first draft passed
+  against a proxy that forwarded the client's name. The probes are removed in
+  the EXIT trap before the stop, found by *scanning* for the filename rather
+  than rebuilding `upload:<owner>:<stem>`, and anything left behind exits
+  non-zero. Needs `SEXTANT_TRIP_AUTH` and `_2`; costs ~$0.006 of summaries.
 - `deploy/trip.sh` **checks the gate from outside the box** (step 6, since
   2026-10-06). Every other check in it runs through `docker exec` at
   `localhost:8000`, which is behind Caddy -- so the trip that deploys the gate

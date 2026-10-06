@@ -73,6 +73,31 @@ script exit non-zero: the box is deployed, but it is not proven.
 Nothing in step 6 writes to the corpus or calls the model — every request is a
 `GET /health`.
 
+**Step 7 proves the isolation, and it is the only part of the trip that
+writes.** Step 6 proves the gate; every check in it is a read, so it says
+nothing about what is behind the gate. Step 7 runs milestone 21's
+pre-registered success criterion — two gate users upload a file of the same
+name, both survive, each sees their own and not the other's, a client-supplied
+`X-Sextant-User` changes nothing — and then reads the store directly to confirm
+there are two probe documents under two different owners.
+
+It only runs when both `SEXTANT_TRIP_AUTH` and `SEXTANT_TRIP_AUTH_2` are
+exported. It costs two summaries (~$0.006) when a model key is configured.
+
+**The forged-name check runs between the two uploads, not after.** Once both
+users have uploaded, their counts are the same number, and a check whose two
+sides agree cannot fail — the first draft of this step passed against a proxy
+that forwarded the client's name for exactly that reason.
+
+**The probe documents are removed in the `EXIT` trap, before the box stops** —
+not at the end of step 7, because the run that most needs the cleanup is the
+one that died half way through. They are found by scanning the store for the
+probe filename rather than by rebuilding `upload:<owner>:<stem>` from the
+usernames, so a name spelled differently by `safe_owner()` cannot leave
+documents behind that the trip reports as gone. If any survive, the trip says
+which and exits non-zero: documents left in the production corpus are not
+something a 0 should be able to say happened.
+
 **The park is checked, not just performed.** `park()` has always read the
 instance's state back; it now compares it. If the box is not `TERMINATED` the
 stop is retried once — a transient API error is the dullest explanation and
