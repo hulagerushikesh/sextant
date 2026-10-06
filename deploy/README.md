@@ -45,6 +45,15 @@ configured. After the build it checks that a forged `X-Sextant-User` sent
 straight at the api container is refused, and lists the store's document ids
 so a pre-0.8.2 `upload:<stem>` leftover shows up by name.
 
+**The park is checked, not just performed.** `park()` has always read the
+instance's state back; it now compares it. If the box is not `TERMINATED` the
+stop is retried once — a transient API error is the dullest explanation and
+the cheapest to rule out — and if it is still up the script says so on stderr
+with the manual command and **exits non-zero**, because 0 is how a person or a
+later `&&` reads "parked". The same applies to the reserved address, which
+bills ~₹21/day attached to nothing. A trip that otherwise passed but left the
+meter running is not a trip that passed.
+
 ---
 
 ## B1–B2 · Provision (static IP, disk, firewall, VM)

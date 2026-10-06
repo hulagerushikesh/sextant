@@ -153,14 +153,31 @@ esac
 """
 
 _GCLOUD_STUB = """#!/usr/bin/env bash
+# Stands in for gcloud, and unlike the ssh stub it keeps state: the instance
+# answers RUNNING until a `stop` succeeds and TERMINATED afterwards, and the
+# reserved address exists until a `delete` succeeds. A stub that always says
+# TERMINATED would make "the trip parked the box" an assertion that cannot
+# fail -- which is how a trip that never parked passed the gate until now.
+S="$FAKE_STATE"
 case "$*" in
-  *"instances describe"*) echo "${FAKE_VM_STATUS:-RUNNING}" ;;
+  *"instances describe"*)
+    cat "$S" 2>/dev/null || echo RUNNING ;;
+  *"instances stop"*)
+    if [ "${FAKE_STOP_FAILS:-0}" = 1 ]; then exit 1; fi
+    echo TERMINATED > "$S" ;;
+  *"addresses describe"*)
+    if [ -f "$S.ip" ]; then echo 10.0.0.1; else exit 1; fi ;;
+  *"addresses delete"*)
+    if [ "${FAKE_ADDRESS_STICKS:-0}" = 1 ]; then exit 1; fi
+    rm -f "$S.ip" ;;
+  *"addresses list"*)
+    if [ -f "$S.ip" ]; then echo agenticrag-ip; fi ;;
 esac
 exit 0
 """
 
 
-def _run_trip(tmp_path, env_text, **extra_env):
+def _run_trip(tmp_path, env_text, args=(), **extra_env):
     """Run the whole script offline. Returns (exit code, stdout+stderr)."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -173,10 +190,18 @@ def _run_trip(tmp_path, env_text, **extra_env):
     box.mkdir(parents=True)
     (box / ".env").write_text(env_text)
 
+    # The box starts up with its address reserved, which is the state a trip
+    # actually finds: that is what step 1 skips creating and what park has to
+    # release.
+    state = tmp_path / "vm-state"
+    state.write_text("RUNNING\n")
+    state.with_suffix(".ip").write_text("10.0.0.1\n")
+
     env = {
         **os.environ,
         "PATH": f"{bin_dir}:{os.environ['PATH']}",
         "FAKE_BOX": str(box.parent),
+        "FAKE_STATE": str(state),
         "FAKE_HEALTH": (
             '{"status":"healthy","mcp_connected":true,'
             '"model_configured":true,"budget":{"budget_usd":0.6}}'
@@ -188,7 +213,11 @@ def _run_trip(tmp_path, env_text, **extra_env):
         **extra_env,
     }
     done = subprocess.run(
-        ["bash", str(TRIP)], capture_output=True, text=True, env=env, timeout=300
+        ["bash", str(TRIP), *args],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=300,
     )
     return done.returncode, done.stdout + done.stderr
 
@@ -369,3 +398,66 @@ class TestTheDocumentIdAudit:
         assert "embeddings" not in source
         assert "sentence_transformers" not in source
         assert 'include=["metadatas"]' in source
+
+
+class TestTheTripProvesItParkedTheBox:
+    """The trap's own result, which nothing checked until today.
+
+    `park()` has always read the instance's state back and printed it. Printing
+    is not checking: an offline run of the whole script ended `agenticrag is
+    RUNNING` and exited 0, and so did this module's happy-path test, because
+    the stub answered RUNNING to every question and nobody compared the answer
+    to anything. That is the 2026-09-28 failure one level down -- the checklist
+    became a trap, and then the trap's outcome became the new unread line.
+    """
+
+    def test_the_happy_path_actually_terminates_the_box(self, good_run):
+        code, out = good_run
+        assert "agenticrag is TERMINATED" in out
+        assert "reserved addresses: 0" in out
+        assert code == 0
+
+    def test_a_box_that_will_not_stop_is_not_a_successful_trip(self, tmp_path):
+        # Everything else passes. The exit code must still say "not parked",
+        # because 0 is how a person or a later `&&` reads that claim.
+        code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_STOP_FAILS="1")
+        assert "done - the trap parks the box next" in out, "the trip itself passed"
+        assert code != 0
+        assert "STILL RUNNING" in out
+
+    def test_the_alarm_says_what_it_costs_and_how_to_end_it(self, tmp_path):
+        _, out = _run_trip(tmp_path, GOOD_ENV, FAKE_STOP_FAILS="1")
+        assert "Rs134/day" in out
+        assert "gcloud compute instances stop agenticrag" in out
+
+    def test_the_stop_is_retried_before_the_alarm(self, tmp_path):
+        # One transient API error is the dullest reason for a bad readback and
+        # the cheapest to rule out, so the alarm only fires after a second try.
+        _, out = _run_trip(tmp_path, GOOD_ENV, FAKE_STOP_FAILS="1")
+        assert "stop did not take (RUNNING), retrying" in out
+
+    def test_an_address_left_reserved_also_takes_the_zero_away(self, tmp_path):
+        # Rs21/day for an address nothing is attached to -- smaller than a
+        # running box and the same kind of silence.
+        code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_ADDRESS_STICKS="1")
+        assert "agenticrag is TERMINATED" in out, "the box did park"
+        assert code != 0
+        assert "still reserved" in out
+        assert "gcloud compute addresses delete agenticrag-ip" in out
+
+    def test_keep_up_is_a_decision_not_an_alarm(self, tmp_path):
+        # --keep-up is something you have to type. A box left up on purpose is
+        # not the failure this guards, so it must not start reading as one.
+        code, out = _run_trip(tmp_path, GOOD_ENV, args=["--keep-up"])
+        assert "NOT parking (--keep-up)" in out
+        assert "STILL" not in out
+        assert code == 0
+
+    def test_a_trip_that_failed_keeps_its_own_exit_code(self, tmp_path):
+        # The park check may only turn a 0 into a 1. A hard stop that already
+        # failed must not have its reason overwritten by a successful park.
+        code, out = _run_trip(tmp_path, "SEXTANT_PROXY_SECRET=\n")
+        assert code != 0
+        assert "SEXTANT_PROXY_SECRET is missing or empty" in out
+        assert "agenticrag is TERMINATED" in out
+        assert "STILL" not in out
