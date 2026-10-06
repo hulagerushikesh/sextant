@@ -230,7 +230,11 @@ async def resolve_owner(request: Request, call_next):
     refusal still carries a request id.
     """
     try:
-        request.state.owner = identity.owner_of(request.headers)
+        who = identity.resolve(request.headers)
+        request.state.owner = who.name
+        # Kept apart from the name because the two are used for different
+        # things: namespacing is happy with an unproven name, rationing is not.
+        request.state.trusted = who.trusted
     except identity.ForgedIdentity as e:
         # The claimed name is attacker-controlled text; it does not go in the
         # log line. What is worth recording is that someone tried, and from where.
@@ -257,9 +261,34 @@ async def tag_request(request: Request, call_next):
         request_id.reset(token)
 
 
+def _trusted_owner(request: Request) -> str | None:
+    """The authenticated name, or None when nothing vouched for one."""
+    return request.state.owner if getattr(request.state, "trusted", False) else None
+
+
+def _limit_key(request: Request) -> str:
+    """What the rate limiter counts against.
+
+    The authenticated name when there is one, and the client address when
+    there is not. Not "the name, falling back to the address" as a tidiness
+    measure -- the two protect against different things and only one of them
+    can be chosen per request. An authenticated name is the thing worth
+    limiting: everybody behind one NAT otherwise shares a bucket and throttles
+    each other, and an office is one address. But an *unproven* name is worse
+    than the address it would replace, because the caller picks it, and a
+    bucket the caller picks is a bucket the caller empties by picking another.
+
+    Prefixed, so an address can never collide with somebody named after one.
+    """
+    owner = _trusted_owner(request)
+    if owner:
+        return f"user:{owner}"
+    return f"ip:{request.client.host if request.client else 'unknown'}"
+
+
 def _rate_limit(request: Request) -> None:
     """Reject a client that is asking too often. Raises 429 with Retry-After."""
-    client = request.client.host if request.client else "unknown"
+    client = _limit_key(request)
     allowed, retry_after = limiter.check(client)
     if not allowed:
         logger.warning("rate limited %s", client)
@@ -270,8 +299,17 @@ def _rate_limit(request: Request) -> None:
         )
 
 
-def _budget_gate() -> None:
-    """Refuse a query once the day's model spend has hit the cap.
+def _budget_gate(request: Request) -> None:
+    """Refuse a query once the day's model spend has hit a cap.
+
+    Two caps, checked in this order because they fail for different reasons
+    and the message has to say which:
+
+    1. **the day's**, which protects the operator's wallet and is the thing a
+       leaked gate can never get past;
+    2. **this owner's share of it**, which protects the *other* people behind
+       the gate from the first one to spend the afternoon. Only applied to a
+       name the proxy vouched for -- see `DailyBudget.check_owner`.
 
     A hard ceiling, not a rate limit: it counts dollars, not requests, and
     resets at UTC midnight rather than on a rolling window. Off unless
@@ -286,6 +324,19 @@ def _budget_gate() -> None:
             detail=(
                 f"Daily spend cap of ${budget.budget:.2f} reached. "
                 "Answering is paused until 00:00 UTC."
+            ),
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    owner = _trusted_owner(request)
+    allowed, mine, retry_after = budget.check_owner(owner)
+    if not allowed:
+        logger.warning("%s reached their share: $%.4f", owner, mine)
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"Your share of today's spend cap (${budget.owner_budget:.2f}) is "
+                "used up. It resets at 00:00 UTC; other users are unaffected."
             ),
             headers={"Retry-After": str(retry_after)},
         )
@@ -317,7 +368,7 @@ async def root():
 
 
 @app.get("/health")
-async def health_check():
+async def health_check(http_request: Request):
     """Health of this server, the MCP connection, and the model behind it."""
     model_ready = bool(os.getenv("GEMINI_API_KEY"))
     return {
@@ -332,7 +383,10 @@ async def health_check():
         "web_search_enabled": web_search_default(),
         # The day's model spend against the cap, so the UI can show how much is
         # left and warn before answering stops. {"enabled": false} when unset.
-        "budget": budget.status(),
+        # Carries this asker's own share too when one is configured: being
+        # refused at 20% of a cap you can see is unspent, with no way to tell
+        # why, is the kind of thing that gets reported as the box being broken.
+        "budget": budget.status(_trusted_owner(http_request)),
         "mcp_error": host.error,
         "tools_discovered": [t["name"] for t in host.tools],
         "tools_offered_to_model": [t.get("name") for t in declare_tools(host)],
@@ -408,7 +462,12 @@ async def ann_benchmark(request: BenchmarkRequest, http_request: Request):
     numbers: the reason `/ann/compare` leaked was that one route called the
     process-global host directly, and "this one has nothing to leak yet" is how
     that happens again the next time a field is added to its result.
+
+    Rate limited for the same reason it is the heaviest call the box serves:
+    it builds real indexes over every vector. It was the only route with no
+    limit on it at all, which did not matter while the box had one user.
     """
+    _rate_limit(http_request)
     try:
         return await scoped(host, http_request.state.owner).call(
             "kb_ann_benchmark",
@@ -428,6 +487,7 @@ async def ann_compare(request: CompareRequest, http_request: Request):
     they measure an index against exact search over the whole store, which is
     what an index is. See `scope.py`.
     """
+    _rate_limit(http_request)
     try:
         return await scoped(host, http_request.state.owner).call(
             "kb_ann_compare",
@@ -559,7 +619,7 @@ async def process_query(request: QueryRequest, http_request: Request):
     """Run the agent to completion and return the whole answer at once."""
     start = time.time()
     _rate_limit(http_request)
-    _budget_gate()
+    _budget_gate(http_request)
     logger.info("query received (%d chars)", len(request.query))
 
     answer: list[str] = []
@@ -627,7 +687,7 @@ async def process_query(request: QueryRequest, http_request: Request):
     # Charge the day's budget with what this query actually cost. Done here, on
     # the success path, because a failed query that never reached the model
     # should not spend the cap.
-    budget.record(float(usage.get("cost_usd", 0.0)))
+    budget.record(float(usage.get("cost_usd", 0.0)), _trusted_owner(http_request))
 
     return QueryResponse(
         success=True,
@@ -664,7 +724,7 @@ async def process_query_stream(request: QueryRequest, http_request: Request):
       error       : something failed; the message is human-readable
     """
     _rate_limit(http_request)
-    _budget_gate()
+    _budget_gate(http_request)
     history, prior_sources = request.prior()
 
     # The context var is read inside the generator, which runs after the
@@ -673,6 +733,9 @@ async def process_query_stream(request: QueryRequest, http_request: Request):
     # Captured out here for the same reason as the request id: the generator
     # runs after the request object's scope has been torn down.
     kb = scoped(host, http_request.state.owner)
+    # Same reason again: the generator outlives the request object, and the
+    # day's tally is charged from inside it.
+    charge_to = _trusted_owner(http_request)
 
     async def events():
         token = request_id.set(current)
@@ -683,7 +746,9 @@ async def process_query_stream(request: QueryRequest, http_request: Request):
                 # Charge the cap as the closing event goes past, so a streamed
                 # query counts against the day exactly like a non-streamed one.
                 if event["type"] == "done":
-                    budget.record(float(event.get("usage", {}).get("cost_usd", 0.0)))
+                    budget.record(
+                        float(event.get("usage", {}).get("cost_usd", 0.0)), charge_to
+                    )
                 yield _sse(event["type"], event)
         except (AgentUnavailable, ToolUnavailable) as e:
             yield _sse("error", {"message": str(e)})

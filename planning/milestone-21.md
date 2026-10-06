@@ -232,6 +232,88 @@ The limiter is process-global in-memory state and stays that way. A shared
 store for it is the multi-replica problem, and multi-replica is decided
 against (`milestone-15.md`).
 
+### Shipped — 2026-10-06, 0.8.6, ₹0
+
+**The design question, settled: the per-owner cap sits *under* the global one,
+it does not replace it.** The global cap is the only thing a shared or leaked
+gate can never get past, and `deploy/env.example` promises exactly that; a
+per-owner cap that replaced it would make the bill scale with the number of
+users, which is the opposite promise. So there are two ceilings and a query
+passes both — `check` is the wallet, `check_owner` is the fairness.
+
+**Not one line, and the plan was wrong to guess it would be.** "Key the
+limiter on the owner" is only right for an owner somebody *checked*. The name
+is `X-Sextant-Client` on a box with no proxy secret — a header the caller
+types — so keying the bucket on it would let anyone get a fresh bucket by
+typing a different one. That is **weaker than the client address it replaced**.
+The rule shipped is therefore a choice, not a fallback:
+
+| Identity | Limiter key | Per-owner share |
+| --- | --- | --- |
+| vouched for by the proxy | `user:<name>` | applied |
+| anything else | `ip:<address>` | not applied — the global cap alone |
+
+Keys are prefixed so a user named after an address cannot inherit its bucket.
+`identity.resolve()` now returns `Identity(name, trusted)`; `owner_of` is the
+name half, kept because most callers only ever wanted the name. Untrusted
+spend still counts against the *day* — it is real money — it is simply not
+attributed to a name not worth attributing to.
+
+**The share is a fixed fraction, `SEXTANT_DAILY_BUDGET_SHARE`, default 1
+(off).** It is not a division between whoever turns up: that needs to know how
+many people there are, and this process cannot see the user list, which lives
+in Caddy's `.env`. Two schemes were rejected for concrete reasons — an
+absolute per-owner figure drifts out of step with the cap it sits under, and
+`cap ÷ owners-seen-today` is self-balancing but shrinks a share retroactively,
+so somebody who spent inside their share at 10am is over it at noon because
+another person logged in. A fraction the operator picks with the user list in
+front of them is legible, and the cost of getting it wrong is legible too:
+too low wastes the wallet, too high lets one person take more of it.
+
+Default 1 for the same reason the cap itself defaults to off: a share below 1
+leaves part of a wallet the operator paid for unspendable when they are the
+only person asking. `deploy/env.example` carries the arithmetic for a gate
+with three users (0.5 guarantees half the day is always left for the others;
+0.34 divides it about equally) and `deploy/README.md` says what each half is
+for.
+
+**Scope added on purpose, and stated rather than slipped in:** `/ann/benchmark`
+and `/ann/compare` are now rate limited. Building two ANN indexes over every
+vector is the heaviest thing the box serves and they were the only routes with
+no limit at all — the same defect as the rest of this item, in the same place
+item 1 found the scope hole.
+
+**The UI had to change or the fix would read as a bug.** The spend card
+tracked the box-wide cap. A user refused at 60% of a cap the card showed as
+40% unspent, with no explanation, is a bug report. `/health` now carries the
+asker's own share when there is one, the card labels itself *Your daily share*
+and tracks whichever figure is closer to stopping them, with the box's beside
+it; `lib/mock.ts` carries the new fields so design mode renders that branch.
+
+**Verified live** on a real server, limit 2 per 120s, ₹0 — the limiter half
+needs no model key, so it was checked rather than argued:
+
+```
+ada   (proven), 3 tries        200 200 429     own bucket
+grace (proven), same address   200 200         not throttled by ada -- the NAT fix
+unproven, a new client header every time        429 429 429   no fresh bucket
+...and a proven name beside them                200           separate keys
+/ann/benchmark, three tries    503 503 429      now limited at all
+```
+
+The *share* half is not live-verifiable for free: spend only accumulates
+through a model call, and this box has no key wired up. It is covered at the
+HTTP edge with a stubbed agent instead, which is stated here rather than
+dressed up as a live run.
+
+**Verification.** 21 new tests. The three pre-registered clauses each have one
+named for it: `test_exhausting_a_share_leaves_the_other_owner_able_to_ask`,
+`test_the_global_ceiling_still_holds` (three owners each inside their own
+share, $1.05 between them, box shut), and
+`test_a_box_with_no_identity_behaves_exactly_as_before`. Plus the one the plan
+did not ask for and needed most:
+`test_an_unproven_name_does_not_buy_a_fresh_bucket`.
+
 ## 3 · Put it on the box — ≈₹2, and it needs you
 
 Three versions of work that nobody can use. The trip carries 0.8.2, 0.8.3,

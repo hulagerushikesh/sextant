@@ -13,7 +13,16 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
  */
 export function SpendCard({ conversation, lifetime, budget, onReset }: { conversation: Lifetime; lifetime: Lifetime; budget: Budget | null; onReset: () => void }) {
   const capped = !!budget?.enabled
-  const ratio = capped && budget!.budget_usd > 0 ? budget!.spent_usd / budget!.budget_usd : 0
+  const dayRatio = capped && budget!.budget_usd > 0 ? budget!.spent_usd / budget!.budget_usd : 0
+  // A per-user share, when the box has one, is the figure that actually stops
+  // you -- and it stops you while the box-wide bar still shows money left.
+  // Showing only the box's would make a refusal look like a bug.
+  const share =
+    capped && budget!.owner_budget_usd && budget!.owner_spent_usd !== undefined
+      ? budget!
+      : null
+  const ratio = share ? Math.max(dayRatio, share.owner_spent_usd! / share.owner_budget_usd!) : dayRatio
+  const left = share ? share.owner_remaining_usd! : budget?.remaining_usd ?? 0
   const level = ratio >= 1 ? 'over' : ratio >= 0.8 ? 'near' : 'ok'
   const since = lifetime.since ? new Date(lifetime.since).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : null
 
@@ -22,9 +31,9 @@ export function SpendCard({ conversation, lifetime, budget, onReset }: { convers
       {capped && (
         <div>
           <div className="mb-1.5 flex items-baseline justify-between">
-            <span className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Daily cap</span>
+            <span className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">{share ? 'Your daily share' : 'Daily cap'}</span>
             <span className={cn('font-mono text-[11px] tabular', level === 'over' ? 'text-destructive' : level === 'near' ? 'text-warning' : 'text-muted-foreground')}>
-              {level === 'over' ? 'answering paused' : `${money(budget!.remaining_usd)} left`}
+              {level === 'over' ? 'answering paused' : `${money(left)} left`}
             </span>
           </div>
           <Progress
@@ -32,7 +41,9 @@ export function SpendCard({ conversation, lifetime, budget, onReset }: { convers
             className={cn('h-1.5', level === 'over' && '[&>[data-slot=progress-indicator]]:bg-destructive', level === 'near' && '[&>[data-slot=progress-indicator]]:bg-warning', level === 'ok' && '[&>[data-slot=progress-indicator]]:bg-success')}
           />
           <p className="mt-1.5 font-mono text-[11px] text-muted-foreground tabular">
-            {money(budget!.spent_usd)} of {money(budget!.budget_usd)} · resets 00:00 UTC
+            {share
+              ? `${money(share.owner_spent_usd!)} of ${money(share.owner_budget_usd!)} · box ${money(budget!.spent_usd)} of ${money(budget!.budget_usd)}`
+              : `${money(budget!.spent_usd)} of ${money(budget!.budget_usd)}`} · resets 00:00 UTC
           </p>
         </div>
       )}

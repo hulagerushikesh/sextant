@@ -63,6 +63,7 @@ from __future__ import annotations
 
 import hmac
 import re
+from typing import NamedTuple
 
 from tools import settings
 
@@ -123,8 +124,23 @@ def _proxy_spoke(offered: str | None) -> bool:
     return bool(secret) and hmac.compare_digest(secret, (offered or "").strip())
 
 
-def owner_of(headers: object) -> str:
-    """Who this request's uploads belong to.
+class Identity(NamedTuple):
+    """A name, and whether anything checked it.
+
+    The two are never collapsed into one string, because almost everything
+    that uses a name needs to know which kind it is. Namespacing an upload is
+    happy with an unproven name -- it is only keeping two people's files
+    apart. Limiting what a name may spend is not: a bucket keyed on a header
+    anybody can retype is a bucket anybody can empty by retyping it, which is
+    weaker than the client address it would be replacing.
+    """
+
+    name: str
+    trusted: bool
+
+
+def resolve(headers: object) -> Identity:
+    """Who this request is, and whether the proxy vouched for it.
 
     Precedence: the proxy's authenticated name, then the browser's own id, then
     the shared namespace. Raises `ForgedIdentity` if the first is claimed and
@@ -138,7 +154,7 @@ def owner_of(headers: object) -> str:
     """
     get = getattr(headers, "get", None)
     if get is None:
-        return DEFAULT_OWNER
+        return Identity(DEFAULT_OWNER, False)
     claimed = (get(USER_HEADER) or "").strip()
     if claimed:
         if not _proxy_spoke(get(PROXY_HEADER)):
@@ -152,8 +168,13 @@ def owner_of(headers: object) -> str:
                 else f"{USER_HEADER} was sent but {settings.env_name(PROXY_SECRET)} "
                 f"is not set, so no identity can be verified."
             )
-        return safe_owner(claimed)
-    return safe_owner(get(CLIENT_HEADER))
+        return Identity(safe_owner(claimed), True)
+    return Identity(safe_owner(get(CLIENT_HEADER)), False)
+
+
+def owner_of(headers: object) -> str:
+    """Just the name. Kept because most callers only ever wanted the name."""
+    return resolve(headers).name
 
 
 # The id scheme `upload:<owner>:<stem>` is parseable precisely because
