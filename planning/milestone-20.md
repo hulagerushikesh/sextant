@@ -161,6 +161,44 @@ share** with an over-fetch budget of **10 × k**, it reaches B's hit@5 within
 is not an architecture and B wins on the measurement. If B wins, the
 singleton refactor above is in scope.
 
+**Shipped 2026-10-06, ₹0 — A, with the filter pushed inside the query and the
+listing tools scoped.** Full note: [`../learning/multi-corpus.md`](../learning/multi-corpus.md),
+harness `eval/tenancy.py`.
+
+At a **3.1%** tenant share — smaller than the rule asks — A reaches recall@5
+0.9727 against B's 0.9818, a gap of +0.0091 inside the 0.02 tolerance, and
+*beats* B on hit@1 (0.9455 vs 0.9273). **The rule passed and could not have
+failed**, which matters more: filtering removes only documents the owner does
+not have, so it never demotes one they do, and the tenant's own answer sits at
+global rank **1** (median; max 3 with the cap, 14 without). The arithmetic in
+this file — *10% share, so over-fetch 10×* — was about filling k slots, not
+about finding the answer. It measured the wrong quantity.
+
+Two facts the run turned up that decide more than the table does:
+
+- **The over-fetch budget does not exist past 30.** Both runs asked for 200
+  and got exactly 25: `RERANK_DEPTH = 25`, fed by `CANDIDATES = 30`. Raising
+  it widens the cross-encoder for every query and every tenant — A's real cost
+  at scale is latency, not recall.
+- **The filter need not be post-hoc at all.** The default dense backend is
+  `chroma`, whose path is `collection.query(...)`, which takes a `where`. The
+  shortlist then holds 30 of the *tenant's* chunks. What was measured is
+  therefore the pessimistic bound on A, and it passed. The BM25 half and the
+  four hand-written ANN backends have no filter and keep the post-hoc
+  behaviour.
+
+**The work A actually needs is not the filter — it is `kb_list` and
+`kb_stats`**, which report the whole collection and would hand every tenant's
+document titles to the model in its prompt. A leak, not a recall problem, and
+no experiment would have found it.
+
+**The synthetic partition this file proposed was built first and abandoned.**
+`eval/corpus/` is 58 chunks, so an over-fetch of 200 returns everything; and
+11 of its 17 labelled documents are chained into one component by questions
+labelling two at once, so the smallest achievable "10% owner" held **62%**.
+The golden set cannot describe a small tenant. The mixed store can, without
+inventing one: the handbook is 52 chunks beside the survey's 1,608.
+
 If neither clears C's bar — that is, if the whole thing turns out to serve a
 tenant count that one VM each would serve more simply — then C wins and this
 milestone's output is a decided-against note, which is a real result.

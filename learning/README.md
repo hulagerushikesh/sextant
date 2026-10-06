@@ -48,6 +48,7 @@ depends on a number in an earlier one.
 | [`hyde.md`](hyde.md) | §9 item 2 — does embedding a hypothetical answer help on a personal corpus? | No: dense worse on both sets, erased by the reranker, abstention broken when it replaces the question; the model writes the wrong document |
 | [`kb-list.md`](kb-list.md) | M17 step 2 — does the agent reach for the listing tool unprompted, and name the documents? | 3/5 → one sentence → 4/5 global, 3/3 starters, 100% named; bullet ships; list-then-search emerges on its own |
 | [`ivf-hnsw-1m.md`](ivf-hnsw-1m.md) | §9 item 6 — at 1M vectors and 65k cells, does an HNSW coarse quantizer pay? | Half: same cells at a quarter of the coarse cost, 1.6–1.8× on the whole query (not 2×); `nlist` past `4√n` costs recall |
+| [`multi-corpus.md`](multi-corpus.md) | M20 item 2 — can several people's documents share one collection with a metadata filter, or does each need its own? | One collection, filtered: a 3.1% tenant loses 0.009 recall@5 and *gains* 0.018 hit@1, because filtering only promotes the owner's own documents. The rule could not have failed — their answer sits at global rank 1. The work is scoping `kb_list`/`kb_stats`, which leak every tenant's titles into the prompt |
 
 ---
 

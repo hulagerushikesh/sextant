@@ -5,6 +5,55 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-06 — a corpus is a filter, and the filter was never the hard part
+
+- **Milestone 20 item 2, decided: A — one collection, filtered.** Full note
+  [`../learning/multi-corpus.md`](../learning/multi-corpus.md), harness
+  `eval/tenancy.py`. At a **3.1%** tenant share -- smaller than the rule asked
+  about -- A reaches recall@5 0.9727 against collection-per-owner's 0.9818, a
+  gap of +0.0091 inside the 0.02 tolerance, and *beats* it on hit@1 (0.9455 vs
+  0.9273).
+- **The rule passed and could not have failed, which is the real result.**
+  Filtering removes only documents the owner does not have, so it never
+  demotes one they do -- their answer keeps its order and moves up. A can lose
+  a question in exactly one way: the answer falling outside the budget in the
+  global ranking. Measured, the tenant's own answer sits at global rank **1**
+  (median; max 3 with the per-document cap, 14 without). There was nothing for
+  a bigger budget to recover, which is why every over-fetch column is
+  identical. The milestone's arithmetic -- *10% share, so over-fetch 10x* --
+  was about filling k slots, not about finding the answer.
+- **Two facts that decide more than the table does.** The over-fetch budget
+  does not exist past 30: both runs asked for 200 and got exactly 25, because
+  `RERANK_DEPTH = 25` is fed by `CANDIDATES = 30`. And the filter need not be
+  post-hoc at all -- the default dense backend is `chroma`, whose path is
+  `collection.query(...)`, which takes a `where`, so the shortlist can hold 30
+  of the *tenant's* chunks. What was measured is the pessimistic bound on A,
+  and it passed. The BM25 half and the four hand-written ANN backends have no
+  filter and keep the post-hoc behaviour.
+- **The work A needs is not the filter -- it is the listing tools.** `kb_list`
+  and `kb_stats` report the whole collection, so under A every tenant's
+  document titles are handed to the model in its prompt. A leak, not a recall
+  problem, and no retrieval experiment would have found it. Queued as item 4;
+  it is a correctness bug the moment a second person has documents.
+- **The first attempt was invalid and was thrown away.** A synthetic partition
+  of `eval/corpus/`: 58 chunks, so an over-fetch of 200 returns the whole
+  store; and 11 of its 17 labelled documents are chained into one component by
+  questions labelling two at once, so the smallest achievable "10% owner" held
+  **62%** -- the printed `share 0%-62%` is what gave it away. The golden set
+  cannot describe a small tenant. The mixed store can without inventing one:
+  the handbook's 52 chunks beside the survey's 1,608.
+- **The arms differ in one thing by construction.** Arm B is the same chunks
+  with the same embeddings, copied out of the mixed store rather than
+  re-ingested -- re-ingesting would have regenerated the overviews and
+  re-chunked, and either difference would have read as though it were about
+  tenancy.
+- **Not measured:** behaviour past ~25k chunks with many tenants, where a
+  30-candidate shortlist may not contain a small tenant at all and
+  `CANDIDATES` would have to grow with the tenant count. That is where B
+  wins, and nothing here touches it.
+- Cost ₹0 -- four local runs, ~20 minutes of laptop CPU, no model calls. The
+  real store was never written to; the runs used a copy.
+
 ## 2026-10-06 — an upload belongs to someone (0.8.2)
 
 - **Milestone 20 item 1.** Uploads were stored as `upload:<filename stem>`,
