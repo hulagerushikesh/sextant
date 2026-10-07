@@ -40,6 +40,11 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 
 KEEP_UP=0
 DEPLOY=1
+# Every check that compares something adds to this, and the script exits
+# non-zero if it is not 0 at the end. It is initialised here, not in step 6:
+# step 5 has a check of its own and step 6 runs after it, so a step-5 failure
+# used to be zeroed before anything read it.
+GATE_FAILURES=0
 # Set the moment ssh answers. `--keep-up` means "leave it up, I am going to
 # work on it" -- which presumes you can reach it. A box nobody can reach is
 # not kept up, it is abandoned, and that is the Rs703 shape exactly.
@@ -369,8 +374,21 @@ echo "   a name the proxy did not vouch for:"
 code=$(ssh "$REMOTE" "docker exec $INSTANCE-api-1 curl -s -o /dev/null -w '%{http_code}' --max-time 30 -H 'X-Sextant-User: forged' http://localhost:8000/health" 2>/dev/null | tr -d '\r')
 if [ "$code" = 403 ]; then
   echo "     refused ($code)"
-else
+elif [ "$DEPLOY" = 1 ]; then
+  # A deploy just put the 0.8.3+ middleware on the box and the preflight has
+  # already refused to build without SEXTANT_PROXY_SECRET, so a name the proxy
+  # did not vouch for has to be refused. Until 2026-10-07 this line printed
+  # and the trip went on to exit 0 -- compared, reported, and not counted,
+  # which is the same defect as items 5 to 9 one more time.
   echo "     got $code, expected 403 -- a client can name itself" >&2
+  GATE_FAILURES=$((GATE_FAILURES + 1))
+else
+  # No deploy happened, so this is whatever the box was already running. On a
+  # pre-0.8.3 box a 200 is the correct answer and not a failure -- but it is
+  # also not a pass, and saying so is the difference between a known gap and
+  # an unread line.
+  echo "     got $code, expected 403 -- a client can name itself" >&2
+  echo "     (--no-deploy: this is the box as it stands, not a result of this run)" >&2
 fi
 
 # 0.8.2 namespaced upload ids as `upload:<owner>:<stem>`. Anything still
@@ -419,7 +437,6 @@ AUDIT
 # and then anyone can send the header themselves.
 # ---------------------------------------------------------------------------
 say "6 - the gate, from outside"
-GATE_FAILURES=0
 # The URL is read off the box rather than hardcoded: this repo is public.
 URL=$(ssh "$REMOTE" "cd $APP_DIR && sed -n 's/^PUBLIC_URL=//p' .env" 2>/dev/null | tr -d '\r')
 

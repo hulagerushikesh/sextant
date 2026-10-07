@@ -997,3 +997,59 @@ class TestTheRepoHoldsNoRealAddresses:
         oversized = pattern.findall("build 999.999.999.999")
         assert oversized == ["999.999.999.999"]
         assert any(int(part) > 255 for part in oversized[0].split("."))
+
+
+class TestTheForgedNameCheckCounts:
+    """Step 5 asks the api container whether it believes an unvouched name.
+
+    It compared the answer and printed it, and that was all: no counter, no
+    effect on the exit code. So a trip could deploy 0.8.3+, find that a client
+    can name itself -- the thing the middleware exists to stop -- print it to
+    stderr, and still exit 0 with the box reported as shipped. Compared,
+    reported, and not counted: items 5 through 9 one more time.
+
+    It must not fail unconditionally, though. On a `--no-deploy` run the box is
+    whatever it already was, and on the pre-0.8.3 box still deployed today a
+    200 there is the correct answer.
+    """
+
+    AUTH = {"SEXTANT_TRIP_AUTH": "ada:pw", "SEXTANT_TRIP_AUTH_2": "grace:pw"}
+
+    def test_a_deploy_that_leaves_the_name_believed_fails_the_trip(self, tmp_path):
+        code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_FORGED_CODE="200")
+        assert "a client can name itself" in out
+        assert "check(s) failed" in out
+        assert code != 0
+
+    def test_the_count_survives_step_6(self, tmp_path):
+        """The load-bearing one. `GATE_FAILURES=0` lived inside step 6, which
+        runs after step 5 -- so a step-5 failure was zeroed before anything
+        read it. With the gate credentials exported step 6 really runs, which
+        is the ordering that used to lose the count."""
+        code, out = _run_trip(
+            tmp_path, GOOD_ENV, FAKE_FORGED_CODE="200", **self.AUTH
+        )
+        assert "a real user" in out  # step 6 did run
+        assert "1 check(s) failed" in out
+        assert code != 0
+
+    def test_no_deploy_does_not_fail_on_the_box_as_it_stands(self, tmp_path):
+        """The box deployed today is pre-0.8.3 and answers 200 here. A
+        preflight run must not report that as this run's failure."""
+        code, out = _run_trip(
+            tmp_path, GOOD_ENV, args=("--no-deploy",), FAKE_FORGED_CODE="200"
+        )
+        assert "not a result of this run" in out
+        assert "check(s) failed" not in out
+        assert code == 0
+
+    def test_a_refused_name_is_a_pass_on_a_deploy(self, tmp_path):
+        code, out = _run_trip(tmp_path, GOOD_ENV)
+        assert "refused (403)" in out
+        assert "a client can name itself" not in out
+        assert code == 0
+
+    def test_a_refused_name_is_a_pass_without_a_deploy_too(self, tmp_path):
+        code, out = _run_trip(tmp_path, GOOD_ENV, args=("--no-deploy",))
+        assert "refused (403)" in out
+        assert code == 0
