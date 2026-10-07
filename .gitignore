@@ -14,6 +14,12 @@ env/
 # Secrets
 .env
 .env.local
+# Anything derived from .env holds the same key. `.env` is listed, `.env.bak`
+# was not -- so a one-line edit with a timestamped backup beside it left a live
+# key untracked-but-committable in a public repo, which is one `git add -A`
+# from the incident this project already had once.
+.env.*
+.env.bak*
 !.env.example
 
 # Node
