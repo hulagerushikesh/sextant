@@ -154,8 +154,21 @@ case "$cmd" in
                                fi ;;
   *"python -"*)                cat >/dev/null; echo "     audit ran" ;;
   *"up -d --build"*)           echo "built" ;;
-  *" ps --format"*)            printf 'NAME\\tSTATUS\\nagenticrag-api-1\\tUp\\n' ;;
-  *"logs api"*)                echo "no stale names" ;;
+  # Two containers, because the real box runs two. The stub printed only the
+  # api line, so no test could have noticed that Caddy was never checked --
+  # the harness was missing the thing the check is for.
+  *" ps --format"*)            printf 'NAME\\tSTATUS\\n'
+                               case "${FAKE_API_STATUS-Up 7 minutes (healthy)}" in
+                                 gone) ;;
+                                 *) printf 'agenticrag-api-1\\t%s\\n' \
+                                      "${FAKE_API_STATUS-Up 7 minutes (healthy)}" ;;
+                               esac
+                               case "${FAKE_CADDY_STATUS-Up 7 minutes}" in
+                                 gone) ;;
+                                 *) printf 'agenticrag-caddy-1\\t%s\\n' \
+                                      "${FAKE_CADDY_STATUS-Up 7 minutes}" ;;
+                               esac ;;
+  *"logs api"*)                echo "${FAKE_LOG_LINE-no stale names}" ;;
   *"/stats"*)                  echo "$FAKE_STATS" ;;
   *"/health"*)                 echo "$FAKE_HEALTH" ;;
   *grep*|*"sed -n"*)           bash -c "$cmd" ;;
@@ -1052,4 +1065,135 @@ class TestTheForgedNameCheckCounts:
     def test_a_refused_name_is_a_pass_without_a_deploy_too(self, tmp_path):
         code, out = _run_trip(tmp_path, GOOD_ENV, args=("--no-deploy",))
         assert "refused (403)" in out
+        assert code == 0
+
+
+class TestStep5JudgesWhatItPrints:
+    """Step 5 printed six results and judged one.
+
+    A line on a terminal is not a check. The container table showed whatever
+    compose said and nothing read it, so a box whose Caddy had died reported a
+    clean step 5 -- and step 6, which exists for exactly that failure, only
+    runs when the operator exported credentials. `model=False`, an empty store,
+    an uncapped box and leftover `AGENTICRAG_*` names were all printed and
+    stepped over the same way.
+    """
+
+    HEALTHY = (
+        '{"status":"healthy","mcp_connected":true,'
+        '"model_configured":true,"budget":{"budget_usd":0.6}}'
+    )
+
+    def test_a_dead_caddy_fails_the_trip(self, tmp_path):
+        """The one that matters most: a stopped Caddy means the gate is not in
+        the path, and every other check in step 5 goes through `docker exec`
+        and so cannot see that."""
+        code, out = _run_trip(
+            tmp_path, GOOD_ENV, FAKE_CADDY_STATUS="Exited (1) 2 minutes ago"
+        )
+        assert "caddy is not Up" in out
+        assert "check(s) failed" in out
+        assert code != 0
+
+    def test_a_missing_caddy_fails_the_trip(self, tmp_path):
+        code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_CADDY_STATUS="gone")
+        assert "caddy is not in the table at all" in out
+        assert code != 0
+
+    def test_a_dead_api_fails_the_trip(self, tmp_path):
+        code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_API_STATUS="Restarting")
+        assert "api is not Up" in out
+        assert code != 0
+
+    def test_both_containers_up_is_a_pass(self, tmp_path):
+        code, out = _run_trip(tmp_path, GOOD_ENV)
+        assert "agenticrag-api-1" in out
+        assert "agenticrag-caddy-1" in out
+        assert "is not Up" not in out
+        assert code == 0
+
+    def test_a_box_with_no_model_key_fails_the_trip(self, tmp_path):
+        """`model=True` is the key rotation's whole success criterion, and it
+        was printed and never read: a box with a bad key answered model=False
+        and the trip reported it shipped."""
+        code, out = _run_trip(
+            tmp_path,
+            GOOD_ENV,
+            FAKE_HEALTH=self.HEALTHY.replace('"model_configured":true', '"model_configured":false'),
+        )
+        assert "no model key resolved" in out
+        assert code != 0
+
+    def test_an_uncapped_box_fails_the_trip(self, tmp_path):
+        code, out = _run_trip(
+            tmp_path,
+            GOOD_ENV,
+            FAKE_HEALTH=self.HEALTHY.replace('"budget_usd":0.6', '"budget_usd":0'),
+        )
+        assert "the box is uncapped" in out
+        assert code != 0
+
+    def test_a_disconnected_tool_server_fails_the_trip(self, tmp_path):
+        code, out = _run_trip(
+            tmp_path,
+            GOOD_ENV,
+            FAKE_HEALTH=self.HEALTHY.replace('"mcp_connected":true', '"mcp_connected":false'),
+        )
+        assert "the tool server is not connected" in out
+        assert code != 0
+
+    def test_an_unhealthy_status_fails_the_trip(self, tmp_path):
+        code, out = _run_trip(
+            tmp_path,
+            GOOD_ENV,
+            FAKE_HEALTH=self.HEALTHY.replace('"status":"healthy"', '"status":"degraded"'),
+        )
+        assert "status is degraded" in out
+        assert code != 0
+
+    def test_several_wrong_things_are_all_named(self, tmp_path):
+        _, out = _run_trip(
+            tmp_path,
+            GOOD_ENV,
+            FAKE_HEALTH='{"status":"degraded","mcp_connected":false,'
+            '"model_configured":false,"budget":{"budget_usd":0}}',
+        )
+        assert "status is degraded" in out
+        assert "the tool server is not connected" in out
+        assert "no model key resolved" in out
+        assert "the box is uncapped" in out
+
+    def test_a_box_that_does_not_answer_json_fails_the_trip(self, tmp_path):
+        code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_HEALTH="<html>502</html>")
+        assert "could not read /health" in out
+        assert code != 0
+
+    def test_an_empty_store_fails_the_trip(self, tmp_path):
+        """A floor, not a number: what the corpus should hold is not this
+        script's business, but an empty store after a deploy is."""
+        code, out = _run_trip(
+            tmp_path,
+            GOOD_ENV,
+            FAKE_STATS='{"collection_size":0,"documents":0,"summaries":0,'
+            '"persist_dir":"/data/chroma"}',
+        )
+        assert "the store is empty" in out
+        assert code != 0
+
+    def test_a_leftover_legacy_env_name_fails_the_trip(self, tmp_path):
+        """Not read since 0.8.1, so the container runs with its budget cap and
+        CORS allowlist at defaults. Printing the names and carrying on is how
+        an uncapped box ships."""
+        code, out = _run_trip(
+            tmp_path,
+            GOOD_ENV,
+            FAKE_LOG_LINE="AGENTICRAG_DAILY_BUDGET_USD is set; rename it to SEXTANT_",
+        )
+        assert "AGENTICRAG_DAILY_BUDGET_USD" in out
+        assert "running with defaults for those" in out
+        assert code != 0
+
+    def test_a_clean_log_is_a_pass(self, tmp_path):
+        code, out = _run_trip(tmp_path, GOOD_ENV)
+        assert "clean" in out
         assert code == 0
