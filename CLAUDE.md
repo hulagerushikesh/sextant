@@ -79,6 +79,12 @@ because each one was learned the expensive way.
   `[dev]`. Annotate the name `Any` rather than ignoring the assignment --
   `follow_imports = "skip"` types the module as `Module`, not `Any`, and does
   not help. Check both ways: plain `mypy`, and `mypy --no-site-packages`.
+- **The offline `trip.sh` run is cross-platform now, and was not.** Step 3's
+  tar used `--no-fflags` / `--no-mac-metadata`, which are BSD-only, and GNU tar
+  *exits* on an unknown flag -- so the offline harness added 2026-10-06 could
+  only ever pass on a Mac, and ten tests failed the moment CI reached them.
+  Flags come from `tar --version`; the Mac ones are still passed there.
+  `_run_trip(..., gnu_tar=True)` presents a GNU tar so the gate covers Linux.
 - **CI must run every program the gate runs**, pinned by
   `TestCiRunsWhatTheGateRuns`, which reads the gate out of this file. CI ran
   three of its four commands until 2026-10-07: `npm run build` runs `tsc -b`,
