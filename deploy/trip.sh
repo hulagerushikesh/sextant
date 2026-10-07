@@ -24,6 +24,15 @@ INSTANCE="${VM_INSTANCE:-agenticrag}"
 REGION="${ZONE%-*}"
 ADDRESS="${VM_ADDRESS:-agenticrag-ip}"
 ACCESS_CONFIG="external-nat"
+# Port 22 is open to exactly one /32, and a home ISP moves that address
+# whenever it likes. Hence step 0. The URL is a knob so the check is testable
+# and so a dead service can be swapped rather than worked around.
+SSH_RULE="${VM_SSH_RULE:-agenticrag-ssh}"
+MY_IP_URL="${VM_MY_IP_URL:-https://checkip.amazonaws.com}"
+# Two minutes of waiting, as knobs: the offline gate exercises the path where
+# ssh never answers, and it cannot spend two minutes doing it.
+SSH_TRIES="${VM_SSH_TRIES:-24}"
+SSH_SLEEP="${VM_SSH_SLEEP:-5}"
 REMOTE="$INSTANCE.$ZONE.$PROJECT"
 APP_DIR="agenticrag"
 COMPOSE="docker compose -f docker-compose.prod.yml"
@@ -31,6 +40,10 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 
 KEEP_UP=0
 DEPLOY=1
+# Set the moment ssh answers. `--keep-up` means "leave it up, I am going to
+# work on it" -- which presumes you can reach it. A box nobody can reach is
+# not kept up, it is abandoned, and that is the Rs703 shape exactly.
+SSH_UP=0
 for arg in "$@"; do
   case "$arg" in
     --keep-up)   KEEP_UP=1 ;;
@@ -57,10 +70,19 @@ vm_state() {
 
 park() {
   local code=$?
-  if [ "$KEEP_UP" = 1 ]; then
+  if [ "$KEEP_UP" = 1 ] && [ "${SSH_UP:-0}" = 1 ]; then
     say "NOT parking (--keep-up). The meter is running at ~Rs5.6/hour."
     echo "   park it with: $0 --no-deploy  (or gcloud compute instances stop $INSTANCE --zone=$ZONE --project=$PROJECT)"
     return $code
+  fi
+  # --keep-up was typed, but ssh never answered. On 2026-10-07 that combination
+  # started the box, failed to reach it because the ssh firewall rule still
+  # named a previous home address, and left it billing -- the exact 2026-09-28
+  # failure, inside the script written to prevent it. "Leave it up so I can
+  # work on it" is a sentence about a box you can reach.
+  if [ "$KEEP_UP" = 1 ]; then
+    say "parking anyway: --keep-up was typed but ssh never answered"
+    echo "   there is nothing up to keep. restarting costs ~Rs2; waiting cost Rs703 once." >&2
   fi
   # Step 7 writes two documents into the production corpus. Taking them out
   # again is not a step at the end of step 7, for the same reason parking is
@@ -165,7 +187,66 @@ forget_probes() {
   return 0
 }
 
+# Whether port 22 is open to *this* machine, which is a different question from
+# whether the box is up. Both halves are readable from the laptop for nothing:
+# the rule's source ranges, and this machine's public address. On 2026-10-07
+# neither was read -- the trip started the box, waited two minutes for an ssh
+# that could not arrive, and reported "ssh never came up", which names the
+# symptom and not one thing about the cause. The cause was a /32 from a
+# previous day.
+#
+# Three outcomes, not two: open, shut, or could-not-tell. A flaky address
+# service must not be able to stop a trip, so could-not-tell proceeds and says
+# so -- the ssh wait is still there to catch what this missed.
+ssh_door() {
+  local mine allowed verdict=0
+  mine=$(curl -s --max-time 15 "$MY_IP_URL" 2>/dev/null | tr -d '[:space:]' || true)
+  if [ -z "$mine" ]; then
+    echo "   could not learn this machine's address -- door not checked" >&2
+    return 0
+  fi
+  allowed=$("${GC[@]}" firewall-rules describe "$SSH_RULE" \
+    --format='value(sourceRanges.list())' 2>/dev/null | tr -d '[:space:]' || true)
+  if [ -z "$allowed" ]; then
+    echo "   no source ranges readable on $SSH_RULE -- door not checked" >&2
+    return 0
+  fi
+  # Containment, not string equality: the rule is allowed to be a wider CIDR
+  # than one address, and comparing the text would call an open door shut.
+  MINE="$mine" ALLOWED="$allowed" python3 -c '
+import ipaddress
+import os
+import sys
+
+try:
+    mine = ipaddress.ip_address(os.environ["MINE"])
+    nets = [
+        ipaddress.ip_network(text, strict=False)
+        for text in os.environ["ALLOWED"].split(",")
+        if text
+    ]
+except ValueError:
+    sys.exit(2)
+sys.exit(0 if any(mine in net for net in nets) else 1)
+' || verdict=$?
+  case "$verdict" in
+    0) printf '   port 22 is open to %s\n' "$mine"; return 0 ;;
+    2) echo "   addresses did not parse -- door not checked" >&2; return 0 ;;
+  esac
+  echo "   port 22 is NOT open to this machine." >&2
+  printf '   %s allows %s. this machine is %s.\n' "$SSH_RULE" "$allowed" "$mine" >&2
+  echo "   nothing has been started, so this has cost nothing. open the door:" >&2
+  printf '   gcloud compute firewall-rules update %s --project=%s --source-ranges=%s/32\n' \
+    "$SSH_RULE" "$PROJECT" "$mine" >&2
+  return 1
+}
+
 trap park EXIT
+
+# Before step 1, because step 1 is where the meter starts. A shut door found
+# here costs Rs0; found after the start it costs Rs2 and a second trip.
+say "0 - the ssh door, before the meter starts"
+ssh_door || exit 1
 
 say "1 - starting $INSTANCE (bills ~Rs5.6/hour until parked)"
 if [ "$("${GC[@]}" instances describe "$INSTANCE" --zone="$ZONE" --format='value(status)')" != "RUNNING" ]; then
@@ -179,11 +260,18 @@ if [ "$("${GC[@]}" instances describe "$INSTANCE" --zone="$ZONE" --format='value
   "${GC[@]}" instances start "$INSTANCE" --zone="$ZONE" --quiet >/dev/null
 fi
 "${GC[@]}" config-ssh >/dev/null 2>&1
-for i in $(seq 1 24); do
+for i in $(seq 1 "$SSH_TRIES"); do
   ssh -o ConnectTimeout=5 -o BatchMode=yes "$REMOTE" true 2>/dev/null && break
-  printf '   waiting for ssh (%s)\n' "$i"; sleep 5
+  printf '   waiting for ssh (%s)\n' "$i"; sleep "$SSH_SLEEP"
 done
-ssh -o BatchMode=yes "$REMOTE" true || { echo "ssh never came up"; exit 1; }
+# ConnectTimeout, because without one this last attempt inherits the TCP
+# default and hangs for minutes after the loop has already given up -- which
+# is how a dead trip sat there looking busy on 2026-10-07.
+if ! ssh -o ConnectTimeout=10 -o BatchMode=yes "$REMOTE" true; then
+  echo "ssh never came up -- step 0 said the door was open, so look at the box" >&2
+  exit 1
+fi
+SSH_UP=1
 echo "   up"
 
 if [ "$DEPLOY" = 1 ]; then

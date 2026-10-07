@@ -668,3 +668,116 @@ above exactly.
 since a refused upload stores nothing to clean up under both versions.
 
 ₹0. No new requests — the same two uploads, read properly.
+
+## Item 9 — the door is checked before the meter starts
+
+Found by running item 3, not by reading anything. The trip was started on
+2026-10-07 with `--keep-up --no-deploy`, to bring the box up so the new key
+could be installed on it. It:
+
+1. reserved an address and started the instance — the meter on,
+2. waited 24 × 5s for an ssh that could not arrive,
+3. printed `ssh never came up` and exited 1,
+4. and then, because `--keep-up` was typed, **did not park.**
+
+The box was left billing at ~₹5.6/hour with nothing deployed. That is the
+2026-09-28 ₹703 failure, in the script written to prevent it.
+
+### The cause was free to read and nobody read it
+
+Port 22 is open to exactly one `/32` on the `agenticrag-ssh` rule. It named
+an address from a previous session; this machine's had moved to another
+host inside the same ISP block, a dynamic home address doing what those do. The
+VM itself was fine: the serial console showed a clean boot, `Startup finished
+in 44.477s`, and `instances describe` said `RUNNING`.
+
+Both halves of that answer are readable from the laptop before anything is
+started: the rule's source ranges, and this machine's public address. Neither
+was read. `ssh never came up` names the symptom and not one thing about the
+cause, and it was the only thing on screen — so the natural next move is to
+go looking at the box, which was the one part that was working.
+
+This is the same shape as items 5–8 one more time. **A result produced and
+not compared** — except here the result was never even produced. The
+precondition had no check at all, and the message that stood in for one was a
+restatement of the failure.
+
+### Step 0
+
+```
+== 0 - the ssh door, before the meter starts
+   port 22 is NOT open to this machine.
+   agenticrag-ssh allows 203.0.113.9/32. this machine is 203.0.113.52.
+   nothing has been started, so this has cost nothing. open the door:
+   gcloud compute firewall-rules update agenticrag-ssh --project=agenticrag-rush --source-ranges=203.0.113.52/32
+```
+
+It runs **before step 1**, which is where the meter starts: a shut door found
+there costs ₹0, and found one line later costs ₹2 and a second trip. The
+address is read at run time from `checkip.amazonaws.com` (`VM_MY_IP_URL`) and
+never stored — this repo is public, and an operator's home address is not
+something to commit, the same rule that makes step 6 read `PUBLIC_URL` off
+the box instead of hardcoding it.
+
+Containment, not string equality: the range is allowed to be wider than one
+address, and comparing the text would call an open `/24` shut. `ipaddress`
+does the work.
+
+(The addresses in that sample output are from `203.0.113.0/24`, the range
+reserved for documentation — as are the ones in the tests. A real operator
+address is not something this repo may hold, which is the same reason step 0
+reads it at run time. The first draft of this write-up put the real pair in
+three places, in a public repo; `TestTheRepoHoldsNoRealAddresses` now fails
+the gate on that.)
+
+**Three outcomes, not two.** Open, shut, or could-not-tell. A third-party
+address service that is down, slow, or answering an HTML error page must not
+be able to ground the box — those cases say `door not checked` and carry on,
+and the ssh wait is still there to catch what step 0 missed. Only a
+definite answer stops a trip.
+
+### `--keep-up` does not keep up a box nothing can reach
+
+The second half, and the expensive one. `--keep-up` means *leave it up, I am
+going to work on it* — a sentence about a box you can reach. The flag was
+exempt from parking unconditionally, so the one run that most needed parking,
+the one that never got in, was the one that kept the box.
+
+`SSH_UP` is set the moment ssh answers, and the exemption now requires it:
+
+```
+== parking anyway: --keep-up was typed but ssh never answered
+   there is nothing up to keep. restarting costs ~Rs2; waiting cost Rs703 once.
+```
+
+Because it is a variable the trap reads rather than a branch at one call
+site, this also covers Ctrl-C during the ssh wait and a step-0 failure
+against an already-running box.
+
+Two smaller things from the same run: the final `ssh` after the wait loop had
+no `ConnectTimeout`, so it inherited the TCP default and hung for minutes
+after the loop had given up — the run looked busy when it was already dead.
+And the 24 × 5s wait is now `VM_SSH_TRIES` / `VM_SSH_SLEEP`, because the
+offline gate exercises the path where ssh never answers and cannot spend two
+minutes per test doing it.
+
+### The harness was half the defect again
+
+`test_nothing_is_started_when_the_door_is_shut` is the load-bearing pin —
+step 0's entire value is that it is free — and in its first form it **passed
+against the unfixed script.** The fixture starts the box already `RUNNING`,
+and step 1 skips the start when it is, so `instances start` appeared in no
+run of any version and the assertion could not fail. `_run_trip` takes
+`vm_state` now, the test runs from `TERMINATED` — the only state in which a
+start can happen — and the gcloud stub records every invocation so "nothing
+was started" is something a test reads rather than something a comment
+claims. The stub also moves to `RUNNING` on a start, for the same reason it
+moves to `TERMINATED` on a stop.
+
+**11 of the 12 new tests fail against the previous script.** The twelfth,
+`test_keep_up_still_keeps_a_box_that_did_come_up`, passes either way on
+purpose: the exemption is not being removed, it is being made true, and that
+pin says so.
+
+₹0 to fix. The run that found it cost about ₹1 of VM time before it was
+parked by hand, and the firewall rule is one command the operator runs.

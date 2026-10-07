@@ -5,6 +5,46 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-07 — the ssh door is checked before the meter starts (₹0 to fix, ~₹1 of VM time to find)
+
+- **Milestone 21 item 9, shipped, ₹0.** Found by *running* item 3 rather than
+  by reading anything: the trip was started to bring the box up so the new
+  Gemini key could be installed on it.
+- **What happened.** `deploy/trip.sh --keep-up --no-deploy` reserved an
+  address, started the instance, waited 24 × 5s for ssh, printed `ssh never
+  came up`, exited 1 — and then, because `--keep-up` was typed, **did not
+  park.** The box was left billing at ~₹5.6/hour with nothing deployed. That
+  is the 2026-09-28 ₹703 failure, inside the script written to prevent it.
+- **The cause was free to read and nobody read it.** `agenticrag-ssh` opens
+  port 22 to exactly one `/32`; it named a previous day's address and this
+  machine's had moved within the same ISP block. The VM was fine — clean boot
+  on the serial console, `RUNNING`. `ssh never came up` names the symptom and
+  nothing about the cause, so the obvious next move is to inspect the box,
+  which was the one part working.
+- **Step 0 runs before step 1**, which is where the meter starts: it compares
+  the rule's source ranges against this machine's public address and prints
+  the exact `firewall-rules update` that opens the door. Containment, not
+  string equality — a `/24` that does contain this machine is an open door.
+  The address is read at run time and never stored; the repo is public.
+- **Three outcomes, not two.** Open, shut, or could-not-tell: a third-party
+  address service that is down or answering HTML says `door not checked` and
+  the trip carries on, with the ssh wait still there to catch what it missed.
+  Only a definite answer stops a trip.
+- **`--keep-up` no longer keeps up a box nothing can reach.** It means *leave
+  it up, I am going to work on it*, which presumes you can reach it. `SSH_UP`
+  is set when ssh answers and the exemption requires it — so this also covers
+  Ctrl-C during the ssh wait. Also: the final `ssh` had no `ConnectTimeout`
+  and hung for minutes after the loop gave up, so a dead run looked busy.
+- **The harness was half the defect again.** The load-bearing pin — nothing is
+  started when the door is shut — *passed against the unfixed script*, because
+  the fixture starts the box `RUNNING` and step 1 skips the start when it is.
+  `_run_trip` takes `vm_state`, the test runs from `TERMINATED`, and the
+  gcloud stub logs every call. **11 of 12 new tests fail against the previous
+  script**; the twelfth pins that the `--keep-up` exemption still works.
+- 595 tests. Version stays 0.8.7 — the script is not the package.
+- **Still the operator's:** the firewall rule (one command, ₹0 — the agent is
+  not permitted to change firewall rules) and the box's `.env`.
+
 ## 2026-10-06 — an upload is judged by what it stored (₹0)
 
 - **Milestone 21 item 8, shipped, ₹0.** Item 7 shipped with a check that could
