@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import re
 import stat
 import subprocess
 import sys
@@ -139,7 +140,10 @@ _SSH_STUB = """#!/usr/bin/env bash
 for a in "$@"; do cmd="$a"; done
 cd "$FAKE_BOX" || exit 90
 case "$cmd" in
-  true)                        exit 0 ;;
+  # A stub that can only say yes makes "ssh came up" unfalsifiable, and
+  # `--keep-up` on a box that never came up is the whole point of one of the
+  # tests below.
+  true)                        exit "${FAKE_SSH_DEAD:-0}" ;;
   *"X-Sextant-User: forged"*)  echo "${FAKE_FORGED_CODE:-403}" ;;
   *"tar -xzf"*)                cat >/dev/null; echo "   synced 1 files" ;;
   *"STEM="*)                   cat >/dev/null
@@ -166,9 +170,16 @@ _GCLOUD_STUB = """#!/usr/bin/env bash
 # TERMINATED would make "the trip parked the box" an assertion that cannot
 # fail -- which is how a trip that never parked passed the gate until now.
 S="$FAKE_STATE"
+# Every invocation is logged, so "the door was shut and nothing was started"
+# is a thing a test can read rather than a thing a comment can claim.
+echo "$*" >> "$S.gcloud"
 case "$*" in
+  *"firewall-rules describe"*)
+    echo "${FAKE_SSH_RANGES-203.0.113.7/32}" ;;
   *"instances describe"*)
     cat "$S" 2>/dev/null || echo RUNNING ;;
+  *"instances start"*)
+    echo RUNNING > "$S" ;;
   *"instances stop"*)
     if [ "${FAKE_STOP_FAILS:-0}" = 1 ]; then exit 1; fi
     echo TERMINATED > "$S" ;;
@@ -189,6 +200,11 @@ _CURL_STUB = """#!/usr/bin/env bash
 # ssh. It reads the config file the script passes so the user:pass arrives the
 # same way Caddy would see it, and answers the way a correctly configured gate
 # would -- or, under FAKE_GATE_*, the way a broken one would.
+# Step 0 asks a public service for this machine's own address, which is not a
+# request to the box and must be answered before the gate arguments are read.
+case "$*" in
+  *checkip*) echo "${FAKE_MY_IP-203.0.113.7}"; exit 0 ;;
+esac
 if [ "${FAKE_GATE_DOWN:-0}" = 1 ]; then echo 000; exit 7; fi
 auth=""; hdrs=""; URL_PATH="/health"; discard_body=0; want_code=0
 while [ $# -gt 0 ]; do
@@ -264,7 +280,7 @@ fi
 """
 
 
-def _run_trip(tmp_path, env_text, args=(), **extra_env):
+def _run_trip(tmp_path, env_text, args=(), vm_state="RUNNING", **extra_env):
     """Run the whole script offline. Returns (exit code, stdout+stderr)."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -278,10 +294,13 @@ def _run_trip(tmp_path, env_text, args=(), **extra_env):
     (box / ".env").write_text(env_text)
 
     # The box starts up with its address reserved, which is the state a trip
-    # actually finds: that is what step 1 skips creating and what park has to
-    # release.
+    # actually finds mid-session: that is what step 1 skips creating and what
+    # park has to release. `state="TERMINATED"` is the other real starting
+    # point -- a parked box, where step 1 does reserve and start. Without it,
+    # "nothing was started" is unfalsifiable, because a box already RUNNING is
+    # never started by anything.
     state = tmp_path / "vm-state"
-    state.write_text("RUNNING\n")
+    state.write_text(vm_state + "\n")
     state.with_suffix(".ip").write_text("10.0.0.1\n")
     # The box's corpus, as far as the probe scan is concerned: empty until
     # step 7 uploads into it.
@@ -774,3 +793,207 @@ class TestAnUploadIsJudgedByWhatItStored:
     def test_nothing_is_left_behind_when_nothing_was_stored(self, tmp_path):
         _, out = _run_trip(tmp_path, GOOD_ENV, FAKE_UPLOAD_REJECTS="1", **self.AUTH)
         assert "nothing to remove" in out
+
+
+class TestTheSshDoorIsCheckedBeforeTheMeterStarts:
+    """Port 22 is open to one /32, and a home ISP moves that address.
+
+    On 2026-10-07 a trip started the box, waited two minutes for an ssh that
+    could not arrive because `agenticrag-ssh` still named a previous day's
+    address, printed "ssh never came up" -- naming the symptom and nothing
+    about the cause -- and then, because `--keep-up` was on, left the box
+    billing. Both halves of the real answer were readable from the laptop for
+    nothing, before anything was started.
+    """
+
+    def _gcloud_log(self, tmp_path):
+        log = pathlib.Path(str(tmp_path / "vm-state") + ".gcloud")
+        return log.read_text() if log.exists() else ""
+
+    def test_a_source_range_that_excludes_this_machine_stops_the_trip(self, tmp_path):
+        code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_SSH_RANGES="198.51.100.0/24")
+        assert code != 0
+        assert "port 22 is NOT open to this machine" in out
+
+    def test_nothing_is_started_when_the_door_is_shut(self, tmp_path):
+        """The whole value of step 0 is that it is free. If it runs after the
+        start it has already cost Rs2 and a second trip.
+
+        From a *parked* box, which is the only state in which this can fail: a
+        box already RUNNING is never started by anything, so asserting against
+        the default fixture would pass no matter where step 0 sat.
+        """
+        _run_trip(
+            tmp_path,
+            GOOD_ENV,
+            vm_state="TERMINATED",
+            FAKE_SSH_RANGES="198.51.100.0/24",
+        )
+        log = self._gcloud_log(tmp_path)
+        assert "instances start" not in log
+        assert "addresses create" not in log
+        # And it did get as far as asking about the door.
+        assert "firewall-rules describe" in log
+
+    def test_the_shut_door_prints_the_command_that_opens_it(self, tmp_path):
+        _, out = _run_trip(tmp_path, GOOD_ENV, FAKE_SSH_RANGES="198.51.100.0/24")
+        assert "firewall-rules update agenticrag-ssh" in out
+        # The address it tells you to allow is this machine's, read at run time
+        # -- never a value stored anywhere, because this repo is public.
+        assert "--source-ranges=203.0.113.7/32" in out
+
+    def test_it_says_which_range_is_allowed_and_which_one_you_are(self, tmp_path):
+        _, out = _run_trip(tmp_path, GOOD_ENV, FAKE_SSH_RANGES="198.51.100.0/24")
+        assert "198.51.100.0/24" in out
+        assert "203.0.113.7" in out
+
+    def test_a_wider_range_than_one_address_is_still_open(self, tmp_path):
+        """Containment, not string equality: comparing the text would call a
+        /24 that does contain this machine a shut door."""
+        code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_SSH_RANGES="203.0.113.0/24")
+        assert "port 22 is open to 203.0.113.7" in out
+        assert code == 0
+
+    def test_one_allowed_range_among_several_is_enough(self, tmp_path):
+        _, out = _run_trip(
+            tmp_path, GOOD_ENV, FAKE_SSH_RANGES="198.51.100.1/32,203.0.113.7/32"
+        )
+        assert "port 22 is open to" in out
+
+    def test_an_address_service_that_answers_rubbish_does_not_stop_a_trip(self, tmp_path):
+        """A flaky third party must not be able to ground the box. The ssh wait
+        is still there to catch what this missed."""
+        code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_MY_IP="<html>503</html>")
+        assert "door not checked" in out
+        assert code == 0
+
+    def test_a_silent_address_service_does_not_stop_a_trip(self, tmp_path):
+        code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_MY_IP="")
+        assert "could not learn this machine's address" in out
+        assert code == 0
+
+    def test_a_rule_with_no_readable_ranges_does_not_stop_a_trip(self, tmp_path):
+        code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_SSH_RANGES="")
+        assert "no source ranges readable on agenticrag-ssh" in out
+        assert code == 0
+
+    def test_keep_up_does_not_keep_a_box_that_never_came_up(self, tmp_path):
+        """`--keep-up` means "leave it up, I am going to work on it", which
+        presumes you can reach it. The 2026-10-07 run typed it, never reached
+        the box, and left it billing -- the 2026-09-28 failure inside the
+        script written to prevent it."""
+        code, out = _run_trip(
+            tmp_path,
+            GOOD_ENV,
+            args=("--keep-up", "--no-deploy"),
+            FAKE_SSH_DEAD="1",
+            VM_SSH_TRIES="2",
+            VM_SSH_SLEEP="0",
+        )
+        assert "parking anyway" in out
+        assert "instances stop" in self._gcloud_log(tmp_path)
+        assert (tmp_path / "vm-state").read_text().strip() == "TERMINATED"
+        assert code != 0
+
+    def test_keep_up_still_keeps_a_box_that_did_come_up(self, tmp_path):
+        """The exemption is not being taken away -- it is being made true."""
+        _, out = _run_trip(tmp_path, GOOD_ENV, args=("--keep-up", "--no-deploy"))
+        assert "NOT parking (--keep-up)" in out
+        assert "instances stop" not in self._gcloud_log(tmp_path)
+
+    def test_a_trip_that_cannot_reach_the_box_says_to_look_at_the_box(self, tmp_path):
+        """Once step 0 has confirmed the door is open, "ssh never came up" is
+        the right message: the remaining causes are all on the box."""
+        _, out = _run_trip(
+            tmp_path, GOOD_ENV, FAKE_SSH_DEAD="1", VM_SSH_TRIES="2", VM_SSH_SLEEP="0"
+        )
+        assert "step 0 said the door was open, so look at the box" in out
+
+
+class TestTheRepoHoldsNoRealAddresses:
+    """This repo is public, and `trip.sh` now handles addresses.
+
+    Step 0 reads the operator's public address at run time precisely so it is
+    never stored -- and then the first draft of the write-up for step 0 pasted
+    the real pair into three tracked files, because sample output is the one
+    place nobody thinks of as a secret. Documentation ranges and private
+    ranges are fine; a routable address is not.
+    """
+
+    # RFC 5737 documentation, RFC 1918 private, loopback, link-local, the
+    # unspecified address, and TEST-NET-style ranges the fixtures use.
+    ALLOWED = (
+        "192.0.2.",
+        "198.51.100.",
+        "203.0.113.",
+        "10.",
+        "127.",
+        "169.254.",
+        "172.16.",
+        "172.17.",
+        "172.18.",
+        "192.168.",
+        "0.0.0.0",
+        "255.255.255.",
+    )
+    SKIP_DIRS = {
+        ".git",
+        ".venv",
+        "node_modules",
+        "__pycache__",
+        "chroma_db",
+        "dist",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+    }
+    SUFFIXES = {".md", ".sh", ".py", ".ts", ".tsx", ".yml", ".yaml", ".json", ".example"}
+
+    def _offenders(self):
+        pattern = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+        root = pathlib.Path(__file__).resolve().parent.parent
+        bad = []
+        for path in root.rglob("*"):
+            if not path.is_file() or path.suffix not in self.SUFFIXES:
+                continue
+            if self.SKIP_DIRS & set(path.relative_to(root).parts):
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
+                continue
+            for line_no, line in enumerate(text.splitlines(), 1):
+                for found in pattern.findall(line):
+                    octets = [int(part) for part in found.split(".")]
+                    if any(octet > 255 for octet in octets):
+                        continue  # a version string, not an address
+                    if found.startswith(self.ALLOWED):
+                        continue
+                    bad.append(f"{path.relative_to(root)}:{line_no}: {found}")
+        return bad
+
+    def test_no_routable_address_is_committed(self):
+        offenders = self._offenders()
+        assert not offenders, "real addresses in a public repo:\n" + "\n".join(offenders)
+
+    def test_the_scan_would_notice_one(self):
+        """A pin that cannot fail is a comment: the scan has to actually catch
+        the shape that was committed.
+
+        The sample is assembled from parts rather than written out, because a
+        routable literal here would be caught by the test above -- which is
+        the scan working, but would also mean this file holds the kind of
+        address the scan exists to keep out.
+        """
+        sample = ".".join(["198", "19", "177", "9"])
+        pattern = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+        found = pattern.findall(f"agenticrag-ssh allows {sample}/32")
+        assert found == [sample]
+        assert not found[0].startswith(self.ALLOWED)
+        # A version string is not an address, and must not be reported as one.
+        assert not pattern.findall("sextant 0.8.7")
+        # A number whose octets do not fit matches the regex but is not an
+        # address, and `_offenders` drops it on exactly that test.
+        oversized = pattern.findall("build 999.999.999.999")
+        assert oversized == ["999.999.999.999"]
+        assert any(int(part) > 255 for part in oversized[0].split("."))

@@ -187,6 +187,25 @@ because each one was learned the expensive way.
   a pipe not argv, and are never printed; unset is a skip, a missing
   `PUBLIC_URL` is a failure. Still unproven: the isolation *behind* the gate --
   every check in step 6 is a read.
+- `deploy/trip.sh` **step 0 checks the ssh door before the meter starts.**
+  Port 22 is open to one `/32` on the `agenticrag-ssh` rule, and a home ISP
+  moves that address whenever it likes. On 2026-10-07 a trip reserved an
+  address, started the box, waited two minutes for an ssh that could not
+  arrive, printed `ssh never came up` — the symptom, and nothing about the
+  cause — and then, because `--keep-up` was typed, **left it billing with
+  nothing deployed**. Both halves of the answer were readable from the laptop
+  for free, before anything was started. Step 0 compares them by *containment*
+  (a wider CIDR is still an open door) and prints the `firewall-rules update`
+  that fixes it; the address is read at run time from `VM_MY_IP_URL` and never
+  stored, because the repo is public. **Three outcomes, not two** — a dead
+  address service says `door not checked` and the trip carries on, since a
+  flaky third party must not be able to ground the box.
+- **`--keep-up` does not keep up a box nothing can reach** (since 2026-10-07).
+  It means *leave it up, I am going to work on it*, which presumes you can
+  reach it; `SSH_UP` is set when ssh answers and the exemption requires it, so
+  Ctrl-C during the ssh wait parks too. Changing a firewall rule is **the
+  owner's command, not the agent's** — auto mode refuses it as an infra
+  change, which is correct; the script prints the command to run.
 - `deploy/trip.sh` **verifies the park, it does not just perform it.** The
   stop is `|| true` (a trap that aborts half way leaves the address reserved),
   so the state is read back, retried once if it is not `TERMINATED`, and then
