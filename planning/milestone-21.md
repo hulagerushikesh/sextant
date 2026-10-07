@@ -1077,3 +1077,22 @@ the BSD regression guard and the stub's own pin, which pass either way on
 purpose.
 
 ₹0.
+
+### And CI went green
+
+Run 37660824132 on `67dd89e` is the **first green run since 2026-09-20** — 30
+of the previous 31 failed. All three steps that had not executed in those 17
+days ran and passed: `Unit tests` (623), `Retrieval evaluation`
+(`sextant-eval --check`, which uploaded `eval-results.json` for the first time
+ever — 591 bytes), and `Frontend build`, which item 12 added because the
+documented gate had four commands and CI ran three.
+
+So the committed retrieval baseline is now enforced by something other than
+this laptop. On the 65 questions: rerank hit@1 0.9273 / recall@5 0.9818 /
+ndcg@5 0.9521, rrf 0.9091 / 0.9727 / 0.9315, dense 0.8727 / 0.9727 / 0.9044,
+lexical 0.7818 / 0.9212 / 0.8506.
+
+Two advisory annotations remain, neither of them ours: Node 20 actions forced
+onto Node 24, and `ubuntu-latest` migrating to Ubuntu 26 on 2026-10-19. The
+second one is worth watching now that the trip harness runs on whichever
+Ubuntu CI picks.
