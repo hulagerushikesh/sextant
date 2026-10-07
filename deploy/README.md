@@ -29,6 +29,40 @@ below.** It starts the VM, ships the tree, rebuilds, verifies, and parks —
 parking is an `EXIT` trap, so it happens on success, on failure and on Ctrl-C.
 The steps below are the first-time build-out.
 
+**Step 0 runs before the box is started, and it is the only check that costs
+nothing to fail.** Port 22 is open to a single `/32` on the `agenticrag-ssh`
+firewall rule, and a home ISP reassigns that address whenever it likes. On
+2026-10-07 a trip reserved an address, started the instance, waited two
+minutes for an ssh that could not arrive, said `ssh never came up`, and — with
+`--keep-up` typed — left the box billing with nothing deployed. The VM was
+fine; the rule named a previous day's address.
+
+So step 0 reads this machine's public address and the rule's source ranges and
+compares them, by containment rather than string equality, before anything is
+started:
+
+```
+== 0 - the ssh door, before the meter starts
+   port 22 is NOT open to this machine.
+   agenticrag-ssh allows 203.0.113.9/32. this machine is 203.0.113.52.
+   nothing has been started, so this has cost nothing. open the door:
+   gcloud compute firewall-rules update agenticrag-ssh --project=agenticrag-rush --source-ranges=<this machine>/32
+```
+
+The addresses above are from the documentation range; yours are printed by the
+script. Run that command and start the trip again. It is yours to run, not an agent's:
+auto mode refuses firewall changes, which is right. Your address is read at
+run time and never written to a tracked file — this repo is public.
+
+If the address service cannot be reached or answers something that is not an
+address, step 0 says `door not checked` and the trip continues. A flaky third
+party must not be able to ground the box; only a definite *shut* stops a trip.
+
+**`--keep-up` does not keep up a box nothing can reach.** It means *leave it
+up, I am going to work on it*. If ssh never answered there is nothing to work
+on, so the box is parked anyway and the script says so. Ctrl-C during the ssh
+wait parks too.
+
 Two of its checks stop the trip *before* the build, because both failures are
 only visible afterwards and both take the box down:
 
