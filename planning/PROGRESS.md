@@ -5,6 +5,29 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-07 — the forged-name check counts (₹0)
+
+- **Milestone 21 item 10, shipped, ₹0.** Found by reading the output of a real
+  preflight run, which the script had already produced.
+- **Step 5 compared, printed, and discarded.** It asks the api container
+  whether it believes a name the proxy did not vouch for. On the box as it
+  stands (0.8.1, pre-middleware) a 200 is the correct answer and one of the
+  things the deploy fixes. But the verdict fed no counter and nothing read it —
+  so a trip could deploy 0.8.3+, find a client can *still* name itself, print
+  that line among forty, and exit **0** with the box reported as shipped.
+- **Items 5–9 were "a result produced and not compared."** This is the next
+  notch along: compared, reported, and then thrown away.
+- **It cannot fail unconditionally.** With `--no-deploy` nothing was built, so
+  the answer describes the box as it already was. The verdict is counted when
+  a deploy happened; otherwise it prints `(--no-deploy: this is the box as it
+  stands, not a result of this run)` — a known gap rather than an unread line.
+- **A second defect behind the first:** `GATE_FAILURES=0` lived inside step 6,
+  which runs *after* step 5, so the count was zeroed before anything read it.
+  The fix would have looked like it worked while doing nothing. Initialised
+  once now, before any step can add to it, and pinned by a test that exports
+  the gate credentials so step 6 really runs.
+- 602 tests. Version stays 0.8.7.
+
 ## 2026-10-07 — the ssh door is checked before the meter starts (₹0 to fix, ~₹1 of VM time to find)
 
 - **Milestone 21 item 9, shipped, ₹0.** Found by *running* item 3 rather than
