@@ -54,13 +54,23 @@ from tools.vector_db.ann.base import (
 # without it, clicking "Run benchmark sweep" would hard-crash the running server.
 os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 
+# Annotated `Any` on purpose. Whether an *optional* dependency is installed must
+# not change whether this module type-checks -- and it did. Installed, faiss is a
+# typed module, so `faiss = None` in the ImportError branch needed a
+# `type: ignore[assignment]`; absent, `ignore_missing_imports` makes it Any, that
+# ignore is unnecessary, and `warn_unused_ignores` turns it into an error. CI
+# installs `[dev]` and not `[bench]`, so this one line failed every push from
+# 2026-09-20 to 2026-10-07 -- and since the type check runs before them, `pytest`
+# and `sextant-eval --check` did not run once in those 17 days.
+faiss: Any = None
+HAVE_FAISS = False
 try:
-    import faiss
+    import faiss as _faiss_module
 
+    faiss = _faiss_module
     HAVE_FAISS = True
 except ImportError:  # pragma: no cover - exercised only where faiss is absent
-    faiss = None  # type: ignore[assignment]
-    HAVE_FAISS = False
+    pass
 
 
 def _require_faiss() -> None:
