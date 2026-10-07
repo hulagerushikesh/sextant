@@ -921,3 +921,97 @@ makes every test about it a comment.**
 the happy paths.
 
 ₹0.
+
+## Item 12 — CI had been red for 17 days and nobody looked
+
+Items 5 to 11 were all the same shape inside `trip.sh`. The question that
+closes the theme is where else the shape lives, and the answer was one level up
+from the script: **the repository's own check.**
+
+```
+runs: 30  failures: 30
+failure   2026-10-07  deploy: step 5 judges what it prints
+failure   2026-10-07  deploy: count the forged-name check, do not ju
+...
+failure   2026-09-20  agent: report and price cached prompt tokens -
+```
+
+Thirty consecutive red runs, every push since 2026-09-20, all failing at the
+same step on the same line:
+
+```
+tools/vector_db/ann/faiss_ref.py:62: error: Unused "type: ignore" comment
+```
+
+Because the type check runs before them, **`pytest` and `sextant-eval --check`
+did not execute once in those seventeen days.** The workflow's own header says
+why it exists — *"retrieval quality is a number, and a number that is not
+checked drifts"* — and for seventeen days nothing checked it.
+
+I pushed to `main` five times across two days inside that window and reported
+"gate green" every time. That was true of the four commands in CLAUDE.md, which
+I ran. I never looked at CI. The local gate passing is not the same claim as
+the repository's check passing, and I had been treating it as if it were.
+
+### One line, and an optional dependency
+
+```python
+try:
+    import faiss
+    HAVE_FAISS = True
+except ImportError:
+    faiss = None  # type: ignore[assignment]
+    HAVE_FAISS = False
+```
+
+`faiss` is the `bench` extra. Installed, it is a typed module, so assigning
+`None` to that name is an error and the ignore is required. Absent,
+`ignore_missing_imports` makes it `Any`, the ignore is unnecessary, and
+`warn_unused_ignores = true` turns *that* into an error. CI installs `[dev]`
+and not `[bench]`.
+
+So **whether an optional dependency was installed decided whether the code
+type-checked**, and the two environments landed on opposite sides. Locally it
+passed, which is why it survived seventeen days.
+
+`follow_imports = "skip"` was the wrong fix — it types the module as `Module`,
+not `Any`, so the assignment still fails. The name is annotated instead:
+
+```python
+faiss: Any = None
+HAVE_FAISS = False
+try:
+    import faiss as _faiss_module
+
+    faiss = _faiss_module
+    HAVE_FAISS = True
+except ImportError:
+    pass
+```
+
+Verified both ways: `mypy` passes with faiss installed, and passes under
+`--no-site-packages`, which is CI's condition applied to every import.
+
+### CI ran three quarters of the gate
+
+A second gap, found while reading the workflow. The gate is four commands; CI
+ran three. `npm run build` runs `tsc -b` first, so **a type error in the
+frontend failed only for whoever typed the gate by hand** and passed every
+push. Added, with Node 22 because production builds on `node:22-alpine` — this
+machine is on 20.12, which Vite 7 warns about and CI should not inherit.
+
+### The pin
+
+`TestCiRunsWhatTheGateRuns` reads the gate out of CLAUDE.md, extracts the
+programs it invokes, and fails if any of them is absent from the workflow — so
+the next command added to the gate cannot quietly skip CI. It also asserts the
+frontend step *builds* rather than only installing, since `npm ci` alone would
+satisfy the first check while checking nothing.
+
+Verified by reverting the workflow: two of the four fail.
+
+What it cannot pin is the thing that actually went wrong — nobody looked. A
+test cannot read a dashboard. What it can do is make the gap between the two
+claims smaller, so that looking matters less.
+
+₹0.

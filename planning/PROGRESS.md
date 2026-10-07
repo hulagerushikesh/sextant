@@ -5,6 +5,45 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-07 — CI had been red for 17 days and nobody looked (₹0)
+
+- **Milestone 21 item 12, shipped, ₹0.** Items 5–11 were all the same shape
+  inside `trip.sh`. This is the same shape one level up: the repository's own
+  check.
+- **30 of 30 runs failed**, every push since 2026-09-20, all at the same step on
+  the same line: `tools/vector_db/ann/faiss_ref.py:62: error: Unused
+  "type: ignore" comment`. Because the type check runs before them, **`pytest`
+  and `sextant-eval --check` did not execute once in those 17 days** — and the
+  workflow's own header says it exists because *retrieval quality is a number,
+  and a number that is not checked drifts*.
+- **I pushed to `main` five times inside that window and reported "gate green"
+  each time.** That was true of the four commands in CLAUDE.md, which I ran. I
+  never looked at CI. The local gate passing is a different claim from the
+  repository's check passing, and I had been treating them as one.
+- **The cause was an optional dependency deciding whether the code
+  type-checks.** `faiss` is the `bench` extra. Installed, it is a typed module,
+  so `faiss = None` in the ImportError branch needs
+  `type: ignore[assignment]`. Absent, `ignore_missing_imports` makes it `Any`,
+  the ignore is unnecessary, and `warn_unused_ignores` turns that into an error.
+  CI installs `[dev]`, not `[bench]`, so the two environments sat on opposite
+  sides and the local one passed.
+- **`follow_imports = "skip"` was the wrong fix** — it types the module as
+  `Module`, not `Any`, so the assignment still fails. The name is annotated
+  `Any` instead. Verified both ways: mypy passes with faiss installed and under
+  `--no-site-packages`, which is CI's condition applied to every import.
+- **Second gap: CI ran three quarters of the gate.** `npm run build` runs
+  `tsc -b` first, so a frontend type error failed only for whoever typed the
+  gate by hand and passed every push. Added, on Node 22 — production builds on
+  `node:22-alpine`, and this machine's 20.12 is a version Vite 7 warns about
+  and CI should not inherit.
+- **`TestCiRunsWhatTheGateRuns`** reads the gate out of CLAUDE.md, extracts the
+  programs it invokes, and fails if any is absent from the workflow, so the next
+  command added to the gate cannot quietly skip CI. It also requires the
+  frontend step to *build*, not just `npm ci`, which would satisfy the first
+  check while checking nothing. Verified by reverting the workflow.
+- What no test can pin is the thing that actually went wrong: nobody looked.
+- 619 tests. Version stays 0.8.7.
+
 ## 2026-10-07 — step 5 judges what it prints (₹0)
 
 - **Milestone 21 item 11, shipped, ₹0.** Item 10 fixed one unjudged result in

@@ -1197,3 +1197,67 @@ class TestStep5JudgesWhatItPrints:
         code, out = _run_trip(tmp_path, GOOD_ENV)
         assert "clean" in out
         assert code == 0
+
+
+class TestCiRunsWhatTheGateRuns:
+    """The gate in CLAUDE.md and the workflow in CI must not drift apart.
+
+    They had. The gate has four commands; CI ran three. `npm run build` runs
+    `tsc -b` first, so a type error in the frontend failed only for whoever
+    typed the gate by hand and passed every push.
+
+    The deeper reason to pin it: CI's own green tick is a claim about what was
+    checked, and nobody reads the step list to find out which claim it is.
+    """
+
+    ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+    def _gate_programs(self):
+        """The programs the documented gate invokes, by name."""
+        text = (self.ROOT / "CLAUDE.md").read_text()
+        marker = "## Gate before a commit"
+        assert marker in text, "CLAUDE.md no longer documents a gate"
+        block = text.split(marker, 1)[1].split("```")[1]
+        block = block.split("\n", 1)[1] if block.startswith("bash") else block
+        programs = []
+        for segment in re.split(r"&&|\|\||;|\n", block):
+            segment = segment.strip().lstrip("(").strip()
+            if not segment:
+                continue
+            first = segment.split()[0].rstrip(")")
+            first = first.rsplit("/", 1)[-1]  # ./.venv/bin/pytest -> pytest
+            if first in {"cd", "export", "then", "fi", "do", "done"}:
+                continue
+            if first not in programs:
+                programs.append(first)
+        return programs
+
+    def _workflow(self):
+        found = sorted((self.ROOT / ".github" / "workflows").glob("*.yml"))
+        assert found, "no CI workflow at all"
+        return "\n".join(p.read_text() for p in found)
+
+    def test_the_gate_is_still_four_commands(self):
+        """If this changes, the list below changed with it and the next test is
+        checking a different thing than it was written for."""
+        assert self._gate_programs() == ["pytest", "mypy", "ruff", "npm"]
+
+    def test_every_program_in_the_gate_is_run_in_ci(self):
+        workflow = self._workflow()
+        missing = [p for p in self._gate_programs() if p not in workflow]
+        assert not missing, (
+            f"the gate runs these and CI does not: {', '.join(missing)} -- a "
+            "green tick in CI then means less than it looks like"
+        )
+
+    def test_ci_builds_the_frontend_not_just_installs_it(self):
+        """`npm ci` alone would satisfy the test above while checking nothing:
+        the build is what runs `tsc -b`."""
+        assert "npm run build" in self._workflow()
+
+    def test_ci_runs_on_a_push_to_main(self):
+        """A workflow nothing triggers is not a check. 30 consecutive red runs
+        went unseen, but at least they ran."""
+        workflow = self._workflow()
+        assert "pull_request" in workflow
+        assert "branches: [main]" in workflow
