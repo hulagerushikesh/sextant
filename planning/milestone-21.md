@@ -781,3 +781,65 @@ pin says so.
 
 ₹0 to fix. The run that found it cost about ₹1 of VM time before it was
 parked by hand, and the firewall rule is one command the operator runs.
+
+## Item 10 — the forged-name check counts
+
+Found in the output of a real preflight run on 2026-10-07, after item 9 was
+shipped and the box was brought up to install the key. Step 5 asks the api
+container whether it believes a name the proxy did not vouch for:
+
+```
+   a name the proxy did not vouch for:
+     got 200, expected 403 -- a client can name itself
+```
+
+On the box as it stands that answer is correct: it runs 0.8.1, which predates
+the 0.8.3 middleware, and a client can indeed name itself. That is one of the
+things this deploy exists to fix.
+
+The defect is what the script did with the answer. It compared it, printed it
+to stderr, and **discarded the verdict** — no counter, no effect on the exit
+code. So a trip could deploy 0.8.3 or later, discover that a client can still
+name itself, print that one line among forty, and exit **0** with the box
+reported as shipped. The middleware whose entire job is that 403 would be
+broken, and the trip that deployed it would say it was fine.
+
+Compared, reported, and not counted. Items 5 through 9 were all a variant of
+*a result produced and not compared*; this is the next notch along — compared
+and then thrown away.
+
+### It must not fail unconditionally
+
+The reason it was only a print is real: on a `--no-deploy` run nothing was
+built, so the answer describes whatever the box already was, and today that is
+legitimately a 200. A check that failed every preflight run would be turned
+off within a week.
+
+So the verdict depends on whether a deploy happened. With `DEPLOY=1` the
+preflight has already refused to build without `SEXTANT_PROXY_SECRET` and the
+tree being built contains the middleware, so a non-403 is a failure and feeds
+`GATE_FAILURES` like every other counted check. With `--no-deploy` it stays
+informational and says so, which is the difference between a known gap and an
+unread line:
+
+```
+     got 200, expected 403 -- a client can name itself
+     (--no-deploy: this is the box as it stands, not a result of this run)
+```
+
+### The counter was in the wrong scope
+
+`GATE_FAILURES=0` sat inside step 6. Step 5 runs before step 6. So even once
+step 5 began counting, step 6 zeroed the count before anything read it — a
+second defect hiding behind the first, and the one that would have made the
+fix look like it worked while doing nothing. It is initialised once now,
+beside `SSH_UP`, before any step can add to it.
+
+`test_the_count_survives_step_6` is the pin for that, and it exports the gate
+credentials on purpose: without them step 6 returns early, and the ordering
+that loses the count is the one where step 6 really runs.
+
+**3 of the 5 new tests fail against the previous script.** The other two are
+the 403 happy paths, which were already right.
+
+₹0. Found by reading output the script had already produced.

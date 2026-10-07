@@ -187,6 +187,15 @@ because each one was learned the expensive way.
   a pipe not argv, and are never printed; unset is a skip, a missing
   `PUBLIC_URL` is a failure. Still unproven: the isolation *behind* the gate --
   every check in step 6 is a read.
+- `deploy/trip.sh` **step 5's forged-name check is counted, not just printed**
+  (since 2026-10-07). It asks the api container whether it believes an
+  unvouched `X-Sextant-User`; the answer fed no counter, so a trip could deploy
+  0.8.3+, find that a client can still name itself, and exit **0** with the box
+  reported shipped. Counted only when a deploy happened — on `--no-deploy` the
+  answer describes the box as it already is, and a pre-0.8.3 box answering 200
+  is correct. `GATE_FAILURES` is initialised at the top of the script, not in
+  step 6: step 6 runs *after* step 5 and used to zero the count before anything
+  read it.
 - `deploy/trip.sh` **step 0 checks the ssh door before the meter starts.**
   Port 22 is open to one `/32` on the `agenticrag-ssh` rule, and a home ISP
   moves that address whenever it likes. On 2026-10-07 a trip reserved an
