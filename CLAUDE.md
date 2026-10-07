@@ -187,6 +187,18 @@ because each one was learned the expensive way.
   a pipe not argv, and are never printed; unset is a skip, a missing
   `PUBLIC_URL` is a failure. Still unproven: the isolation *behind* the gate --
   every check in step 6 is a read.
+- `deploy/trip.sh` **step 5 judges every result it prints** (since
+  2026-10-07). It used to produce six and read one. Both containers must be
+  present and `Up` **by name** -- the table was printed and never read, so a box
+  whose **Caddy had exited** passed step 5, and every other check there goes
+  through `docker exec` at `localhost:8000`, behind Caddy, so none of them can
+  see that. Step 6 covers it only when the operator exported credentials, and
+  unset is a skip. `status` / `mcp` / `model` / `budget_usd` are each named when
+  wrong, all at once rather than the first; `model=` in particular is the key
+  rotation's success criterion and was printed and stepped over. The store check
+  is a **floor, not a number** (hardcoding 21 would make every ingest a
+  failure). A leftover `AGENTICRAG_*` name in the log is a counted failure, not
+  a note.
 - `deploy/trip.sh` **step 5's forged-name check is counted, not just printed**
   (since 2026-10-07). It asks the api container whether it believes an
   unvouched `X-Sextant-User`; the answer fed no counter, so a trip could deploy

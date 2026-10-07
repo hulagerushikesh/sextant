@@ -843,3 +843,81 @@ that loses the count is the one where step 6 really runs.
 the 403 happy paths, which were already right.
 
 ₹0. Found by reading output the script had already produced.
+
+## Item 11 — step 5 judges what it prints
+
+Item 10 fixed one unjudged result in step 5. This is the rest of them, found by
+asking the obvious follow-up question instead of waiting for the next one to
+bite: **of the six results step 5 produces, how many does it read?** One.
+
+| What step 5 printed | What happened if it was wrong |
+| --- | --- |
+| the container table | nothing — a dead Caddy printed and the trip went on |
+| `status=` | nothing |
+| `mcp=` | nothing |
+| `model=` | nothing |
+| `budget_usd=` | a line on stderr, no effect on the exit code |
+| `N chunks / N documents` | nothing |
+| leftover `AGENTICRAG_*` names | the names printed, and the trip went on |
+
+### The container table is the serious one
+
+```
+NAME                 STATUS
+agenticrag-api-1     Up 15 minutes (healthy)
+agenticrag-caddy-1   Up 15 minutes
+```
+
+That is the whole check: print what compose said. **A box whose Caddy had
+exited would print `Exited (1)` there and pass step 5.** And every other check
+in step 5 goes through `docker exec` to `localhost:8000` — inside the box,
+behind Caddy — so not one of them can see that the gate is not in the path.
+
+Step 6 exists for precisely that failure. But step 6 needs credentials the
+operator has to export, and unset is a *skip*. So the default trip had no check
+at all for the container that serves every real request.
+
+Both services are now required to be present and `Up`, by name.
+
+### `model=` was printed and never read
+
+`model=True` is the key rotation's entire success criterion — the thing this
+milestone's item 3 is waiting on a person for. A box with a bad or missing key
+answers `model_configured: false`, and the trip printed it in the middle of a
+healthy-looking line and exited 0 with the box reported as shipped.
+
+Same for `status`, `mcp_connected`, and an empty store. The health verdict now
+names every wrong thing at once rather than the first:
+
+```
+     status=degraded mcp=False model=False budget_usd=0
+     NOT RIGHT: status is degraded; the tool server is not connected; no model
+     key resolved, so the box cannot answer anything; the daily cap is 0, so
+     the box is uncapped
+```
+
+The store check is a **floor, not a number**: what the corpus should hold is
+not this script's business and hardcoding 21 would make every ingest a test
+failure, but an empty store after a deploy is.
+
+A leftover `AGENTICRAG_*` name is a counted failure too. It has not been read
+since 0.8.1, so the container is running with its budget cap and CORS allowlist
+at defaults — printing the names and carrying on is how an uncapped box ships.
+
+### The harness was missing the thing the check is for
+
+The `ps` stub printed **one** line, `agenticrag-api-1`. The real box runs two
+containers. So no test could have noticed that Caddy went unchecked, because in
+the fixture Caddy did not exist.
+
+That is the fourth time in this milestone that the stub was half the defect:
+the gcloud stub that always said `RUNNING` (item 5), the curl stub that ignored
+`-o /dev/null` and `-w` (item 8), the fixture that started the box `RUNNING` so
+nothing was ever started (item 9), and now a container table with one container
+in it. The pattern is worth naming: **a stub that cannot represent the failure
+makes every test about it a comment.**
+
+**11 of the 13 new tests fail against the previous script.** The other two are
+the happy paths.
+
+₹0.

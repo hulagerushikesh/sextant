@@ -5,6 +5,39 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-07 — step 5 judges what it prints (₹0)
+
+- **Milestone 21 item 11, shipped, ₹0.** Item 10 fixed one unjudged result in
+  step 5. This is the other five, found by asking the follow-up question rather
+  than waiting for the next one to bite: of six results step 5 produced, it read
+  **one**.
+- **The container table is the serious one.** It printed whatever compose said
+  and nothing read it, so a box whose **Caddy had exited** printed
+  `Exited (1)` and passed step 5. Every other check in step 5 goes through
+  `docker exec` to `localhost:8000` — inside the box, behind Caddy — so not one
+  of them can see that the gate is not in the path. Step 6 exists for exactly
+  that failure, but it needs credentials the operator exports and unset is a
+  *skip*: the default trip had **no check at all** for the container that
+  serves every real request. Both services must now be present and `Up`, by
+  name.
+- **`model=` was printed and never read.** It is the key rotation's entire
+  success criterion — the thing item 3 is waiting on a person for. A box with a
+  bad key answered `model_configured: false` in the middle of a healthy-looking
+  line and the trip exited 0 reporting it shipped. Same for `status`,
+  `mcp_connected`, and an empty store. The verdict names every wrong thing at
+  once, not the first.
+- **The store check is a floor, not a number.** What the corpus should hold is
+  not the script's business and hardcoding 21 would make every ingest a
+  failure; an empty store after a deploy is.
+- **A leftover `AGENTICRAG_*` name is a counted failure.** Not read since
+  0.8.1, so the container runs with its budget cap and CORS allowlist at
+  defaults — printing the names and carrying on is how an uncapped box ships.
+- **The harness was missing the thing the check is for**: the `ps` stub printed
+  one container line, so no test could have noticed Caddy went unchecked.
+  Fourth time this milestone a stub was half the defect. Worth naming: **a stub
+  that cannot represent the failure makes every test about it a comment.**
+- 615 tests. Version stays 0.8.7.
+
 ## 2026-10-07 — the forged-name check counts (₹0)
 
 - **Milestone 21 item 10, shipped, ₹0.** Found by reading the output of a real

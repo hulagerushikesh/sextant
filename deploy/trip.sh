@@ -346,26 +346,103 @@ if [ "$DEPLOY" = 1 ]; then
 fi
 
 say "5 - verify"
-ssh "$REMOTE" "cd $APP_DIR && $COMPOSE ps --format 'table {{.Name}}\t{{.Status}}'" 2>&1 | quiet
+
+# Until 2026-10-07 this step printed six results and judged one. Everything
+# below is now compared, because a line on a terminal is not a check: the
+# container table showed whatever compose said and nothing read it, so a box
+# whose Caddy had died reported a clean step 5 -- and step 6, which exists for
+# exactly that failure, only runs when the operator exported credentials.
+echo "   containers:"
+ps_out=$(ssh "$REMOTE" "cd $APP_DIR && $COMPOSE ps --format 'table {{.Name}}\t{{.Status}}'" 2>&1 | quiet)
+printf '%s\n' "$ps_out" | sed 's/^/     /'
+for svc in api caddy; do
+  line=$(printf '%s\n' "$ps_out" | grep "^$INSTANCE-$svc-1[[:space:]]" || true)
+  case "$line" in
+    *Up*) ;;
+    "")
+      echo "     $svc is not in the table at all" >&2
+      GATE_FAILURES=$((GATE_FAILURES + 1)) ;;
+    *)
+      echo "     $svc is not Up: $line" >&2
+      GATE_FAILURES=$((GATE_FAILURES + 1)) ;;
+  esac
+done
+
 # The api container does not publish 8000 to the host; curl over ssh gets
 # HTTP 000. Health goes through docker exec.
 echo "   health:"
-ssh "$REMOTE" "docker exec $INSTANCE-api-1 curl -s --max-time 30 http://localhost:8000/health" 2>&1 | quiet \
-  | python3 -c 'import json, sys
-d = json.load(sys.stdin)
-b = d["budget"]
-print("     status=%s mcp=%s model=%s budget_usd=%s"
-      % (d["status"], d["mcp_connected"], d["model_configured"], b["budget_usd"]))
-sys.exit(0 if b["budget_usd"] else 1)' \
-  || { echo "     BUDGET CAP IS 0 -- the box is uncapped, check SEXTANT_DAILY_BUDGET_USD in its .env" >&2; }
+health=$(ssh "$REMOTE" "docker exec $INSTANCE-api-1 curl -s --max-time 30 http://localhost:8000/health" 2>&1 | quiet)
+# `model` is the one the key rotation turns on, and it was printed and never
+# read: a box with a bad key answers model=False and the trip said shipped.
+if ! printf '%s' "$health" | python3 -c '
+import json
+import sys
+
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print("     could not read /health -- the box did not answer with json")
+    raise SystemExit(1)
+b = d.get("budget") or {}
+print(
+    "     status=%s mcp=%s model=%s budget_usd=%s"
+    % (d.get("status"), d.get("mcp_connected"), d.get("model_configured"),
+       b.get("budget_usd"))
+)
+wrong = []
+if d.get("status") != "healthy":
+    wrong.append("status is %s" % d.get("status"))
+if not d.get("mcp_connected"):
+    wrong.append("the tool server is not connected")
+if not d.get("model_configured"):
+    wrong.append("no model key resolved, so the box cannot answer anything")
+if not b.get("budget_usd"):
+    wrong.append("the daily cap is 0, so the box is uncapped")
+if wrong:
+    print("     NOT RIGHT: %s" % "; ".join(wrong), file=sys.stderr)
+    raise SystemExit(1)
+'; then
+  GATE_FAILURES=$((GATE_FAILURES + 1))
+fi
+
 echo "   stats:"
-ssh "$REMOTE" "docker exec $INSTANCE-api-1 curl -s --max-time 30 http://localhost:8000/stats" 2>&1 | quiet \
-  | python3 -c 'import json, sys
-d = json.load(sys.stdin)
-print("     %s chunks / %s documents / %s summaries at %s"
-      % (d["collection_size"], d["documents"], d.get("summaries", 0), d["persist_dir"]))'
+stats=$(ssh "$REMOTE" "docker exec $INSTANCE-api-1 curl -s --max-time 30 http://localhost:8000/stats" 2>&1 | quiet)
+# A floor, not a number: the corpus is re-ingested by hand and what it should
+# hold is not this script's business, but an empty store after a deploy is.
+if ! printf '%s' "$stats" | python3 -c '
+import json
+import sys
+
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print("     could not read /stats -- the box did not answer with json")
+    raise SystemExit(1)
+print(
+    "     %s chunks / %s documents / %s summaries at %s"
+    % (d.get("collection_size"), d.get("documents"), d.get("summaries", 0),
+       d.get("persist_dir"))
+)
+if not d.get("documents") or not d.get("collection_size"):
+    print("     NOT RIGHT: the store is empty", file=sys.stderr)
+    raise SystemExit(1)
+'; then
+  GATE_FAILURES=$((GATE_FAILURES + 1))
+fi
+
 echo "   stale env names in the log (want none):"
-ssh "$REMOTE" "cd $APP_DIR && $COMPOSE logs api --tail=120" 2>&1 | quiet | grep -i 'AGENTICRAG_' || echo "     clean"
+# A leftover AGENTICRAG_* name is not read since 0.8.1, so the container runs
+# with its budget cap and CORS allowlist at defaults. Printing the names it
+# found and carrying on is how an uncapped box ships.
+stale=$(ssh "$REMOTE" "cd $APP_DIR && $COMPOSE logs api --tail=120" 2>&1 | quiet \
+  | grep -i 'AGENTICRAG_' || true)
+if [ -n "$stale" ]; then
+  printf '%s\n' "$stale" | sed 's/^/     /' >&2
+  echo "     NOT RIGHT: the box is running with defaults for those" >&2
+  GATE_FAILURES=$((GATE_FAILURES + 1))
+else
+  echo "     clean"
+fi
 
 # A name is only worth anything if a client cannot simply type it. Going
 # straight at the api container skips Caddy, so this is exactly the forged
