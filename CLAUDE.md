@@ -65,6 +65,25 @@ because each one was learned the expensive way.
 ./.venv/bin/pytest tests/ -q && ./.venv/bin/mypy mcp_server tools eval tests && ./.venv/bin/ruff check . && (cd frontend && npm run build)
 ```
 
+## CI
+
+- **Check CI after a push. The local gate passing is a different claim.** From
+  2026-09-20 to 2026-10-07 every push was red on one line, 30 runs, and because
+  the type check runs first `pytest` and `sextant-eval --check` never ran in
+  those 17 days while five commits reported "gate green" from the local
+  commands. `gh run list --repo hulagerushikesh/sextant --limit 5`.
+- **An optional dependency must not decide whether the code type-checks.**
+  `ignore_missing_imports = true` plus `warn_unused_ignores = true` means a
+  `type: ignore` needed when a package is installed is an *error* when it is
+  not. That is what broke the 30 runs: `faiss` is the `bench` extra, CI installs
+  `[dev]`. Annotate the name `Any` rather than ignoring the assignment --
+  `follow_imports = "skip"` types the module as `Module`, not `Any`, and does
+  not help. Check both ways: plain `mypy`, and `mypy --no-site-packages`.
+- **CI must run every program the gate runs**, pinned by
+  `TestCiRunsWhatTheGateRuns`, which reads the gate out of this file. CI ran
+  three of its four commands until 2026-10-07: `npm run build` runs `tsc -b`,
+  so a frontend type error failed only by hand.
+
 ## Gotchas that recur
 
 - Chroma segment goes stale after CLI ingest: restart `:8100` to see new
