@@ -5,6 +5,21 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-07 — CI is green again (₹0)
+
+Run 37660824132 on `67dd89e`: **first green run since 2026-09-20** (30 of 31
+red). The three steps that had not executed in 17 days all pass -- `Unit tests`
+(623), `Retrieval evaluation` (`sextant-eval --check`, artifact uploaded for the
+first time), `Frontend build` (added by item 12).
+
+Fixing the type check moved the failure to `Unit tests` rather than ending it,
+and that second failure (item 13, the BSD-only tar flags) was real. **A check
+that has never run hides every failure behind the first one** -- so a CI fix is
+not reported from the commit that attempts it.
+
+Two advisory annotations left, neither ours: Node 20 actions forced onto Node
+24, and `ubuntu-latest` moving to Ubuntu 26 on 2026-10-19.
+
 ## 2026-10-07 — the offline trip harness only ran on a Mac (₹0)
 
 - **Milestone 21 item 13, shipped, ₹0.** Fixing item 12 *moved* CI's failure
