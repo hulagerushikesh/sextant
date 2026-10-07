@@ -330,7 +330,19 @@ if [ "$DEPLOY" = 1 ]; then
   say "3 - shipping the working tree"
   # tar over ssh, not rsync: macOS ships openrsync, which mangles a dotted
   # host:path into a LOCAL directory and silently syncs nothing.
-  tar -czf - --no-xattrs --no-fflags --no-mac-metadata \
+  #
+  # Which flags keep macOS metadata out of the tarball depends on which tar
+  # this is. BSD tar (macOS) has all three; GNU tar (Linux, and CI) has only
+  # --no-xattrs and *exits* on an unknown flag rather than ignoring it. So this
+  # line could only ever run on a Mac -- and the offline run of this whole
+  # script in the gate therefore could not run on Linux at all. Nobody found
+  # out, because CI failed at the type check before it reached the tests.
+  if tar --version 2>/dev/null | head -1 | grep -qi gnu; then
+    TAR_FLAGS=(--no-xattrs)
+  else
+    TAR_FLAGS=(--no-xattrs --no-fflags --no-mac-metadata)
+  fi
+  tar -czf - "${TAR_FLAGS[@]}" \
     --exclude '.git' --exclude '.venv' --exclude 'node_modules' \
     --exclude 'frontend/dist' --exclude '__pycache__' \
     --exclude '.pytest_cache' --exclude '.mypy_cache' --exclude '.ruff_cache' \

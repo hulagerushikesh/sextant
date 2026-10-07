@@ -145,7 +145,11 @@ case "$cmd" in
   # tests below.
   true)                        exit "${FAKE_SSH_DEAD:-0}" ;;
   *"X-Sextant-User: forged"*)  echo "${FAKE_FORGED_CODE:-403}" ;;
-  *"tar -xzf"*)                cat >/dev/null; echo "   synced 1 files" ;;
+  # `wc -c`, not `cat >/dev/null`: the stub printed "synced" for whatever
+  # arrived, including nothing at all, so a tar that failed still read as a
+  # successful ship. The byte count makes it checkable.
+  *"tar -xzf"*)                wc -c > "$FAKE_STATE.tarbytes"
+                               echo "   synced 1 files" ;;
   *"STEM="*)                   cat >/dev/null
                                sort -u "$FAKE_STATE.corpus" 2>/dev/null \
                                  | sed 's/^/upload:/;s/$/:sextant-trip-probe/' ;;
@@ -293,11 +297,42 @@ fi
 """
 
 
-def _run_trip(tmp_path, env_text, args=(), vm_state="RUNNING", **extra_env):
+_GNU_TAR_STUB = """#!/usr/bin/env bash
+# Stands in for GNU tar, which is what Linux and CI have. It rejects the
+# BSD-only flags the way GNU tar does -- by exiting, not by ignoring them.
+#
+# Without this, every offline run of trip.sh in this module could only pass on a
+# Mac: `tar --no-fflags` is a hard error on GNU tar, so step 3 died and ten
+# tests failed. That went unseen for 17 days because CI failed at the type check
+# and never reached the tests. A harness that only runs on the author's laptop
+# is a harness nothing else can check.
+case "$1" in
+  --version) echo "tar (GNU tar) 1.35"; exit 0 ;;
+esac
+args=()
+for a in "$@"; do
+  case "$a" in
+    --no-fflags|--no-mac-metadata)
+      echo "tar: unrecognized option '$a'" >&2
+      echo "Try 'tar --help' or 'tar --usage' for more information." >&2
+      exit 64 ;;
+    *) args+=("$a") ;;
+  esac
+done
+exec /usr/bin/tar "${args[@]}"
+"""
+
+
+def _run_trip(
+    tmp_path, env_text, args=(), vm_state="RUNNING", gnu_tar=False, **extra_env
+):
     """Run the whole script offline. Returns (exit code, stdout+stderr)."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    for name, body in (("ssh", _SSH_STUB), ("gcloud", _GCLOUD_STUB), ("curl", _CURL_STUB)):
+    stubs = [("ssh", _SSH_STUB), ("gcloud", _GCLOUD_STUB), ("curl", _CURL_STUB)]
+    if gnu_tar:
+        stubs.append(("tar", _GNU_TAR_STUB))
+    for name, body in stubs:
         f = bin_dir / name
         f.write_text(body)
         f.chmod(f.stat().st_mode | stat.S_IEXEC)
@@ -1261,3 +1296,68 @@ class TestCiRunsWhatTheGateRuns:
         workflow = self._workflow()
         assert "pull_request" in workflow
         assert "branches: [main]" in workflow
+
+
+class TestTheTripRunsOnALinuxTar:
+    """The offline run of `trip.sh` could only ever pass on a Mac.
+
+    Step 3 shipped the tree with `tar --no-xattrs --no-fflags
+    --no-mac-metadata`. The last two are BSD-only, and GNU tar -- Linux, and CI
+    -- *exits* on an unknown flag rather than ignoring it. So step 3 died on
+    Linux and took ten tests in this module with it.
+
+    Nobody found out for 17 days, because CI failed at the type check and never
+    reached the tests. A harness that only runs on the author's machine is a
+    harness nothing else can check, which is the whole value of having it.
+    """
+
+    def test_the_trip_completes_with_a_gnu_tar(self, tmp_path):
+        code, out = _run_trip(tmp_path, GOOD_ENV, gnu_tar=True)
+        assert "unrecognized option" not in out
+        assert "done - the trap parks the box next" in out
+        assert code == 0
+
+    def test_the_tree_is_still_shipped(self, tmp_path):
+        """Not just "did not crash": the tar has to have produced something the
+        far side could unpack.
+
+        Asserting on the "synced" line would prove nothing -- the stub prints it
+        for whatever arrives, including an empty stream from a tar that just
+        died. The byte count is the falsifiable part.
+        """
+        _, out = _run_trip(tmp_path, GOOD_ENV, gnu_tar=True)
+        assert "synced 1 files" in out
+        received = pathlib.Path(str(tmp_path / "vm-state") + ".tarbytes")
+        assert received.exists(), "the far side was never piped anything"
+        assert int(received.read_text().strip()) > 1000, (
+            "the tarball was empty or near-empty, so nothing was shipped"
+        )
+
+    def test_macos_metadata_is_still_excluded_on_a_bsd_tar(self, tmp_path):
+        """The BSD-only flags are not being dropped for everyone -- on a Mac
+        they are still passed, or .DS_Store and resource forks ride along to the
+        box. This machine has BSD tar, so the default run exercises that."""
+        code, out = _run_trip(tmp_path, GOOD_ENV)
+        assert "unrecognized option" not in out
+        assert code == 0
+
+    def test_the_stub_really_rejects_the_bsd_flags(self, tmp_path):
+        """A stub that cannot say no makes the test above a comment. This is the
+        fourth time that has bitten in this milestone, so it gets its own pin."""
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        fake = bin_dir / "tar"
+        fake.write_text(_GNU_TAR_STUB)
+        fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
+        refused = subprocess.run(
+            [str(fake), "-czf", "-", "--no-fflags", "-C", str(tmp_path), "."],
+            capture_output=True,
+            text=True,
+        )
+        assert refused.returncode != 0
+        assert "unrecognized option '--no-fflags'" in refused.stderr
+        # And it answers --version the way the detection in trip.sh reads it.
+        version = subprocess.run(
+            [str(fake), "--version"], capture_output=True, text=True
+        )
+        assert "GNU tar" in version.stdout

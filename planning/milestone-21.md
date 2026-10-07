@@ -1015,3 +1015,65 @@ test cannot read a dashboard. What it can do is make the gap between the two
 claims smaller, so that looking matters less.
 
 ₹0.
+
+## Item 13 — the offline trip harness only ran on a Mac
+
+Fixing item 12 moved CI's failure rather than ending it, which is what should
+happen when a check that never ran starts running. The type check passed; `Unit
+tests` failed, for the first time since 2026-09-20:
+
+```
+tar: unrecognized option '--no-fflags'
+Try 'tar --help' or 'tar --usage' for more information.
+```
+
+Step 3 shipped the working tree with `tar --no-xattrs --no-fflags
+--no-mac-metadata`. The last two are BSD-only, and **GNU tar exits on an
+unknown flag rather than ignoring it.** So step 3 died immediately on Linux and
+took ten tests in `test_deploy_config.py` with it.
+
+Which means the offline run of `trip.sh` — added on 2026-10-06 specifically so
+the script could be exercised start to park without starting a box — **has
+never once run anywhere but this laptop.** It was written to make the trip
+checkable by something other than a person, and the only machine that could
+check it was the machine that wrote it.
+
+The flags are chosen by asking which tar this is:
+
+```bash
+if tar --version 2>/dev/null | head -1 | grep -qi gnu; then
+  TAR_FLAGS=(--no-xattrs)
+else
+  TAR_FLAGS=(--no-xattrs --no-fflags --no-mac-metadata)
+fi
+```
+
+Not dropped for everyone: on a Mac they are still passed, or `.DS_Store` and
+resource forks ride along to the box. `test_macos_metadata_is_still_excluded_on_a_bsd_tar`
+pins that, and passes on this machine because this machine has BSD tar.
+
+### The harness needed a Linux tar it could fail against
+
+A `tar` stub that answers `tar (GNU tar) 1.35` to `--version` and exits 64 on
+the BSD-only flags, with GNU's exact message. `_run_trip(..., gnu_tar=True)`
+puts it on PATH. That is the fifth time in this milestone that the stub was
+half the defect, and this one gets its own pin —
+`test_the_stub_really_rejects_the_bsd_flags` — because a stub that cannot say
+no makes the test above a comment.
+
+### And one of my own pins could not fail
+
+`test_the_tree_is_still_shipped` **passed against the broken script.** The ssh
+stub printed `synced 1 files` for whatever arrived on the pipe, including the
+empty stream a dead `tar` produces, so "the tree was shipped" was not something
+the test could get wrong. The stub counts the bytes it receives now, and the
+test requires more than a thousand of them.
+
+That is the same mistake as item 9's, two commits later: the assertion was on
+the *message* rather than on the thing the message claims.
+
+**2 of the 4 new tests fail against the previous script.** The other two are
+the BSD regression guard and the stub's own pin, which pass either way on
+purpose.
+
+₹0.

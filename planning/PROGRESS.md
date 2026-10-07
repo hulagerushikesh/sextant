@@ -5,6 +5,36 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-07 — the offline trip harness only ran on a Mac (₹0)
+
+- **Milestone 21 item 13, shipped, ₹0.** Fixing item 12 *moved* CI's failure
+  rather than ending it — which is what should happen when a check that never
+  ran starts running. The type check passed and `Unit tests` failed for the
+  first time since 2026-09-20.
+- **`tar: unrecognized option '--no-fflags'`.** Step 3 shipped the working tree
+  with `--no-xattrs --no-fflags --no-mac-metadata`. The last two are BSD-only,
+  and **GNU tar exits on an unknown flag** rather than ignoring it. Step 3 died
+  immediately on Linux and took ten tests in `test_deploy_config.py` with it.
+- **So the offline run of `trip.sh` had never run anywhere but this laptop.** It
+  was added on 2026-10-06 precisely so the script could be exercised start to
+  park without starting a box — written to make the trip checkable by something
+  other than a person, and the only machine that could check it was the one that
+  wrote it.
+- **The flags are chosen from `tar --version` now.** Not dropped for everyone:
+  on a Mac they are still passed, or `.DS_Store` and resource forks ride along
+  to the box, and a test pins that.
+- **The harness needed a Linux tar it could fail against**: a stub answering
+  `tar (GNU tar) 1.35` and exiting 64 on the BSD-only flags with GNU's exact
+  message. Fifth time this milestone the stub was half the defect, so it gets
+  its own pin — a stub that cannot say no makes the test above a comment.
+- **And one of my own pins could not fail.**
+  `test_the_tree_is_still_shipped` passed against the broken script, because the
+  ssh stub printed `synced 1 files` for whatever arrived on the pipe, including
+  the empty stream a dead `tar` produces. It counts the bytes received now and
+  requires more than a thousand. Same mistake as item 9's, two commits later:
+  asserting on the message rather than on what the message claims.
+- 623 tests. Version stays 0.8.7.
+
 ## 2026-10-07 — CI had been red for 17 days and nobody looked (₹0)
 
 - **Milestone 21 item 12, shipped, ₹0.** Items 5–11 were all the same shape
