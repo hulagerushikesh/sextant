@@ -32,6 +32,23 @@ CORPUS = {
 }
 
 
+@pytest.fixture(autouse=True)
+def isolate_the_spend_ledger(tmp_path_factory, monkeypatch):
+    """Give every test its own spend ledger.
+
+    `DailyBudget` persists the day's tally since 2026-10-08, and its default
+    path is inside the collection directory. Without this the suite wrote a
+    real ledger into the repository's `chroma_db/` and every later
+    `DailyBudget()` resumed it, so one test's spend decided another's cap --
+    found by eight pre-existing tests failing at once, which is the only
+    pleasant way to find shared mutable state.
+
+    Autouse on purpose: a test that wants persistence passes `ledger=` itself.
+    """
+    ledger = tmp_path_factory.mktemp("spend") / ".sextant-spend.json"
+    monkeypatch.setenv("SEXTANT_SPEND_LEDGER", str(ledger))
+
+
 @pytest.fixture(scope="session")
 def corpus_dir() -> Iterator[Path]:
     directory = Path(tempfile.mkdtemp(prefix="sextant-test-corpus-"))

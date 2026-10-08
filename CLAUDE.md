@@ -52,6 +52,37 @@ because each one was learned the expensive way.
   box up takes `--keep-up`, which you have to decide to type.
 - Kill CPU-heavy local jobs (eval runs, model loads) at the end of a session.
 
+### Where the money shows up
+
+Three places, and only one of them is the bill.
+
+| Where | What it is |
+| --- | --- |
+| **AI Studio / Google billing** | the **actual** charge. Prepay with a Rs500/month cap; a 402 "prepayment credits are depleted" is an empty balance, not a bad key. The authoritative number for any month. |
+| `/health` -> `budget` | sextant's own running total for the UTC day: `spent_usd`, `remaining_usd`, `budget_usd`, `resets_in_seconds`, plus `owner_*` when a share is set. `durable: false` means the ledger could not be read or written, so that figure is this process's spend and **not the day's**. |
+| the structured log | `cost_usd` per query (and `agent_cost_usd`, `agent_cached_tokens`) -- the per-query breakdown behind the daily total. |
+
+What `/health` does **not** include, so it always reads low against the bill:
+
+- **CLI ingest and eval runs are separate processes.** `sextant-ingest` and
+  `sextant-judge` spend real money and no cap or tally sees it. Summaries cost
+  about $0.003/document at upload. `sextant-eval` spends nothing -- retrieval
+  is local.
+- It is an **estimate** from a hard-coded table, `PRICING_AS_OF` in
+  `mcp_server/pricing.py`, currently `2026-08` and priced for
+  gemini-3.1-flash-lite ($0.25 / $1.50 per Mtok). Bump `SEXTANT_MODEL` without
+  bumping those and the number understates the bill.
+- **Grounded search is priced per request** at $0.014, ignoring the
+  5,000/month free allowance, so grounded answers *over*state early in a month.
+  Wrong in the safe direction on purpose.
+- **VM time is a different line entirely** -- GCP compute, ~Rs5.6/hour running,
+  disks while parked. `deploy/deploy.sh HOST status` says what is billing.
+
+The day's tally is persisted to `.sextant-spend.json` in the Chroma directory
+so a deploy or a restart does not begin the day again at zero; before
+2026-10-08 it was in memory only, which made the cap a limit per process
+lifetime rather than per day.
+
 ## Local ports
 
 - `:8100` — this project's API (safe to restart).
@@ -101,6 +132,13 @@ because each one was learned the expensive way.
   plant here showed 12 of 16 tests failing, which was worthless: the signature
   had changed and most of them were `TypeError`. Revert the *body* behind the
   new signature so the logic is the only difference, then count.
+- **A counter that resets is not a cap on a day.** `DailyBudget` kept the UTC
+  day's spend in memory, so every deploy and every `restart: unless-stopped`
+  bounce began the day at zero. It persists to `.sextant-spend.json` in the
+  Chroma directory now -- **inside** it, because the box mounts
+  `/data/chroma:/data/chroma`, so `/data` does not survive a rebuild and
+  `/data/chroma` does. `/health` reports `budget.durable`; `trip.sh` fails on
+  false and only notes an absent key.
 
 ## Gotchas that recur
 

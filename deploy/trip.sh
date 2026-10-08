@@ -397,9 +397,9 @@ except Exception:
     raise SystemExit(1)
 b = d.get("budget") or {}
 print(
-    "     status=%s mcp=%s model=%s budget_usd=%s"
+    "     status=%s mcp=%s model=%s budget_usd=%s durable=%s"
     % (d.get("status"), d.get("mcp_connected"), d.get("model_configured"),
-       b.get("budget_usd"))
+       b.get("budget_usd"), b.get("durable"))
 )
 wrong = []
 if d.get("status") != "healthy":
@@ -410,6 +410,13 @@ if not d.get("model_configured"):
     wrong.append("no model key resolved, so the box cannot answer anything")
 if not b.get("budget_usd"):
     wrong.append("the daily cap is 0, so the box is uncapped")
+# Three outcomes. False means the box cannot write its spend ledger, so the cap
+# restarts with the container and is a limit per process, not per day. Absent
+# means the box predates the ledger -- worth saying, not worth failing a trip.
+if b.get("durable") is False:
+    wrong.append("the spend ledger is not writable, so the cap resets on restart")
+elif b.get("budget_usd") and "durable" not in b:
+    print("     (this box predates the spend ledger; the cap resets on restart)")
 if wrong:
     print("     NOT RIGHT: %s" % "; ".join(wrong), file=sys.stderr)
     raise SystemExit(1)
