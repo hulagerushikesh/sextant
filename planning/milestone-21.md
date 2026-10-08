@@ -1225,3 +1225,72 @@ up* — the bill, `/health`, and the per-query log, with the four things
 `/health` cannot see (CLI ingest and judging are separate processes; the price
 table is hard-coded and dated; grounded search is priced without the free
 allowance, so it overstates; VM time is a different line).
+
+## Item 16 — the other door to the meter (unplanned)
+
+Shipped 2026-10-08. ₹0.
+
+Items 5–13 hardened `deploy/trip.sh`: a step 0 that reads the ssh firewall rule
+for ₹0 *before* anything starts, an ssh wait that has to actually succeed, and
+a park that is an **EXIT trap** rather than the last line of a checklist.
+
+**`deploy/deploy.sh HOST start` is the other command that turns the meter on,
+and it had none of it.** It started the box, looped thirty times for an ssh
+that could not arrive, printed `>> up at <ip>` **either way**, and left the box
+billing with a printed reminder to stop it by hand.
+
+That is the 2026-09-28 ₹703 failure in full, sitting in the script the fix for
+it never touched — and it is the same shape as this milestone's item 1, where
+`/ann/*` reached the corpus without crossing `ScopedHost`. **Hardening one of
+two paths to the same action hardens neither.**
+
+### One copy of the check
+
+`ssh_door()` moved to `deploy/lib.sh` and both scripts source it. The
+extraction is behaviour-preserving: all 97 pre-existing deploy tests passed
+against it before anything else changed. Two tests now fail the gate if either
+script grows its own copy, because *a door check that exists in one of two
+scripts is a door check in neither* — and item 15 had just finished arguing
+that one location resolved twice is the drift this repository keeps paying for.
+
+`start` checks the door before the meter, then asks ssh once more for real and
+**stops the box if the answer is no**, naming the rate and the manual command
+if the stop itself fails. It cannot park on exit the way a trip does — leaving
+the box up is the whole point of running it — so it says out loud that nothing
+parks it and that `trip.sh` does.
+
+`VM_SSH_TRIES` and `VM_SSH_SLEEP` became knobs because `30 × 5s` hardcoded
+meant **the old script could not be exercised offline in bounded time at all**:
+the item 13 shape, where the harness could only ever run on one machine.
+
+### A pin of mine could not fail — in the harness, again
+
+The gcloud stub matched verbs as adjacent words, `*"instances describe"*`. But
+`trip.sh` runs `compute instances describe …` while `deploy.sh` runs
+`compute instances --project=X describe …`. **Every branch silently missed for
+`deploy.sh`**: the stub answered nothing, the box read as neither `RUNNING` nor
+`TERMINATED`, and `assert "instances start" not in calls` **passed for a run
+that had started the box.**
+
+The stub strips `--flags` and matches and logs the normalised args now. Sixth
+time this milestone a stub was half the defect.
+
+**5 of 9** tests fail against the previous `deploy.sh`.
+
+### Second clause: `stop` performed the park without checking it
+
+Found while reading the same file. `deploy.sh stop` issued the stop and printed
+`>> stopped.` — a claim about the command, not about the box. Item 5's defect
+in the other script, two days after item 5.
+
+It reads the state back now and fails loudly when the box is still up, and it
+names any **reserved address**, which bills roughly twice the in-use rate while
+the box is off — about ₹21/day for nothing. The README has priced that
+difference all along and the command that creates the situation never mentioned
+it. Not released automatically: that changes the public IP, which is a DNS
+decision, and `trip.sh` (which repoints DNS next trip anyway) is where it
+belongs.
+
+The stub gained the nastier failure it could not previously represent — gcloud
+answering **0 while the box stays up** — which is the entire reason to read the
+state back. **4 of 5** of those tests fail against the previous `stop`.

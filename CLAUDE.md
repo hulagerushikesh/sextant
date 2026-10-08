@@ -45,6 +45,15 @@ because each one was learned the expensive way.
   a human — a key to paste, a decision — parks first and restarts later.
   Restarting costs ₹2; on 2026-09-28 a box left running while waiting for a
   key rotation billed **₹703 over 125.5 hours**, against a ₹50-100/day cap.
+- **Two doors to the meter, one check.** `deploy/deploy.sh HOST start` is the
+  other command that starts the box. It had neither of `trip.sh`'s
+  protections: no door check, and an ssh wait that ended either way and then
+  printed `>> up at <ip>` regardless, leaving an unreachable box billing with
+  a reminder to stop it by hand -- the 2026-09-28 shape in the script the fix
+  for it never touched. `ssh_door` now lives in `deploy/lib.sh` and both use
+  that one copy; `start` verifies ssh for real and stops the box if it never
+  answers. **A door check that exists in one of two scripts is a door check in
+  neither.**
 - **Use `deploy/trip.sh`, not a sequence of gcloud commands.** It starts the
   box, deploys, verifies and parks — and parking is an `EXIT` trap, so it also
   happens on failure and on Ctrl-C. A checklist is what failed on 2026-09-28;

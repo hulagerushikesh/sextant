@@ -24,11 +24,10 @@ INSTANCE="${VM_INSTANCE:-agenticrag}"
 REGION="${ZONE%-*}"
 ADDRESS="${VM_ADDRESS:-agenticrag-ip}"
 ACCESS_CONFIG="external-nat"
-# Port 22 is open to exactly one /32, and a home ISP moves that address
-# whenever it likes. Hence step 0. The URL is a knob so the check is testable
-# and so a dead service can be swapped rather than worked around.
-SSH_RULE="${VM_SSH_RULE:-agenticrag-ssh}"
-MY_IP_URL="${VM_MY_IP_URL:-https://checkip.amazonaws.com}"
+# SSH_RULE and MY_IP_URL, and the door check itself, come from lib.sh -- the
+# same copy `deploy.sh start` uses, because a door check that exists in one of
+# two scripts is a door check in neither.
+. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 # Two minutes of waiting, as knobs: the offline gate exercises the path where
 # ssh never answers, and it cannot spend two minutes doing it.
 SSH_TRIES="${VM_SSH_TRIES:-24}"
@@ -203,55 +202,12 @@ forget_probes() {
 # Three outcomes, not two: open, shut, or could-not-tell. A flaky address
 # service must not be able to stop a trip, so could-not-tell proceeds and says
 # so -- the ssh wait is still there to catch what this missed.
-ssh_door() {
-  local mine allowed verdict=0
-  mine=$(curl -s --max-time 15 "$MY_IP_URL" 2>/dev/null | tr -d '[:space:]' || true)
-  if [ -z "$mine" ]; then
-    echo "   could not learn this machine's address -- door not checked" >&2
-    return 0
-  fi
-  allowed=$("${GC[@]}" firewall-rules describe "$SSH_RULE" \
-    --format='value(sourceRanges.list())' 2>/dev/null | tr -d '[:space:]' || true)
-  if [ -z "$allowed" ]; then
-    echo "   no source ranges readable on $SSH_RULE -- door not checked" >&2
-    return 0
-  fi
-  # Containment, not string equality: the rule is allowed to be a wider CIDR
-  # than one address, and comparing the text would call an open door shut.
-  MINE="$mine" ALLOWED="$allowed" python3 -c '
-import ipaddress
-import os
-import sys
-
-try:
-    mine = ipaddress.ip_address(os.environ["MINE"])
-    nets = [
-        ipaddress.ip_network(text, strict=False)
-        for text in os.environ["ALLOWED"].split(",")
-        if text
-    ]
-except ValueError:
-    sys.exit(2)
-sys.exit(0 if any(mine in net for net in nets) else 1)
-' || verdict=$?
-  case "$verdict" in
-    0) printf '   port 22 is open to %s\n' "$mine"; return 0 ;;
-    2) echo "   addresses did not parse -- door not checked" >&2; return 0 ;;
-  esac
-  echo "   port 22 is NOT open to this machine." >&2
-  printf '   %s allows %s. this machine is %s.\n' "$SSH_RULE" "$allowed" "$mine" >&2
-  echo "   nothing has been started, so this has cost nothing. open the door:" >&2
-  printf '   gcloud compute firewall-rules update %s --project=%s --source-ranges=%s/32\n' \
-    "$SSH_RULE" "$PROJECT" "$mine" >&2
-  return 1
-}
-
 trap park EXIT
 
 # Before step 1, because step 1 is where the meter starts. A shut door found
 # here costs Rs0; found after the start it costs Rs2 and a second trip.
 say "0 - the ssh door, before the meter starts"
-ssh_door || exit 1
+ssh_door "$PROJECT" "${GC[@]}" || exit 1
 
 say "1 - starting $INSTANCE (bills ~Rs5.6/hour until parked)"
 if [ "$("${GC[@]}" instances describe "$INSTANCE" --zone="$ZONE" --format='value(status)')" != "RUNNING" ]; then
