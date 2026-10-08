@@ -89,6 +89,18 @@ because each one was learned the expensive way.
   `TestCiRunsWhatTheGateRuns`, which reads the gate out of this file. CI ran
   three of its four commands until 2026-10-07: `npm run build` runs `tsc -b`,
   so a frontend type error failed only by hand.
+- **`sextant-eval --check` must grade the whole gate, and now proves it.**
+  `--check` guarded `--store` and `--golden` but not `--modes`, so
+  `--check --modes dense` graded one mode of four and printed "no regressions";
+  and the baseline's `questions` count was never compared, so **deleting 60 of
+  the 65 golden questions passed** (a shorter set raises every metric). It fails
+  now on an ungraded baseline mode, a no-longer-reported baseline metric, a
+  shorter golden set, or a missing `baseline.json` -- **no baseline is a
+  failure, not a pass.** `tests/test_eval_gate.py`.
+- **Plant the defect, and check the plant fails for the right reason.** A first
+  plant here showed 12 of 16 tests failing, which was worthless: the signature
+  had changed and most of them were `TypeError`. Revert the *body* behind the
+  new signature so the logic is the only difference, then count.
 
 ## Gotchas that recur
 

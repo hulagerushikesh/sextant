@@ -5,6 +5,46 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-07 — the gate on retrieval quality could not fail (₹0)
+
+CI had just gone green on `sextant-eval --check`, so the next question was the
+one items 5–13 kept asking: **can it go red?** It is the repository's entire
+claim about retrieval quality and it had **no tests at all.**
+
+The comparison was correct. Its *coverage* was never compared — six ways to
+pass without grading anything, every one of which makes the numbers look
+better:
+
+- `--check --modes dense` graded one mode of four and printed "no
+  regressions". `--check` guarded `--store` and `--golden`, not `--modes`, and
+  the loop walks the reports, so three ungraded modes leave nothing to notice.
+- **Deleting 60 of the 65 golden questions passed.** `questions` was computed,
+  printed and written into the artifact, and never compared; the easy
+  questions survive, so every metric rises.
+- Renaming a metric passed: `previous.get(metric, value)` defaulted the
+  missing name **to the value it was being compared with**, so the delta was
+  always exactly zero.
+- Renaming a mode printed "new configuration, no baseline" and continued.
+- Dropping a mode from `RETRIEVAL_MODES` left a baseline entry nobody grades.
+- Deleting `baseline.json` printed "nothing to compare against" and exited 0.
+
+Fixed on both sides: a parser guard refuses a narrowed `--check` before a
+minute of grading is spent, and the check now fails on an ungraded baseline
+mode, a no-longer-reported baseline metric, a shorter golden set, a baseline
+with no question count, or no baseline. **Could-not-tell is a third outcome,
+not a pass.** Growth is still growth — a new mode or metric is printed and
+passes. Two tests pin the committed baseline against the code rather than
+against itself.
+
+**The first plant was dishonest.** 12 of 16 new tests failed against the old
+file, and that number was worthless: the signature had changed, so most were
+`TypeError` rather than behaviour. Re-planted with the old body behind the new
+signature — **7 of 16 fail**, and the nine that pass either way are deliberate
+regression guards.
+
+`tests/test_eval_gate.py`, 16 tests. Also renamed `worst` to `best` where it is
+`max` by `hit@1` and the message says "best configuration".
+
 ## 2026-10-07 — CI is green again (₹0)
 
 Run 37660824132 on `67dd89e`: **first green run since 2026-09-20** (30 of 31

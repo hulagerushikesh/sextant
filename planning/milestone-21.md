@@ -1096,3 +1096,62 @@ Two advisory annotations remain, neither of them ours: Node 20 actions forced
 onto Node 24, and `ubuntu-latest` migrating to Ubuntu 26 on 2026-10-19. The
 second one is worth watching now that the trip harness runs on whichever
 Ubuntu CI picks.
+
+## Item 14 — the gate on retrieval quality could not fail (unplanned)
+
+Shipped 2026-10-07. ₹0.
+
+CI went green on `sextant-eval --check` for the first time in 17 days, and the
+next question is the one items 5–13 kept asking: **can it go red?** A pin that
+cannot fail is a comment, and this one is the repository's entire claim about
+retrieval quality. It had **no tests at all.**
+
+The comparison itself was correct — the arithmetic, the tolerance, the epsilon
+that keeps `0.97 - 0.99` from reading as `-0.020000000000000018`. What was
+missing is that **nothing checked the comparison's own coverage.** Six ways to
+pass it without grading anything:
+
+| How | Why it passed |
+| --- | --- |
+| `--check --modes dense` | `--check` guarded `--store` and `--golden` but not `--modes`. The loop walks the *reports*, so three ungraded modes leave nothing behind to notice — a quarter of the gate, reported as "no regressions" |
+| Delete 60 golden questions | `questions` was computed, printed, written into the artifact, and never compared. The easy questions survive, so every metric *rises* |
+| Rename a metric | `previous.get(metric, value)` defaulted the missing name **to the value it was being compared against**, so the delta was always exactly zero |
+| Rename a mode | `previous is None` printed "new configuration, no baseline" and continued. Renaming `rerank` un-checked the strongest mode |
+| Drop a mode from `RETRIEVAL_MODES` | The baseline keeps an entry nobody grades; nothing reads the baseline's own key set |
+| Delete `baseline.json` | "nothing to compare against" and **exit 0** |
+
+Every one of those makes the numbers look better. That is the same shape as
+items 5–13 — a result produced and not compared — one level further out: here
+it is the *scope* of a comparison that was never compared.
+
+Fixed on both sides. A parser guard refuses `--check` with a narrowed mode set
+before a minute of grading is spent; and the check itself now fails when a
+baseline mode was not graded, when a baseline metric is no longer reported,
+when the run asked fewer questions than the baseline did, when the baseline
+records no question count, or when there is no baseline at all. **Missing
+baseline is a failure, not a pass** — `--check` is the claim that a committed
+baseline was matched, and could-not-tell is a third outcome. Something
+genuinely new — an added mode, an added metric — is still printed and still
+passes; the guard is against silent *removal*, not against growth.
+
+Two tests pin the committed baseline against the code rather than against
+itself: its mode set must equal `RETRIEVAL_MODES`, and its `questions` must
+equal `len(load_golden())`.
+
+### The plant was dishonest the first time
+
+Running the new 16 tests against the old file gave **12 failures** — and that
+number was worthless. The signature changed to take the question count, so
+most of those twelve were `TypeError`, not behaviour. A plant that fails for
+the wrong reason proves nothing, which is the same trap as a pin that cannot
+fail, inverted.
+
+Re-planted with the **old body behind the new signature**, so the only
+difference under test is the logic: **7 of 16 fail.** The other nine are
+deliberate regression guards — the happy path, a real regression, the
+exactly-at-tolerance boundary, a longer golden set, an added mode.
+
+Also renamed `worst` to `best` in `print_table`'s caller: it is `max` by
+`hit@1` and the message it prints says "best configuration". The behaviour was
+right and the name was not, which is how a reader ends up flipping `max` to
+`min`.
