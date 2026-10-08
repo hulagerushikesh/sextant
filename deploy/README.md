@@ -383,6 +383,20 @@ without it the first person to spend the day's allowance silences the rest
 until 00:00 UTC. Default 1 (no per-user limit); `env.example` has the
 arithmetic for a gate with three users.
 
+Both caps are kept in `.sextant-spend.json` **inside** `/data/chroma`, keyed by
+UTC date. That location is deliberate: the api container mounts
+`/data/chroma:/data/chroma`, so `/data` itself is container-local and a
+`/data/spend.json` would be wiped by the very rebuild the ledger exists to
+survive. Until 2026-10-08 the tally was in memory, which meant every
+`deploy.sh` and every `restart: unless-stopped` bounce started the day again at
+zero while the provider's meter kept counting.
+
+`/health` reports `budget.durable`. False means the ledger could not be read or
+written, so `spent_usd` is that process's spend and not the day's -- the cap
+still holds, it just resets with the container again. `trip.sh` step 5 fails on
+a false; a box that does not report the field at all predates the ledger and is
+only noted.
+
 ### Uptime check (only if the VM runs 24/7)
 
 Pointless while the VM is parked on purpose — it would page you for a

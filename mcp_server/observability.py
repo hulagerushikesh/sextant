@@ -21,6 +21,7 @@ import uuid
 from collections import defaultdict, deque
 from contextvars import ContextVar
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 
 from tools import settings
 
@@ -55,6 +56,38 @@ if not 0 < DAILY_BUDGET_SHARE <= 1:
         DAILY_BUDGET_SHARE,
     )
     DAILY_BUDGET_SHARE = 1.0
+
+# Where the day's tally is written so a restart does not zero it.
+#
+# The cap is a promise about a *day*, and it was kept in memory only: every
+# `docker compose up -d --build` -- so every deploy -- and every
+# `restart: unless-stopped` bounce began the day again at zero, while Google's
+# meter kept counting. A cap that forgets is not a cap, it is a speed bump per
+# process lifetime.
+#
+# Default lives inside the Chroma directory because on the box that is the one
+# path on the persistent disk: the mount is `/data/chroma:/data/chroma`, so
+# `/data` itself does not survive a container rebuild and `/data/chroma` does.
+SPEND_LEDGER_NAME = ".sextant-spend.json"
+
+
+def spend_ledger_path() -> Path:
+    """Where the day's tally is kept.
+
+    Resolved the same way as the collection directory, and pinned against it in
+    the tests -- two defaults for one location is exactly the kind of drift this
+    repository keeps paying for.
+    """
+    explicit = settings.getenv("SPEND_LEDGER")
+    if explicit:
+        return Path(explicit).expanduser()
+    override = settings.getenv("CHROMA_DIR")
+    base = (
+        Path(override).expanduser()
+        if override
+        else Path(__file__).resolve().parents[1] / "chroma_db"
+    )
+    return base / SPEND_LEDGER_NAME
 
 
 class RequestIdFilter(logging.Filter):
@@ -180,7 +213,10 @@ class DailyBudget:
     """
 
     def __init__(
-        self, budget_usd: float = DAILY_BUDGET_USD, share: float = DAILY_BUDGET_SHARE
+        self,
+        budget_usd: float = DAILY_BUDGET_USD,
+        share: float = DAILY_BUDGET_SHARE,
+        ledger: Path | None = None,
     ):
         self.budget = budget_usd
         self.share = share if 0 < share <= 1 else 1.0
@@ -188,6 +224,85 @@ class DailyBudget:
         self._spent = 0.0
         self._by_owner: dict[str, float] = defaultdict(float)
         self._lock = threading.Lock()
+        self._ledger = ledger if ledger is not None else spend_ledger_path()
+        # Three states, not two: the tally came back from disk, there was
+        # nothing to come back from, or the ledger could not be read. The last
+        # one has to be visible -- a number nobody can tell the provenance of
+        # is worse for tracking than an obviously fresh one.
+        self._durable = self.budget > 0
+        self._load()
+
+    def _load(self) -> None:
+        """Pick today's tally back up. Never raises; a bad ledger is not fatal."""
+        if self.budget <= 0:
+            return
+        try:
+            raw = json.loads(self._ledger.read_text())
+        except FileNotFoundError:
+            return
+        except (OSError, ValueError) as exc:
+            self._durable = False
+            logging.getLogger(__name__).warning(
+                "spend ledger at %s is unreadable (%s); today's tally starts at "
+                "zero and will not survive a restart",
+                self._ledger,
+                exc,
+            )
+            return
+        try:
+            if date.fromisoformat(str(raw["day"])) != self._day:
+                return  # a previous day's tally is not this day's
+            self._spent = float(raw["spent_usd"])
+            owners = raw.get("by_owner") or {}
+            self._by_owner.update(
+                {str(k): float(v) for k, v in owners.items() if float(v) > 0}
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            self._durable = False
+            logging.getLogger(__name__).warning(
+                "spend ledger at %s does not parse (%s); today's tally starts at zero",
+                self._ledger,
+                exc,
+            )
+            return
+        logging.getLogger(__name__).info(
+            "resumed today's spend from %s: $%.6f of $%.2f",
+            self._ledger,
+            self._spent,
+            self.budget,
+        )
+
+    def _save(self) -> None:
+        """Write the tally. Caller holds the lock. Never raises.
+
+        A query must not fail because the disk is full: the cap still holds in
+        memory, so the only thing lost is surviving a restart, and that is said
+        out loud in /health rather than assumed.
+        """
+        if self.budget <= 0:
+            return
+        payload = {
+            "day": self._day.isoformat(),
+            "spent_usd": round(self._spent, 9),
+            "by_owner": {k: round(v, 9) for k, v in self._by_owner.items() if v > 0},
+        }
+        tmp = self._ledger.with_suffix(self._ledger.suffix + ".tmp")
+        try:
+            self._ledger.parent.mkdir(parents=True, exist_ok=True)
+            tmp.write_text(json.dumps(payload))
+            # Atomic: a crash mid-write leaves the previous tally, not a
+            # truncated file that reads as zero.
+            tmp.replace(self._ledger)
+            self._durable = True
+        except OSError as exc:
+            if self._durable:
+                logging.getLogger(__name__).warning(
+                    "cannot write the spend ledger at %s (%s); the daily cap now "
+                    "holds only for this process",
+                    self._ledger,
+                    exc,
+                )
+            self._durable = False
 
     @property
     def owner_budget(self) -> float:
@@ -213,6 +328,7 @@ class DailyBudget:
             self._day = today
             self._spent = 0.0
             self._by_owner.clear()
+            self._save()
 
     def check(self) -> tuple[bool, float, int]:
         """(allowed, spent_today, seconds_until_reset). Always allowed when off."""
@@ -255,6 +371,7 @@ class DailyBudget:
             self._spent += cost_usd
             if owner:
                 self._by_owner[owner] += cost_usd
+            self._save()
 
     def status(self, owner: str | None = None) -> dict[str, object]:
         """A snapshot for /health, so the UI can show the day's spend.
@@ -273,6 +390,9 @@ class DailyBudget:
                 "spent_usd": round(self._spent, 6),
                 "remaining_usd": round(max(0.0, self.budget - self._spent), 6),
                 "resets_in_seconds": self._seconds_to_reset(),
+                # Whether `spent_usd` is the day's spend or only this process's.
+                # The difference matters to anyone reading it for tracking.
+                "durable": self._durable,
             }
             if self.share < 1:
                 snapshot["share"] = round(self.share, 4)
