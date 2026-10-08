@@ -208,15 +208,47 @@ def print_separation(reports: list[dict[str, Any]]) -> None:
         )
 
 
-def check_against_baseline(reports: list[dict[str, Any]]) -> int:
-    """Compare to the committed baseline. Returns a process exit code."""
-    if not BASELINE_PATH.exists():
-        print(f"\nNo baseline at {BASELINE_PATH}; nothing to compare against.")
-        return 0
+def check_against_baseline(reports: list[dict[str, Any]], questions: int) -> int:
+    """Compare to the committed baseline. Returns a process exit code.
 
-    baseline = json.loads(BASELINE_PATH.read_text())["modes"]
+    This is CI's only check on retrieval quality, so most of it is about what
+    it *cannot* see. A comparison that silently narrows its own scope is the
+    same defect as a result nobody reads: every mode the baseline records has
+    to be graded, every metric it records has to be present, and the run has
+    to have asked at least as many questions as the baseline did. Dropping a
+    mode, renaming a metric or deleting sixty golden questions all make the
+    numbers look better, and none of them used to fail here.
+    """
+    if not BASELINE_PATH.exists():
+        # Not "nothing to compare against, carry on" -- `--check` is a claim
+        # that a committed baseline was matched, and there is no baseline to
+        # match. Could-not-tell is a third outcome, not a pass.
+        print(f"\nFAILED: no baseline at {BASELINE_PATH}; --check has nothing to compare")
+        return 1
+
+    committed = json.loads(BASELINE_PATH.read_text())
+    baseline = committed["modes"]
     regressions: list[str] = []
     print("\nAgainst baseline:")
+
+    graded = {report["mode"] for report in reports}
+    ungraded = sorted(set(baseline) - graded)
+    if ungraded:
+        # `--check --modes dense` used to grade a quarter of the gate and
+        # report no regressions, because the loop below walks the reports and
+        # a mode that was never run produces no report to walk.
+        regressions.append(f"not graded: {', '.join(ungraded)}")
+
+    # The baseline's question count is the amount of evidence behind its
+    # numbers. A shorter golden set raises every metric, so without a floor
+    # the gate is passed by deleting questions.
+    expected_questions = committed.get("questions")
+    if expected_questions is None:
+        regressions.append("baseline records no question count")
+    elif questions < expected_questions:
+        regressions.append(
+            f"golden set is {questions} questions, baseline used {expected_questions}"
+        )
 
     for report in reports:
         previous = baseline.get(report["mode"])
@@ -226,7 +258,10 @@ def check_against_baseline(reports: list[dict[str, Any]]) -> int:
         for metric, value in report["metrics"].items():
             if not isinstance(value, (int, float)):
                 continue
-            delta = value - previous.get(metric, value)
+            if metric not in previous:
+                print(f"  {report['mode']}.{metric}: {value:.4f} (new metric, no baseline)")
+                continue
+            delta = value - previous[metric]
             flag = ""
             # A drop of exactly the tolerance is at the gate, not past it; the
             # epsilon keeps 0.97 - 0.99 from reading as -0.020000000000000018.
@@ -235,6 +270,16 @@ def check_against_baseline(reports: list[dict[str, Any]]) -> int:
                 regressions.append(f"{report['mode']}.{metric} {delta:+.4f}")
             if abs(delta) > 1e-9:
                 print(f"  {report['mode']}.{metric}: {value:.4f} ({delta:+.4f}){flag}")
+        # A metric the baseline grades and this run does not is a metric that
+        # stopped being checked. Renaming one used to be a free pass, because
+        # the missing name defaulted to the value it was being compared with.
+        missing = sorted(
+            name
+            for name, value in previous.items()
+            if isinstance(value, (int, float)) and name not in report["metrics"]
+        )
+        if missing:
+            regressions.append(f"{report['mode']} no longer reports {', '.join(missing)}")
 
     if regressions:
         print("\nFAILED: " + "; ".join(regressions))
@@ -270,10 +315,12 @@ async def run(
     if scored:
         print_threshold_sweep(scored[0])
 
-    worst = max(reports, key=lambda r: r["metrics"]["hit@1"])
-    if worst["failures"]:
-        print(f"\nMisses in the best configuration ({worst['mode']}):")
-        for failure in worst["failures"]:
+    # `max` by hit@1, and the message says "best" -- the behaviour was right and
+    # the name was not, which is how a reader ends up flipping max to min.
+    best = max(reports, key=lambda r: r["metrics"]["hit@1"])
+    if best["failures"]:
+        print(f"\nMisses in the best configuration ({best['mode']}):")
+        for failure in best["failures"]:
             print(
                 f"  {failure['id']} [{failure['kind']}] recall {failure['recall']:.2f}  "
                 f"expected {failure['expected']} got {failure['got'][:3]}"
@@ -326,6 +373,11 @@ def main() -> None:
     args = parser.parse_args()
     if args.check and (args.store or args.golden != GOLDEN_PATH):
         parser.error("--check compares the committed corpus and golden set only")
+    if args.check and set(args.modes) != set(RETRIEVAL_MODES):
+        # Fails here rather than after a minute of grading. The coverage check
+        # inside --check catches this too, and also catches the case this
+        # cannot see: a mode quietly dropped from RETRIEVAL_MODES itself.
+        parser.error("--check grades every mode; it is the whole gate or none of it")
 
     # A throwaway index, so grading never touches whatever the user has
     # actually ingested. Set before KnowledgeBase is ever constructed. With
@@ -338,7 +390,7 @@ def main() -> None:
         if args.out:
             args.out.write_text(json.dumps(payload, indent=2) + "\n")
             print(f"\nwrote {args.out}")
-        code = check_against_baseline(reports) if args.check else 0
+        code = check_against_baseline(reports, payload["questions"]) if args.check else 0
     finally:
         if not own_store:
             pass
