@@ -1294,3 +1294,77 @@ belongs.
 The stub gained the nastier failure it could not previously represent — gcloud
 answering **0 while the box stays up** — which is the entire reason to read the
 state back. **4 of 5** of those tests fail against the previous `stop`.
+
+## 17 · The gate's environment was chosen by GitHub — ₹0
+
+**Unplanned.** Item 16's own green run carried two annotations, and reading
+them is the whole item.
+
+Five actions target **Node 20**, which is deprecated, and the runner has been
+force-running them on Node 24. And `ubuntu-latest` migrates from Ubuntu 24.04
+to **26.04 gradually between 2026-10-19 and 2026-11-19**
+(`actions/runner-images#14748`).
+
+Gradual is worse than dated. For a month the same commit can pass or fail
+depending on which image it drew — and a gate that is *sometimes* red teaches
+people that red means nothing. This repository has already paid that bill:
+thirty red runs went unread for seventeen days.
+
+Items 12 and 13 were both the environment deciding whether the check ran — an
+optional dependency deciding whether the code type-checked, then BSD-only tar
+flags meaning the harness could only pass on a Mac. This is the third
+instance, and the only one **announced in advance**. Announced on every single
+run, in fact, and read by nobody: **item 11's defect in the repository's own
+check** — a result produced and never compared.
+
+So the answer is not to read the annotations harder. `.github/dependabot.yml`
+turns the next deprecation into a pull request. The runner and all five actions
+are pinned to versions checked against their release notes (setup-node v6
+limited automatic caching to npm, which is what we ask for; setup-python v7
+removed `pip-install`, which we never set; checkout v7 blocks fork checkouts
+for `pull_request_target` and `workflow_run`, neither of which we trigger on).
+
+### Probing the image first paid for itself immediately
+
+Pinning to an untested image only moves the surprise, so the whole workflow was
+run on `ubuntu-26.04` before anything was pinned. It came back **2 failed, 664
+passed**.
+
+`_run_deploy` never set `FAKE_BOX`, so the ssh stub's first line was `cd ""`.
+**bash 5.2 accepts that as a no-op; bash 5.3 rejects it as a null directory.**
+Ubuntu 24.04 ships 5.2.21 and 26.04 ships 5.3.9 — confirmed in a container, not
+assumed. The stub therefore answered every command on this laptop and on 24.04,
+and exited before reading its first argument on the image CI is migrating to.
+
+**Two tests going red is how it was found. The four that stayed green are the
+finding.** With the stub dead, the two that assert *an unreachable box is parked
+rather than left billing* — item 16's clause, the ₹703 protection, the most
+expensive guarantee in this repository — **passed with `FAKE_SSH_DEAD` forced to
+0**, meaning ssh explicitly alive. Proven by running exactly that. They were
+insensitive to the one variable they are built on.
+
+Answering nothing is indistinguishable from answering correctly to any test
+whose expectation is a failure. That is the narrow form of the item 13 lesson,
+and it is the seventh time this milestone a stub was half the defect: **a stub
+that cannot start must say so.** It uses `:?` now, and a pin checks that
+`FAKE_SSH_DEAD` still decides the outcome.
+
+**4 of 15** tests in that area fail against the pre-fix harness under the
+bash 5.3 condition, including the two new pins that exist for it.
+
+### Second clause: CI ran the gate's programs, not the gate's commands
+
+`TestCiRunsWhatTheGateRuns` (item 12) asks whether the string `mypy` appears in
+the workflow. So a CI step narrowed from `mypy mcp_server tools eval tests` to
+`mypy mcp_server` keeps the green tick while type-checking **one tree of four**
+— checked against the real pin, which passes it.
+
+Same program, different claim. **The arguments are the claim.** Item 14 is this
+shape one level out: `--check` guarded `--store` and `--golden` but not
+`--modes`, so grading one retrieval mode of four printed *no regressions*.
+
+CI may run *more* of a gate command — it runs `npm ci && npm run build`, and the
+`cd frontend` is a `working-directory:` — and may not run less. Both plants
+caught: narrowing mypy to one tree, and dropping `-q` from pytest. The item 12
+pin passes the first of those, which is the proof the new clause is not a
+duplicate of it.
