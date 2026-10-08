@@ -183,14 +183,32 @@ esac
 _GCLOUD_STUB = """#!/usr/bin/env bash
 # Stands in for gcloud, and unlike the ssh stub it keeps state: the instance
 # answers RUNNING until a `stop` succeeds and TERMINATED afterwards, and the
-# reserved address exists until a `delete` succeeds. A stub that always says
+# reserved address exists until a `delete` succeeds. A stub that always said
 # TERMINATED would make "the trip parked the box" an assertion that cannot
 # fail -- which is how a trip that never parked passed the gate until now.
 S="$FAKE_STATE"
-# Every invocation is logged, so "the door was shut and nothing was started"
-# is a thing a test can read rather than a thing a comment can claim.
-echo "$*" >> "$S.gcloud"
+# The verb is matched on the args with every --flag removed, because the two
+# callers interleave flags differently: trip.sh runs `compute instances
+# describe ...` and deploy.sh runs `compute instances --project=X describe
+# ...`. Matching the raw string meant every branch below silently missed for
+# deploy.sh: the stub answered nothing, the box read as neither RUNNING nor
+# TERMINATED, and a test asserting `instances start` was ABSENT passed for a
+# run that had started the box. A pin that cannot fail, in the harness.
+norm=""
+for a in "$@"; do case "$a" in --*) ;; *) norm="$norm $a" ;; esac; done
+norm="${norm# }"
+# Every invocation is logged, normalised, so "the door was shut and nothing was
+# started" is a thing a test can read rather than a thing a comment can claim.
+echo "$norm" >> "$S.gcloud"
+# This one is a question about a --format, so it is asked of the raw args. An
+# empty answer is a box whose external address was released; a stub that could
+# not be empty made `start`'s refusal untestable.
 case "$*" in
+  *"accessConfigs[0].name"*)
+    if [ "${FAKE_NO_EXTERNAL_IP:-0}" = 1 ]; then echo ""; else echo external-nat; fi
+    exit 0 ;;
+esac
+case "$norm" in
   *"firewall-rules describe"*)
     echo "${FAKE_SSH_RANGES-203.0.113.7/32}" ;;
   *"instances describe"*)
@@ -199,6 +217,10 @@ case "$*" in
     echo RUNNING > "$S" ;;
   *"instances stop"*)
     if [ "${FAKE_STOP_FAILS:-0}" = 1 ]; then exit 1; fi
+    # The nastier failure: gcloud answers 0 and the box stays up. Without this
+    # the stub could not represent "the command worked and the box did not",
+    # which is the whole reason the state is read back.
+    if [ "${FAKE_STOP_SILENT:-0}" = 1 ]; then exit 0; fi
     echo TERMINATED > "$S" ;;
   *"addresses describe"*)
     if [ -f "$S.ip" ]; then echo 10.0.0.1; else exit 1; fi ;;
@@ -206,6 +228,7 @@ case "$*" in
     if [ "${FAKE_ADDRESS_STICKS:-0}" = 1 ]; then exit 1; fi
     rm -f "$S.ip" ;;
   *"addresses list"*)
+    if [ "${FAKE_NO_ADDRESS:-0}" = 1 ]; then exit 0; fi
     if [ -f "$S.ip" ]; then echo agenticrag-ip; fi ;;
 esac
 exit 0
@@ -377,6 +400,161 @@ def _run_trip(
         timeout=300,
     )
     return done.returncode, done.stdout + done.stderr
+
+
+def _run_deploy(tmp_path, args=("start", "--yes"), vm_state="TERMINATED", **extra_env):
+    """Run `deploy/deploy.sh` offline, the way `_run_trip` runs the trip.
+
+    `deploy.sh start` is the other command in this repository that turns the
+    meter on, and until now nothing had ever run it except a person.
+    """
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for name, body in (("ssh", _SSH_STUB), ("gcloud", _GCLOUD_STUB), ("curl", _CURL_STUB)):
+        f = bin_dir / name
+        f.write_text(body)
+        f.chmod(f.stat().st_mode | stat.S_IEXEC)
+
+    state = tmp_path / "vm-state"
+    state.write_text(vm_state + "\n")
+    state.with_suffix(".ip").write_text("10.0.0.1\n")
+
+    env = {
+        **os.environ,
+        "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        "FAKE_STATE": str(state),
+        "VM_INSTANCE": "agenticrag",
+        "VM_ZONE": "us-central1-a",
+        "VM_PROJECT": "test-project",
+        # Two minutes of real waiting is not a unit test.
+        "VM_SSH_TRIES": "1",
+        "VM_SSH_SLEEP": "0",
+        **extra_env,
+    }
+    done = subprocess.run(
+        ["bash", str(DEPLOY / "deploy.sh"), "agenticrag.us-central1-a.test-project", *args],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=120,
+    )
+    gcloud_log = pathlib.Path(str(state) + ".gcloud")
+    calls = gcloud_log.read_text() if gcloud_log.exists() else ""
+    return done.returncode, done.stdout + done.stderr, calls
+
+
+class TestBothDoorsToTheMeterAreChecked:
+    """`trip.sh` grew a step 0 and an EXIT-trap park. `deploy.sh start` is the
+    other command that starts the box, and it had neither: it waited thirty
+    times for an ssh that could not arrive, printed ">> up at <ip>" either way,
+    and left the box billing with a reminder to stop it by hand. That is the
+    2026-09-28 Rs703 shape, in the script the fix for it never touched."""
+
+    def test_the_door_is_checked_before_the_box_is_started(self, tmp_path):
+        code, out, calls = _run_deploy(
+            tmp_path, FAKE_MY_IP="198.51.100.9", FAKE_SSH_RANGES="203.0.113.7/32"
+        )
+        assert code != 0
+        assert "port 22 is NOT open to this machine" in out
+        assert "instances start" not in calls, "the meter was turned on anyway"
+        assert "cost nothing" in out
+
+    def test_an_open_door_lets_it_start(self, tmp_path):
+        code, out, calls = _run_deploy(
+            tmp_path, FAKE_MY_IP="203.0.113.7", FAKE_SSH_RANGES="203.0.113.0/24"
+        )
+        assert code == 0, out
+        assert "instances start" in calls
+
+    def test_an_unreachable_box_is_parked_not_left_billing(self, tmp_path):
+        code, out, calls = _run_deploy(tmp_path, FAKE_SSH_DEAD="1")
+        assert code != 0
+        assert "ssh never came up" in out
+        assert "instances stop" in calls, "the box was left running"
+        assert "parked (TERMINATED)" in out
+
+    def test_a_park_that_fails_names_the_rate_and_the_manual_command(self, tmp_path):
+        code, out, _ = _run_deploy(tmp_path, FAKE_SSH_DEAD="1", FAKE_STOP_FAILS="1")
+        assert code != 0
+        assert "COULD NOT PARK IT" in out
+        assert "per hour" in out
+        assert "gcloud compute instances stop agenticrag" in out
+
+    def test_a_reachable_box_is_reported_up_and_points_at_the_script_that_parks(
+        self, tmp_path
+    ):
+        code, out, _ = _run_deploy(tmp_path)
+        assert code == 0, out
+        assert "up at 10.0.0.1" in out or "up at" in out
+        assert "trip.sh parks on exit" in out
+
+    def test_a_box_with_no_external_address_is_refused_before_starting(self, tmp_path):
+        code, out, calls = _run_deploy(tmp_path, FAKE_NO_EXTERNAL_IP="1")
+        assert code != 0
+        assert "no external IP" in out
+        assert "instances start" not in calls
+
+    def test_an_already_running_box_is_left_alone(self, tmp_path):
+        code, out, calls = _run_deploy(tmp_path, vm_state="RUNNING")
+        assert code == 0
+        assert "already running" in out
+        assert "instances start" not in calls
+
+
+class TestStopChecksThePark:
+    """`deploy.sh stop` issued the stop and printed ">> stopped." without
+    reading the state back -- item 5's defect in the other script -- and said
+    nothing about the reserved address, which bills about twice the in-use rate
+    while the box is off. The README's own table prices that difference."""
+
+    def test_a_successful_stop_is_confirmed_from_the_box(self, tmp_path):
+        code, out, calls = _run_deploy(tmp_path, args=("stop",), vm_state="RUNNING")
+        assert code == 0, out
+        assert "instances stop" in calls
+        assert "stopped (TERMINATED)" in out
+
+    def test_a_stop_that_does_not_take_fails_loudly(self, tmp_path):
+        # gcloud returns 0 and the box stays up: the command succeeded and the
+        # box did not. Printing ">> stopped" there is a claim about the command.
+        code, out, _ = _run_deploy(
+            tmp_path, args=("stop",), vm_state="RUNNING", FAKE_STOP_SILENT="1"
+        )
+        assert code != 0
+        assert "NOT STOPPED" in out
+        assert "per hour" in out
+        assert "gcloud compute instances stop agenticrag" in out
+
+    def test_a_reserved_address_is_named_with_its_rate(self, tmp_path):
+        _, out, _ = _run_deploy(tmp_path, args=("stop",), vm_state="RUNNING")
+        assert "still reserved" in out
+        assert "agenticrag-ip" in out
+        assert "addresses delete" in out
+
+    def test_no_reserved_address_says_only_disks_bill(self, tmp_path):
+        code, out, _ = _run_deploy(
+            tmp_path, args=("stop",), vm_state="RUNNING", FAKE_NO_ADDRESS="1"
+        )
+        assert code == 0, out
+        assert "no reserved addresses" in out
+
+    def test_an_already_stopped_box_is_left_alone(self, tmp_path):
+        code, out, calls = _run_deploy(tmp_path, args=("stop",), vm_state="TERMINATED")
+        assert code == 0
+        assert "already stopped" in out
+        assert "instances stop" not in calls
+
+
+class TestTheDoorCheckHasOneCopy:
+    def test_neither_script_defines_its_own(self):
+        for name in ("trip.sh", "deploy.sh"):
+            text = (DEPLOY / name).read_text()
+            assert "ssh_door() {" not in text, f"{name} has its own copy of the check"
+            assert "lib.sh" in text, f"{name} does not use the shared check"
+
+    def test_the_shared_copy_is_the_one_with_the_containment_logic(self):
+        lib = (DEPLOY / "lib.sh").read_text()
+        assert "ssh_door() {" in lib
+        assert "ipaddress.ip_network" in lib, "string equality would call an open door shut"
 
 
 class TestTheTripRefusesToBuildOnABoxThatWouldBreak:
