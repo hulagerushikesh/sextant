@@ -5,6 +5,52 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-08 — the other door to the meter (₹0)
+
+Items 5–13 hardened `deploy/trip.sh`: a step 0 that reads the ssh firewall rule
+for ₹0 before anything starts, an ssh wait that has to succeed, and a park that
+is an EXIT trap rather than a checklist's last line.
+
+**`deploy/deploy.sh HOST start` is the other command that turns the meter on,
+and it had none of it.** It started the box, looped thirty times for an ssh that
+could not arrive, printed `>> up at <ip>` either way, and left the box billing
+with a printed reminder to stop it by hand — the 2026-09-28 ₹703 failure in
+full, in the script the fix for it never touched. Same shape as item 1, where
+`/ann/*` reached the corpus without crossing `ScopedHost`: **hardening one of
+two paths to the same action hardens neither.**
+
+`ssh_door()` moved to `deploy/lib.sh` and both scripts source it — the
+extraction verified behaviour-preserving against all 97 pre-existing deploy
+tests before anything else changed, and two tests now fail the gate if either
+script grows its own copy. `start` checks the door before the meter, asks ssh
+once more for real, and **stops the box if the answer is no**. It cannot park on
+exit the way a trip does, because leaving the box up is the point of running
+it, so it says so and points at `trip.sh`.
+
+`VM_SSH_TRIES`/`VM_SSH_SLEEP` became knobs because `30 × 5s` hardcoded meant the
+old script **could not be exercised offline in bounded time at all** — the item
+13 shape.
+
+**A pin of mine could not fail, in the harness again.** The gcloud stub matched
+verbs as adjacent words (`*"instances describe"*`), but `trip.sh` runs
+`compute instances describe …` and `deploy.sh` runs
+`compute instances --project=X describe …`. Every branch silently missed for
+`deploy.sh`: the stub answered nothing, the box read as neither RUNNING nor
+TERMINATED, and `assert "instances start" not in calls` passed for a run that
+had started the box. The stub strips `--flags` and logs normalised args now.
+Sixth time this milestone a stub was half the defect. **5 of 9 fail** against
+the old script.
+
+**Second clause, found while reading the same file.** `deploy.sh stop` issued
+the stop and printed `>> stopped.` without reading the state back — item 5's
+defect in the other script, two days after item 5 — and said nothing about a
+**reserved address, which bills ~₹21/day while the box is off** although the
+README's own cost table prices that difference. It verifies the state and names
+any reserved address with the release command now; not released automatically,
+because that changes the public IP and DNS belongs to `trip.sh`. The stub gained
+the failure it could not represent: gcloud answering 0 while the box stays up.
+**4 of 5 fail** against the old `stop`.
+
 ## 2026-10-08 — the daily cap forgot the day on every restart (₹0)
 
 From a plain question — *where do I see what the API cost?* — whose honest

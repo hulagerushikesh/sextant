@@ -449,7 +449,9 @@ all survive a stop. Only the meters change:
 ```bash
 deploy/deploy.sh HOST status    # RUNNING / TERMINATED, and what is billing
 deploy/deploy.sh HOST stop      # park
-deploy/deploy.sh HOST start     # resume -- states the hourly cost and asks first
+deploy/deploy.sh HOST start     # resume -- checks the ssh door, states the
+                                # hourly cost, asks first, and parks the box
+                                # again if ssh never answers
 deploy/deploy.sh HOST preflight # DNS/.env/disk still right?
 deploy/deploy.sh HOST           # only if the tree changed; the containers
                                 # come back with the VM on their own
@@ -457,6 +459,19 @@ deploy/deploy.sh HOST           # only if the tree changed; the containers
 
 `HOST` is the config-ssh alias (`agenticrag.us-central1-a.<project>`); the
 lifecycle commands read instance, zone and project out of it.
+
+**`start` is the other door to the meter, and nothing parks it for you.**
+`trip.sh` parks on exit — including on failure and on Ctrl-C — and `start`
+cannot, because leaving the box up is the whole point of running it. What it
+does do, since 2026-10-08, is everything that is free: it reads the ssh
+firewall rule *before* starting anything (the same `ssh_door` in
+`deploy/lib.sh` that is step 0 of a trip), and after starting it asks ssh once
+more for real and **stops the box again if the answer is no**. It used to wait
+thirty times for an ssh that could not arrive, print `>> up at <ip>` either
+way, and leave the box billing with a reminder to stop it by hand — the
+2026-09-28 ₹703 shape, in the script the fix for that never touched.
+
+Prefer `trip.sh` unless you actually need the box left up.
 
 **The static IP is released.** The old address is gone; while the VM was
 parked it was the largest line on the bill (~₹21/day) for an address no DNS

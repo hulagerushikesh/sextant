@@ -36,6 +36,9 @@ COMPOSE="docker compose -f docker-compose.prod.yml"
 VM_COST_PER_HOUR="~INR 5.6 (~USD 0.067)"
 
 cd "$(dirname "$0")/.."                     # repo root
+# The ssh door check, shared with trip.sh. `start` is the other command
+# that turns the meter on, so it gets the same Rs0 precondition.
+. deploy/lib.sh
 
 # Resolve the gcloud target for the lifecycle commands. The config-ssh alias
 # already carries everything: `agenticrag.us-central1-a.my-project`.
@@ -51,6 +54,7 @@ vm_target() {
     exit 2
   fi
   GC=(gcloud compute instances --project="$PROJECT")
+  GC_COMPUTE=(gcloud compute --project="$PROJECT")
 }
 
 vm_status() {
@@ -74,7 +78,35 @@ case "$CMD" in
     if [ "$state" = "TERMINATED" ]; then echo "$INSTANCE already stopped"; exit 0; fi
     echo ">> stopping $INSTANCE (containers restart on their own at next start) ..."
     "${GC[@]}" stop "$INSTANCE" --zone="$ZONE" --quiet
-    echo ">> stopped. Disks, images and .env are kept; see README on the external IP."
+    # Read it back. Printing ">> stopped" after issuing a stop is a claim about
+    # the command, not about the box -- the same defect trip.sh had until
+    # 2026-10-06, where an offline run ended "agenticrag is RUNNING" and exited
+    # 0 because nothing compared the state it had just printed.
+    read -r state _ _ <<<"$(vm_status)"
+    case "$state" in
+      TERMINATED|STOPPED)
+        echo ">> stopped ($state). Disks, images and .env are kept." ;;
+      *)
+        echo ">> NOT STOPPED: $INSTANCE is $state and billing $VM_COST_PER_HOUR" \
+             "per hour. Try again, or stop it by hand:" >&2
+        echo ">>   gcloud compute instances stop $INSTANCE --zone=$ZONE --project=$PROJECT" >&2
+        exit 1 ;;
+    esac
+    # A stopped box still bills for a reserved address, at roughly twice the
+    # in-use rate -- about Rs640/month for nothing. The README prices it; this
+    # says it at the moment it starts applying. Not deleted automatically:
+    # releasing the address changes the public IP, which is a DNS decision,
+    # and trip.sh (which repoints DNS next trip anyway) is where that belongs.
+    reserved=$(gcloud compute addresses list --project="$PROJECT" \
+      --format='value(name)' 2>/dev/null || true)
+    if [ -n "$reserved" ]; then
+      echo ">> NOTE: an address is still reserved and bills ~Rs21/day while the"
+      echo ">>   box is stopped: $(echo "$reserved" | tr '\n' ' ')"
+      echo ">>   release it with:  gcloud compute addresses delete <name> --region=${ZONE%-*} --project=$PROJECT"
+      echo ">>   (the public IP changes, so repoint DNS -- README B3)"
+    else
+      echo ">> no reserved addresses; only disks bill now (~Rs270/month)."
+    fi
     ;;
   start)
     vm_target
@@ -93,6 +125,12 @@ case "$CMD" in
       echo "then point DNS at the new address (deploy/README.md B3) and run start again."
       exit 1
     fi
+    # Before the meter: is port 22 even open to this machine? Reading the
+    # firewall rule is free, and on 2026-10-07 a trip that skipped this
+    # reserved an address, started the box, waited two minutes for an ssh that
+    # could not arrive, and left it billing. Rs0 to find out first.
+    echo ">> checking the ssh door (costs nothing)"
+    ssh_door "$PROJECT" "${GC_COMPUTE[@]}" || exit 1
     # This is the one command here that turns a meter on. Say so, and wait.
     echo "Starting $INSTANCE bills $VM_COST_PER_HOUR per hour until it is stopped again."
     if [ "${3:-}" != "--yes" ]; then
@@ -101,14 +139,34 @@ case "$CMD" in
     fi
     "${GC[@]}" start "$INSTANCE" --zone="$ZONE" --quiet
     echo ">> started; waiting for ssh ..."
-    for _ in $(seq 1 30); do
+    for _ in $(seq 1 "${VM_SSH_TRIES:-30}"); do
       ssh -o ConnectTimeout=5 -o BatchMode=yes "$REMOTE" true 2>/dev/null && break
-      sleep 5
+      sleep "${VM_SSH_SLEEP:-5}"
     done
+    # The loop above used to be the whole of it: it ended either way and the
+    # next line said ">> up at <ip>" regardless, so a box nothing could reach
+    # was reported as started and left running. Ask once more, for real, and
+    # park it if the answer is no -- an unreachable box is not a started box,
+    # it is Rs5.6/hour of nothing.
+    if ! ssh -o ConnectTimeout=10 -o BatchMode=yes "$REMOTE" true; then
+      echo ">> ssh never came up. The door check passed, so look at the box." >&2
+      echo ">> stopping it rather than leaving it billing:" >&2
+      "${GC[@]}" stop "$INSTANCE" --zone="$ZONE" --quiet || true
+      read -r state _ _ <<<"$(vm_status)"
+      case "$state" in
+        TERMINATED|STOPPED) echo ">> parked ($state). Restarting costs ~Rs2." >&2 ;;
+        *) echo ">> COULD NOT PARK IT: $INSTANCE is $state and billing" \
+                "$VM_COST_PER_HOUR per hour. Stop it by hand:" >&2
+           echo ">>   gcloud compute instances stop $INSTANCE --zone=$ZONE --project=$PROJECT" >&2 ;;
+      esac
+      exit 1
+    fi
     read -r _ _ ip <<<"$(vm_status)"
     echo ">> up at ${ip:-?}. The stack restarts by itself (restart: unless-stopped)."
     echo ">> if the tree changed:  deploy/deploy.sh $REMOTE"
     echo ">> when finished:        deploy/deploy.sh $REMOTE stop"
+    echo ">> nothing parks this for you. deploy/trip.sh parks on exit, including"
+    echo ">>   on failure and on Ctrl-C -- prefer it unless you need the box up."
     ;;
   logs)
     exec ssh -t "$REMOTE" "cd $APP_DIR && $COMPOSE logs -f --tail=200"
