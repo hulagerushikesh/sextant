@@ -5,7 +5,7 @@ Retrieval quality is a number. A number that is not checked drifts.
 ```bash
 ./.venv/bin/sextant-eval                     # grade every configuration
 ./.venv/bin/sextant-eval --check             # fail on regression vs baseline
-./.venv/bin/sextant-eval --modes rrf rerank  # just these two
+./.venv/bin/sextant-eval --modes rrf rerank  # just these two (not with --check)
 
 # The larger, page-labelled set against an existing store (read-only):
 ./.venv/bin/sextant-eval --store ./chroma_db --golden eval/golden-large.jsonl
@@ -25,6 +25,25 @@ grading never touches whatever you have actually ingested.
 | `harness.py` | runs the golden set against each retrieval mode |
 | `judge.py` | faithfulness, relevance and abstention, scored by the model |
 | `baseline.json` | committed results; `--check` compares against it |
+
+## What `--check` guarantees
+
+`--check` is CI's only claim about retrieval quality, so it also checks its own
+coverage -- a comparison that quietly narrows its scope is no better than a
+number nobody reads. It fails if
+
+- a mode in `baseline.json` was not graded. `--modes` is refused alongside
+  `--check` for that reason: it is the whole gate or none of it,
+- a metric in `baseline.json` is no longer reported, so renaming one cannot
+  un-check it,
+- the golden set is **shorter** than the one the baseline was built from. A
+  shorter set raises every metric, so the question count is a floor,
+- `baseline.json` is missing. `--check` claims a committed baseline was
+  matched; no baseline is could-not-tell, which is a failure, not a pass.
+
+Something genuinely new -- an added mode, an added metric -- is printed and
+passes. The guard is against silent removal, not against growth. All of it is
+pinned in `tests/test_eval_gate.py`.
 
 ## The two splits
 
