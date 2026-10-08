@@ -1,0 +1,22 @@
+# Nothing watched the actions, and the last deprecation was announced on every
+# run: five of them targeted Node 20, the runner force-ran them on Node 24, and
+# the annotation sat in each run's log unread. Items 10 and 11 are the same
+# shape inside `deploy/trip.sh` -- a result produced and never compared -- and
+# the answer there was to count it, not to print it louder. Here the counter is
+# a pull request.
+#
+# Monthly, not weekly: this repository takes one push some days and none on
+# others, and a bot that opens noise gets ignored exactly like the annotation
+# did. Grouped for the same reason -- five actions bumping together is one
+# review, five separate PRs is a backlog.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci"

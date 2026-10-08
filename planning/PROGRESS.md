@@ -5,6 +5,48 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-08 — the gate's environment is chosen here now (₹0)
+
+Item 16's own green run carried two annotations. Five actions target the
+deprecated **Node 20** and the runner has been force-running them on Node 24;
+and `ubuntu-latest` migrates from Ubuntu 24.04 to **26.04 gradually between
+2026-10-19 and 2026-11-19**. A gradual migration is worse than a dated one: for
+a month the same commit can pass or fail depending on which image it drew, and
+a gate that is sometimes red teaches people that red means nothing — thirty
+unread red runs is exactly what that cost here.
+
+Items 12 and 13 were both the environment deciding whether the check ran. This
+is the third instance, and the only one **announced in advance** — announced on
+every single run, and read by nobody. That is item 11's defect in the
+repository's own check, so the fix is not to read harder:
+`.github/dependabot.yml` turns the next deprecation into a pull request, and
+the runner and all five actions are pinned to versions reviewed against their
+release notes.
+
+**The probe paid for itself before anything was pinned.** Rather than guess,
+the whole workflow was run on `ubuntu-26.04` first: **2 failed, 664 passed.**
+`_run_deploy` never set `FAKE_BOX`, so the ssh stub's first line was `cd ""` —
+**bash 5.2 accepts that as a no-op and bash 5.3 rejects it as a null
+directory.** 24.04 ships 5.2.21 and 26.04 ships 5.3.9; both confirmed in a
+container rather than assumed. So the stub answered every command on this
+laptop and none on the image CI is moving to.
+
+Two tests going red is how it was found. **The four that stayed green are the
+finding.** With the stub dead, the two that assert *an unreachable box is parked
+rather than left billing* — the ₹703 protection, the most expensive guarantee
+in this repository — **passed with `FAKE_SSH_DEAD` forced to 0, meaning ssh
+explicitly alive.** They were insensitive to the one variable they are built
+on. Answering nothing is indistinguishable from answering correctly to any test
+whose expectation is a failure, which is the narrow version of the item 13
+lesson: a stub that cannot start must say so. It uses `:?` now.
+
+**Second clause.** `TestCiRunsWhatTheGateRuns` compares program *names*, so a CI
+step narrowed from `mypy mcp_server tools eval tests` to `mypy mcp_server`
+keeps the green tick while type-checking one tree of four — checked, that pin
+passes it. Same program, different claim; item 14's `--modes` is this shape one
+level out. The arguments are compared now, and CI may run more of a command
+(`npm ci && npm run build`) but not less.
+
 ## 2026-10-08 — the other door to the meter (₹0)
 
 Items 5–13 hardened `deploy/trip.sh`: a step 0 that reads the ssh firewall rule
