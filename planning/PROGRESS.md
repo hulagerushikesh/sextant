@@ -5,7 +5,7 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
-## 2026-10-07 — the gate on retrieval quality could not fail (₹0)
+## 2026-10-08 — the gate on retrieval quality could not fail (₹0)
 
 CI had just gone green on `sextant-eval --check`, so the next question was the
 one items 5–13 kept asking: **can it go red?** It is the repository's entire
