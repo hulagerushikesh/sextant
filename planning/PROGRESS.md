@@ -5,6 +5,53 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-08 — the daily cap forgot the day on every restart (₹0)
+
+From a plain question — *where do I see what the API cost?* — whose honest
+answer was a defect. `/health` reports `budget.spent_usd`, and it was **the
+process's spend, not the day's**: `DailyBudget` kept the tally in memory, so
+every `docker compose up -d --build` (every deploy, so every trip) and every
+`restart: unless-stopped` bounce began the day again at zero while Google's
+meter kept counting. The ₹50–100/day ceiling this project is built around was
+resting on a counter that forgets.
+
+The class docstring had already anticipated the *multi-replica* case — "a
+deployment would move the tally to a shared store" — and said nothing about the
+single-process case that happens several times a week.
+
+Persisted now to `.sextant-spend.json`, keyed by UTC date so a previous day's
+file is read and ignored rather than resumed; per-owner shares persist too, or
+the fairness ceiling resets on the same bounce. Three points worth keeping:
+
+- **Inside the Chroma directory.** The box mounts `/data/chroma:/data/chroma`,
+  so `/data` does not survive a container rebuild and `/data/chroma` does. The
+  obvious `/data/spend.json` would have been wiped by the restart it exists for.
+- **The ledger may never break a query.** Atomic write (tmp + replace, so a
+  crash leaves the previous tally rather than a truncated file reading as zero)
+  and every failure swallowed. The cap still holds in memory.
+- **Three outcomes, not two.** `/health` carries `budget.durable`; false says
+  the figure is this process's spend, not the day's.
+
+`spend_ledger_path()` is pinned against `vector_search.persist_dir()` in both
+the default and override case — one location resolved twice is the drift this
+repository keeps paying for.
+
+**8 of 14 new tests fail** against the previous behaviour, planted the honest
+way: old body behind the new signature.
+
+**A defect of my own, found by the first honest full run:** 8 failed, 648
+passed, and all eight were *pre-existing* budget tests. The default ledger
+lives in the collection directory, so the suite wrote a real
+`chroma_db/.sextant-spend.json` and every later `DailyBudget()` resumed it --
+a $0.10 budget opened with $0.36 already spent by whichever test ran first.
+Making state durable introduced shared mutable state between tests. An autouse
+fixture gives each test its own ledger; the eight tests are the pin. The stray
+file was gitignored, so nothing could have been committed, and it was deleted.
+
+Also added *Where the money shows up* to CLAUDE.md, because the question
+deserved an answer in the repository rather than in a chat — the bill,
+`/health`, the per-query log, and the four things `/health` cannot see.
+
 ## 2026-10-08 — the gate on retrieval quality could not fail (₹0)
 
 CI had just gone green on `sextant-eval --check`, so the next question was the

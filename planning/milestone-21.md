@@ -1155,3 +1155,73 @@ Also renamed `worst` to `best` in `print_table`'s caller: it is `max` by
 `hit@1` and the message it prints says "best configuration". The behaviour was
 right and the name was not, which is how a reader ends up flipping `max` to
 `min`.
+
+## Item 15 — the daily cap forgot the day on every restart (unplanned)
+
+Shipped 2026-10-08. ₹0.
+
+Came out of a plain question — *where do I see what the API cost?* — and the
+honest answer turned out to be a defect. `/health` reports `budget.spent_usd`,
+and it was **the process's spend, not the day's**: `DailyBudget` held the tally
+in memory, so every `docker compose up -d --build` (which is every deploy, so
+every trip) and every `restart: unless-stopped` bounce began the day again at
+zero while Google's meter kept counting.
+
+The class docstring already anticipated the *multi-replica* case — "a
+deployment would move the tally to a shared store" — and said nothing about the
+single-process case that actually happens several times a week. A cap that
+forgets is not a cap on a day, it is a speed bump per process lifetime, and the
+₹50–100/day ceiling this project is built around was resting on it.
+
+The tally now persists to `.sextant-spend.json`, keyed by UTC date, so a
+previous day's file is read and ignored rather than resumed. Per-owner shares
+persist too, or the fairness ceiling resets on the same bounce.
+
+Three design points worth keeping:
+
+- **It lives inside the Chroma directory.** On the box the mount is
+  `/data/chroma:/data/chroma`, so `/data` itself does **not** survive a
+  container rebuild and `/data/chroma` does. The obvious-looking
+  `/data/spend.json` would have been wiped by the very restart this exists for.
+- **The ledger may never break a query.** Writes are atomic (tmp + replace, so
+  a crash mid-write leaves the previous tally rather than a truncated file that
+  reads as zero) and every failure is swallowed. The cap still holds in memory;
+  the only thing lost is surviving a restart.
+- **Three outcomes, not two.** `/health` now carries `budget.durable`. False
+  means the number being read is this process's spend and not the day's —
+  because a figure whose provenance nobody can tell is worse for tracking than
+  an obviously fresh one.
+
+One location resolved twice is the drift this repository keeps paying for, so
+`spend_ledger_path()` is pinned against `vector_search.persist_dir()` in both
+the default and the override case.
+
+**8 of 14 new tests fail** against the previous behaviour, planted the honest
+way — old body behind the new signature, so the logic is the only difference.
+The six that pass either way are the path pins and the cap-is-off guard.
+
+### My own defect: the tests shared one ledger on disk
+
+The first full run after this change came back **8 failed, 648 passed**, and
+the eight were all *pre-existing* budget tests. The default ledger path is
+inside the collection directory, so the suite wrote a real
+`chroma_db/.sextant-spend.json` and **every later `DailyBudget()` resumed it**:
+`test_spend_accumulates_until_the_cap` constructed a $0.10 budget and found
+$0.36 already spent by whoever ran before it.
+
+Shared mutable state between tests, introduced by making state durable — and
+the only pleasant way to find it, eight unrelated tests failing at once on the
+first honest full run. An autouse fixture in `conftest.py` now gives every test
+its own ledger; a test that wants persistence passes `ledger=` explicitly. The
+pin is the eight tests themselves: remove the fixture and they fail again.
+
+The stray file was gitignored (`chroma_db/`), so nothing was ever at risk of
+being committed, but it had written into the real collection directory and was
+deleted.
+
+Also documented, since the question that started this deserves an answer in the
+repository rather than in a chat: `CLAUDE.md` now has *Where the money shows
+up* — the bill, `/health`, and the per-query log, with the four things
+`/health` cannot see (CLI ingest and judging are separate processes; the price
+table is hard-coded and dated; grounded search is priced without the free
+allowance, so it overstates; VM time is a different line).

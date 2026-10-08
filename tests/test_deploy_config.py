@@ -1116,7 +1116,7 @@ class TestStep5JudgesWhatItPrints:
 
     HEALTHY = (
         '{"status":"healthy","mcp_connected":true,'
-        '"model_configured":true,"budget":{"budget_usd":0.6}}'
+        '"model_configured":true,"budget":{"enabled":true,"budget_usd":0.6}}'
     )
 
     def test_a_dead_caddy_fails_the_trip(self, tmp_path):
@@ -1185,6 +1185,38 @@ class TestStep5JudgesWhatItPrints:
         )
         assert "status is degraded" in out
         assert code != 0
+
+    def test_a_box_that_cannot_write_its_spend_ledger_fails_the_trip(self, tmp_path):
+        """`durable: false` means the cap restarts with the container, so it is
+        a limit per process lifetime and not the daily cap the .env promises."""
+        code, out = _run_trip(
+            tmp_path,
+            GOOD_ENV,
+            FAKE_HEALTH=self.HEALTHY.replace(
+                '"budget_usd":0.6', '"budget_usd":0.6,"enabled":true,"durable":false'
+            ),
+        )
+        assert "the spend ledger is not writable" in out
+        assert code != 0
+
+    def test_a_durable_ledger_passes_and_is_printed(self, tmp_path):
+        code, out = _run_trip(
+            tmp_path,
+            GOOD_ENV,
+            FAKE_HEALTH=self.HEALTHY.replace(
+                '"budget_usd":0.6', '"budget_usd":0.6,"enabled":true,"durable":true'
+            ),
+        )
+        assert "durable=True" in out
+        assert "the spend ledger is not writable" not in out
+        assert code == 0
+
+    def test_a_box_predating_the_ledger_is_noted_not_failed(self, tmp_path):
+        # The box is on 0.8.1 until the trip that carries this runs, so an
+        # absent key is "older box", not "broken box".
+        code, out = _run_trip(tmp_path, GOOD_ENV)
+        assert "predates the spend ledger" in out
+        assert code == 0
 
     def test_several_wrong_things_are_all_named(self, tmp_path):
         _, out = _run_trip(
