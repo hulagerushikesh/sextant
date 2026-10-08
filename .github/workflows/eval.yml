@@ -20,13 +20,13 @@ on:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 25
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -34,7 +34,7 @@ jobs:
       # The embedder and the cross-encoder are ~180 MB of downloads and do not
       # change between runs. Without this the model fetch dominates the job.
       - name: Cache models
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/huggingface
           key: hf-${{ runner.os }}-minilm-crossencoder-v1
@@ -61,7 +61,7 @@ jobs:
       # frontend failed only for whoever typed the gate by hand and passed
       # every push. Node 22 because production builds on node:22-alpine; this
       # machine is on 20.12, which Vite 7 warns about and CI should not share.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -73,7 +73,7 @@ jobs:
 
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: eval-results
           path: eval-results.json
