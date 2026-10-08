@@ -1099,7 +1099,7 @@ Ubuntu CI picks.
 
 ## Item 14 — the gate on retrieval quality could not fail (unplanned)
 
-Shipped 2026-10-07. ₹0.
+Shipped 2026-10-08. ₹0.
 
 CI went green on `sextant-eval --check` for the first time in 17 days, and the
 next question is the one items 5–13 kept asking: **can it go red?** A pin that
