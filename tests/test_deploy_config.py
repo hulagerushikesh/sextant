@@ -138,7 +138,12 @@ _SSH_STUB = """#!/usr/bin/env bash
 # only reads the box's .env is run for real against the fixture, so the greps
 # and the sed under test are the real ones. Everything else is canned.
 for a in "$@"; do cmd="$a"; done
-cd "$FAKE_BOX" || exit 90
+# `cd "$FAKE_BOX"` with FAKE_BOX unset is `cd ""`, which bash 5.2 and
+# earlier accept as a no-op and bash 5.3 (Ubuntu 26.04) rejects as a null
+# directory. `_run_deploy` forgot to set it, so this stub answered every
+# command on a Mac and none on the image CI migrates to. `:?` makes a
+# missing box the same loud failure on both.
+cd "${FAKE_BOX:?the ssh stub was given no box to stand in for}" || exit 90
 case "$cmd" in
   # A stub that can only say yes makes "ssh came up" unfalsifiable, and
   # `--keep-up` on a box that never came up is the whole point of one of the
@@ -415,6 +420,9 @@ def _run_deploy(tmp_path, args=("start", "--yes"), vm_state="TERMINATED", **extr
         f.write_text(body)
         f.chmod(f.stat().st_mode | stat.S_IEXEC)
 
+    box = tmp_path / "box" / "agenticrag"
+    box.mkdir(parents=True)
+
     state = tmp_path / "vm-state"
     state.write_text(vm_state + "\n")
     state.with_suffix(".ip").write_text("10.0.0.1\n")
@@ -422,6 +430,11 @@ def _run_deploy(tmp_path, args=("start", "--yes"), vm_state="TERMINATED", **extr
     env = {
         **os.environ,
         "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        # Without this the ssh stub cannot start, and on bash <= 5.2 it failed
+        # to start *silently* -- every command answered nothing and the two
+        # tests that assert an unreachable box gets parked passed with ssh
+        # explicitly alive.
+        "FAKE_BOX": str(box.parent),
         "FAKE_STATE": str(state),
         "VM_INSTANCE": "agenticrag",
         "VM_ZONE": "us-central1-a",
@@ -1571,3 +1584,267 @@ class TestTheTripRunsOnALinuxTar:
             [str(fake), "--version"], capture_output=True, text=True
         )
         assert "GNU tar" in version.stdout
+
+
+class TestTheGatesEnvironmentIsChosenHere:
+    """CI's environment was chosen by GitHub, and GitHub said so on every run.
+
+    Items 12 and 13 were both the same failure: something about the
+    *environment* decided whether the check ran. An optional dependency decided
+    whether the code type-checked (30 red runs, 17 days, `pytest` and
+    `sextant-eval --check` never executing once); and the offline trip harness
+    used BSD-only tar flags, so it could only ever pass on the machine that
+    wrote it.
+
+    This is the third instance, and the only one that was announced in advance:
+
+    * Five actions targeted Node 20, which is deprecated, and the runner has
+      been **force-running them on Node 24** -- printed as an annotation on
+      every run since.
+    * `runs-on: ubuntu-latest` migrates from Ubuntu 24.04 to 26.04 **gradually
+      between 2026-10-19 and 2026-11-19** (actions/runner-images#14748). A
+      gradual migration is worse than a dated one: for a month the same commit
+      can pass or fail depending on which image it drew, and a gate that is
+      sometimes red teaches people that red means nothing. Thirty unread red
+      runs is what that costs here.
+
+    Both warnings were produced by CI and read by nobody -- step 5's defect
+    (item 11) in the repository's own check. The fix is not to read them harder:
+    the runner is pinned to an image the gate has actually passed on, the
+    actions are pinned to majors that were reviewed, and Dependabot turns the
+    next deprecation into a pull request instead of a line in a log.
+    """
+
+    ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+    # Bumped deliberately, never by a float. Every one of these was checked
+    # against its release notes for a change that touches this workflow:
+    # setup-node v6 limited automatic caching to npm (we ask for npm),
+    # setup-python v7 removed the `pip-install` input (we never set it),
+    # checkout v7 blocks fork checkouts for `pull_request_target` and
+    # `workflow_run` (we trigger on neither), and upload-artifact v7 added an
+    # opt-in `archive: false` that changes nothing by default. All five run on
+    # node24 and need runner >= 2.327.1; run 37779188732 was on 2.337.0.
+    EXPECTED_ACTIONS = {
+        "actions/checkout": "v7",
+        "actions/setup-python": "v7",
+        "actions/setup-node": "v7",
+        "actions/cache": "v6",
+        "actions/upload-artifact": "v7",
+    }
+
+    def _workflows(self):
+        found = sorted((self.ROOT / ".github" / "workflows").glob("*.yml"))
+        assert found, "no CI workflow at all"
+        return found
+
+    def _workflow_text(self):
+        return "\n".join(p.read_text() for p in self._workflows())
+
+    def test_the_runner_image_is_pinned_to_a_version(self):
+        """A floating label means the gate cannot say what it passed on.
+
+        `ubuntu-latest` is not one environment, it is whichever one GitHub is
+        rolling out this week. During a migration window it is both.
+        """
+        floating = re.findall(r"runs-on:\s*(\S*-latest\S*)", self._workflow_text())
+        assert not floating, (
+            f"the gate runs on a floating label: {', '.join(floating)} -- "
+            "pin the image so a rollout is a decision, not an event"
+        )
+
+    def test_the_runner_image_is_one_the_gate_has_passed_on(self):
+        """Pinning to an untested image would only move the surprise.
+
+        `ubuntu-26.04` was run start to finish on this workflow before it was
+        pinned, on branch `pin-the-gates-environment`, so the 2026-10-19
+        rollout is a no-op here rather than a month of nondeterminism.
+        """
+        images = re.findall(r"runs-on:\s*(\S+)", self._workflow_text())
+        assert images, "nothing says what the gate runs on"
+        assert set(images) == {"ubuntu-26.04"}, (
+            f"the gate runs on {sorted(set(images))}; if that is a deliberate "
+            "change, run the workflow on it first and update this pin"
+        )
+
+    def test_no_action_floats(self):
+        """`@main` is someone else's main branch deciding whether this repo's
+        gate passes."""
+        for action, ref in re.findall(r"uses:\s*([\w.-]+/[\w.-]+)@(\S+)", self._workflow_text()):
+            assert re.fullmatch(r"v\d+(\.\d+)*", ref), (
+                f"{action} is pinned to '{ref}', which is not a version"
+            )
+
+    def test_every_action_is_on_a_major_that_was_reviewed(self):
+        """Not 'is it recent' -- 'was this one looked at'. Dependabot will
+        propose the next bump; this makes merging it a decision someone records
+        rather than a diff that rides along."""
+        found = {
+            action: ref.split(".")[0]
+            for action, ref in re.findall(
+                r"uses:\s*([\w.-]+/[\w.-]+)@(\S+)", self._workflow_text()
+            )
+        }
+        assert found == self.EXPECTED_ACTIONS, (
+            f"the workflow uses {found}, this test expects "
+            f"{self.EXPECTED_ACTIONS} -- read the release notes, then update "
+            "both"
+        )
+
+    def test_something_watches_the_actions_for_the_next_deprecation(self):
+        """The Node 20 warning was on every run for months. The answer to a
+        result nobody reads is not a louder result."""
+        config = self.ROOT / ".github" / "dependabot.yml"
+        assert config.exists(), (
+            "nothing watches the actions: the last deprecation was announced "
+            "on every run and read by no one"
+        )
+        text = config.read_text()
+        assert "github-actions" in text, (
+            "dependabot.yml does not watch github-actions, which is the "
+            "ecosystem that just deprecated five of ours"
+        )
+
+
+class TestCiRunsTheGateWithTheSameArguments:
+    """`TestCiRunsWhatTheGateRuns` pins the program names. That is not the claim.
+
+    It asks whether the string `mypy` appears in the workflow, so a CI step
+    narrowed from `mypy mcp_server tools eval tests` to `mypy mcp_server` keeps
+    the tick and type-checks **one tree of four** -- verified, that pin passes
+    it. Item 14 was this exact shape one level out: `sextant-eval --check`
+    guarded `--store` and `--golden` but not `--modes`, so grading one
+    retrieval mode of four printed "no regressions".
+
+    Same program, different claim. The arguments are the claim.
+    """
+
+    ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+    # What the gate runs, as the commands a reader of CLAUDE.md would type,
+    # with the virtualenv prefix removed because CI has the tools on PATH.
+    EXPECTED_COMMANDS = [
+        "pytest tests/ -q",
+        "mypy mcp_server tools eval tests",
+        "ruff check .",
+        "npm run build",
+    ]
+
+    def _gate_commands(self):
+        text = (self.ROOT / "CLAUDE.md").read_text()
+        marker = "## Gate before a commit"
+        assert marker in text, "CLAUDE.md no longer documents a gate"
+        block = text.split(marker, 1)[1].split("```")[1]
+        block = block.split("\n", 1)[1] if block.startswith("bash") else block
+        commands = []
+        for segment in re.split(r"&&|\|\||;|\n", block):
+            segment = segment.strip().lstrip("(").rstrip(")").strip()
+            if not segment:
+                continue
+            words = segment.split()
+            if words[0] in {"cd", "export", "then", "fi", "do", "done"}:
+                continue
+            words[0] = words[0].rsplit("/", 1)[-1]  # ./.venv/bin/pytest -> pytest
+            commands.append(" ".join(words))
+        return commands
+
+    def _workflow(self):
+        found = sorted((self.ROOT / ".github" / "workflows").glob("*.yml"))
+        assert found, "no CI workflow at all"
+        return "\n".join(p.read_text() for p in found)
+
+    def test_the_gate_is_still_the_four_commands_this_pin_was_written_for(self):
+        """If the gate changes, the list above has to change with it, or the
+        test below is checking something it was not written for."""
+        assert self._gate_commands() == self.EXPECTED_COMMANDS
+
+    def test_ci_runs_each_gate_command_with_its_arguments(self):
+        """The arguments are what the tick is a claim about.
+
+        CI may add to a command -- it runs `npm ci && npm run build`, and the
+        `cd frontend` is a `working-directory:` -- but it may not quietly run
+        less of one.
+        """
+        workflow = self._workflow()
+        narrowed = [c for c in self._gate_commands() if c not in workflow]
+        assert not narrowed, (
+            "CI runs these with different arguments than the gate: "
+            f"{'; '.join(narrowed)} -- the program name matching is not the "
+            "claim, the arguments are"
+        )
+
+
+class TestTheSshStubCannotFailQuietly:
+    """The probe on `ubuntu-26.04` found this, 11 days before the rollout.
+
+    `_run_deploy` never set `FAKE_BOX`, so the ssh stub's first line was
+    `cd ""`. **bash 5.2 and earlier accept that as a no-op; bash 5.3 rejects it
+    as a null directory** -- 24.04 ships 5.2.21, 26.04 ships 5.3.9. So on this
+    laptop and on 24.04 the stub answered every command, and on 26.04 it exited
+    before reading its first argument.
+
+    Two of item 16's tests went red there, which is how it was found. The worse
+    half is the four that stayed green: with the stub dead, the two that assert
+    *an unreachable box is parked rather than left billing* -- the Rs703
+    protection, the most expensive guarantee in this repository -- **passed with
+    `FAKE_SSH_DEAD` forced to 0, meaning ssh explicitly alive.** They were
+    insensitive to the one variable they are built on.
+
+    Third instance of the item 13 shape: the harness depended on a platform's
+    tolerance (BSD vs GNU tar, then bash 5.2 vs 5.3). The lesson is narrower
+    than "test on Linux": **a stub that cannot start must say so.** Answering
+    nothing is indistinguishable from answering correctly for any test whose
+    expectation is a failure.
+    """
+
+    def test_the_stub_refuses_to_run_without_a_box(self, tmp_path):
+        fake = tmp_path / "ssh"
+        fake.write_text(_SSH_STUB)
+        fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
+        env = {k: v for k, v in os.environ.items() if k != "FAKE_BOX"}
+        refused = subprocess.run(
+            [str(fake), "box", "true"], capture_output=True, text=True, env=env
+        )
+        assert refused.returncode != 0, (
+            "the stub started with no box; on bash <= 5.2 it then answers "
+            "nothing to everything, and a test expecting a failure cannot tell "
+            "that apart from a pass"
+        )
+        assert "no box" in refused.stderr, (
+            f"it failed without saying why: {refused.stderr!r}"
+        )
+
+    def test_the_stub_still_answers_when_it_has_one(self, tmp_path):
+        """A refusal that fires always would make every deploy test a comment."""
+        box = tmp_path / "box" / "agenticrag"
+        box.mkdir(parents=True)
+        fake = tmp_path / "ssh"
+        fake.write_text(_SSH_STUB)
+        fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
+        ok = subprocess.run(
+            [str(fake), "box", "true"],
+            capture_output=True,
+            text=True,
+            env={**os.environ, "FAKE_BOX": str(box.parent)},
+        )
+        assert ok.returncode == 0, ok.stderr
+
+    def test_an_unreachable_box_is_still_judged_by_the_variable_it_names(
+        self, tmp_path
+    ):
+        """The pin for the four that stayed green on 26.04.
+
+        `FAKE_SSH_DEAD` has to decide the outcome. If the stub is broken in any
+        way that makes ssh fail regardless, this passes while the test above it
+        reports a park that was never tested.
+        """
+        dead, live = tmp_path / "dead", tmp_path / "live"
+        dead.mkdir()
+        live.mkdir()
+        dead_code, dead_out, _ = _run_deploy(dead, FAKE_SSH_DEAD="1")
+        live_code, live_out, _ = _run_deploy(live, FAKE_SSH_DEAD="0")
+        assert dead_code != 0 and "ssh never came up" in dead_out
+        assert live_code == 0 and "ssh never came up" not in live_out, (
+            "ssh fails whatever FAKE_SSH_DEAD says, so every assertion about an "
+            "unreachable box is vacuous"
+        )

@@ -129,6 +129,27 @@ lifetime rather than per day.
   `TestCiRunsWhatTheGateRuns`, which reads the gate out of this file. CI ran
   three of its four commands until 2026-10-07: `npm run build` runs `tsc -b`,
   so a frontend type error failed only by hand.
+- **And with the same arguments, which is the actual claim.** The pin above
+  matches program *names*, so a CI step narrowed from
+  `mypy mcp_server tools eval tests` to `mypy mcp_server` keeps the green tick
+  while type-checking **one tree of four** -- checked, that pin passes it. Item
+  14's shape exactly: same program, different claim.
+  `TestCiRunsTheGateWithTheSameArguments` compares the arguments too. CI may run
+  *more* of a command (`npm ci && npm run build`) and may not run less.
+- **The gate's environment is chosen here, not by GitHub.** Items 12 and 13 were
+  both the environment deciding whether the check ran. The third instance was
+  the only one announced in advance, and announced on every single run: five
+  actions targeted the deprecated Node 20 and were being force-run on Node 24,
+  and `ubuntu-latest` migrates to Ubuntu 26.04 **gradually from 2026-10-19 to
+  2026-11-19** (actions/runner-images#14748) -- which for a month makes the same
+  commit pass or fail depending on which image it drew. Both warnings were
+  produced by CI and read by nobody, which is item 11 in the repository's own
+  check. The runner and every action are pinned to versions the gate has
+  actually passed on; `.github/dependabot.yml` turns the next deprecation into a
+  pull request rather than a line in a log; and
+  `TestTheGatesEnvironmentIsChosenHere` fails the gate if any of that floats
+  again. **Bumping is a decision someone records, so the pins are meant to be
+  edited, not routed around.**
 - **`sextant-eval --check` must grade the whole gate, and now proves it.**
   `--check` guarded `--store` and `--golden` but not `--modes`, so
   `--check --modes dense` graded one mode of four and printed "no regressions";
@@ -141,6 +162,18 @@ lifetime rather than per day.
   plant here showed 12 of 16 tests failing, which was worthless: the signature
   had changed and most of them were `TypeError`. Revert the *body* behind the
   new signature so the logic is the only difference, then count.
+- **A stub that cannot start must say so.** `_run_deploy` never set `FAKE_BOX`,
+  so the ssh stub's first line was `cd ""` -- **bash 5.2 accepts that as a
+  no-op, bash 5.3 calls it a null directory and fails.** Ubuntu 24.04 ships
+  5.2.21, 26.04 ships 5.3.9, so the stub answered every command here and none
+  on the image CI is migrating to. Two tests went red, which is how it was
+  found; the worse half is the four that stayed **green while the stub was
+  dead** -- including the two that assert an unreachable box gets parked rather
+  than left billing, which passed with `FAKE_SSH_DEAD` forced to 0. Answering
+  nothing is indistinguishable from answering correctly to any test whose
+  expectation is a failure. The stub uses `:?` now, and
+  `TestTheSshStubCannotFailQuietly` pins that `FAKE_SSH_DEAD` still decides the
+  outcome. Third instance of the item 13 shape, after BSD vs GNU tar.
 - **A counter that resets is not a cap on a day.** `DailyBudget` kept the UTC
   day's spend in memory, so every deploy and every `restart: unless-stopped`
   bounce began the day at zero. It persists to `.sextant-spend.json` in the
