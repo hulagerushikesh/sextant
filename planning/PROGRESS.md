@@ -52,9 +52,13 @@ eleven warnings**, so adding the step as it stood would have bought a tick
 that cannot go red. `denyWarnings` now lives in the committed config, the six
 shadcn warnings are a scoped override rather than a global off, four are
 in-line judgements with reasons, and `reportUnusedDisableDirectives` reports a
-suppression that stops being needed. The pin also caught three
-`exhaustive-deps` suppressions already in `App.tsx` with no reason given; all
-three were deliberate and all three now say so.
+suppression that stops being needed. Three CI runs to get there, both red
+ones informative: a multi-line reason breaks `-disable-next-line` (the "next
+line" becomes the second comment line), and `react/exhaustive-deps` reports at
+the closing `}, [deps])` line while `react/set-state-in-effect` reports at the
+statement. **Run 3: 0 warnings, 0 errors, 48 files.** The three
+`exhaustive-deps` suppressions already in `App.tsx` were never dead — they
+just gave no reason, and they do now.
 
 ## 2026-10-08 — the gate's environment is chosen here now (₹0)
 

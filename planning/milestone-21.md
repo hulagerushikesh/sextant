@@ -1473,3 +1473,34 @@ why, because a silenced rule without a reason is a silence, not a decision.
 `reportUnusedDisableDirectives` closes the loop: a suppression that stops being
 needed is reported rather than left as a comment, which is item 11 applied to
 the suppressions themselves.
+
+#### What the step cost to make honest, and what that bought
+
+Three runs, because the first two were red and both were informative.
+
+**Run 1 — 14 warnings.** The scoped override worked: all six
+`only-export-components` warnings were gone and `SERIES` moving closed the
+seventh. But every one of the six disable directives came back as *Unused
+oxlint-disable directive (no problems were reported)* with the underlying
+warning still raised. A **multi-line reason breaks
+`-disable-next-line`** — the "next line" was the second line of my own
+comment, not the code.
+
+**Run 2 — 7 warnings.** `set-state-in-effect` was suppressed; the dependency
+rule was not. The remaining four said where: **oxlint reports a hook-dependency
+problem at the closing `}, [deps])` line**, so the directive goes there and not
+above the `useEffect`/`useMemo` call. sweep-chart had one in each position and
+only the lower one had worked, which is the whole answer printed in the output.
+
+That also corrects run 1's reading. The three `exhaustive-deps` directives
+already in `App.tsx` were **not** dead — the probe's eleven warnings never
+included those three sites, because they were suppressing exactly as intended.
+What was wrong with them was that they gave no reason, and what broke them was
+my own multi-line comment.
+
+**Run 3 — 0 warnings, 0 errors, 48 files.**
+
+Two things were bought that a green tick would not have been. A linter whose
+result is now known rather than assumed, and a placement rule established from
+the tool's own output twice over rather than from either project's convention —
+which is the only reason a suppression in this tree means anything.
