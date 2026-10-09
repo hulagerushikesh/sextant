@@ -119,11 +119,11 @@ export default function App() {
   // Restoring the last conversation is a mount-only act. Depending on `saved`
   // would reopen the newest thread every time one is saved, discarding what is
   // on screen.
-  // oxlint-disable-next-line react/exhaustive-deps -- mount-only by intent
   useEffect(() => {
     setLifetime(seedFrom(saved))
     const first = saved[0]
     if (first) { setMessages(first.messages); setSources(first.sources); sourcesRef.current = first.sources }
+    // oxlint-disable-next-line react/exhaustive-deps -- mount-only by intent
   }, [])
 
   const persist = useCallback((m: Message[], s: Source[]) => {
@@ -233,7 +233,6 @@ export default function App() {
   // `toggleTheme`, `copyAnswer`, `refreshCorpus`, `focusComposer` -- are stable
   // by construction, and naming them would rebuild every entry on every render
   // for no change in the list.
-  // oxlint-disable-next-line react/exhaustive-deps -- those callbacks are stable
   const commands = useMemo<CommandSpec[]>(() => {
     const list: CommandSpec[] = []
     if (streaming) list.push({ id: 'stop', group: 'Conversation', label: 'Stop answering', keys: ['esc'], run: stop })
@@ -254,12 +253,12 @@ export default function App() {
     list.push({ id: 'reset', group: 'Spend', label: 'Reset all-time spend counter', run: () => { setLifetime(resetLifetime()); toast('All-time spend reset') } })
     list.push({ id: 'help', group: 'Help', label: 'Show getting started again', keywords: 'onboarding tour', run: showFirstRun })
     return list
+    // oxlint-disable-next-line react/exhaustive-deps -- those callbacks are stable
   }, [streaming, messages.length, lastAnswer, webSearch, view, theme, supported, saved, activeId, exportConversation])
 
   // Deps are the values the handlers read when a key arrives. `stop` and
   // `focusComposer` are stable callbacks; adding them would detach and reattach
   // a window listener on most renders.
-  // oxlint-disable-next-line react/exhaustive-deps -- the rest are stable
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey
@@ -281,6 +280,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
+    // oxlint-disable-next-line react/exhaustive-deps -- the rest are stable
   }, [paletteOpen, streaming, activeSource, messages.length, toggleTheme])
 
   const rail = (
