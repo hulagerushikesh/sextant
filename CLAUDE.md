@@ -119,6 +119,23 @@ lifetime rather than per day.
   `[dev]`. Annotate the name `Any` rather than ignoring the assignment --
   `follow_imports = "skip"` types the module as `Module`, not `Any`, and does
   not help. Check both ways: plain `mypy`, and `mypy --no-site-packages`.
+- **The frontend linter runs in CI only, and that is not a preference.**
+  `npm run lint` (oxlint) was configured and committed at the UI port and
+  invoked by nothing until 2026-10-09, so its result was *unknown*, not green.
+  The first run said **11 warnings, 0 errors** across 47 files — and oxlint
+  exits 0 on warnings, so adding the step as it stood would have bought a tick
+  that cannot go red. `denyWarnings` is in `.oxlintrc.json` so a hand run makes
+  the same claim CI does, each of the eleven is now a decision (a scoped
+  override for the vendored `components/ui` tree, three in-line judgements with
+  reasons, one constant moved to `components/lab/series.ts` because the rule
+  was right), and `reportUnusedDisableDirectives` reports a suppression that
+  stops being needed. It is **not in the local gate**: npm 10.5.0 on this
+  machine will not install oxlint's platform binding even though the lockfile
+  carries it with matching `os`/`cpu` (npm/cli#4828 — `npm ci`,
+  `npm install --save-optional` and a clean reinstall all leave
+  `node_modules/@oxlint` absent), and a gate must not claim a check the machine
+  cannot run. A new suppression needs a `--` reason or
+  `TestTheFrontendLinterRuns` fails.
 - **The offline `trip.sh` run is cross-platform now, and was not.** Step 3's
   tar used `--no-fflags` / `--no-mac-metadata`, which are BSD-only, and GNU tar
   *exits* on an unknown flag -- so the offline harness added 2026-10-06 could
@@ -251,6 +268,19 @@ lifetime rather than per day.
   `lib/api.ts`, not just `/upload`. Leave it off one call and that call is
   answered as the anonymous `shared` caller — which, since 0.8.4, means the
   browser stops seeing its own uploads.
+  `tests/test_deploy_config.py::TestTheBrowserSendsWhatTheAppReads` pins it:
+  the name `identity.py` declares appears in `api.ts`, in one place, every
+  `fetch` in that file routes its headers through `sent()`, and no other
+  frontend file calls `fetch` at all.
+- **A seam is pinned on the side you can read, which is the side that is not
+  the problem.** Three headers cross a process boundary; two had their other
+  end in `deploy/Caddyfile` and were pinned the day they shipped.
+  `X-Sextant-Client`'s other end is TypeScript, so for three versions it
+  existed in exactly two files and no test named it. Renaming `CLIENT_HEADER`
+  left 143 tests in `test_api.py`, `test_observability.py` and `test_scope.py`
+  green — they take the constant — while every browser silently became
+  `shared`, which is the defect 0.8.2 shipped to fix. Pin the seam in whatever
+  language the far end is written in, even when that means reading it as text.
 - Since 0.8.6 the rate limiter keys on the **authenticated** name
   (`user:<name>`) and on the client address (`ip:<addr>`) otherwise — prefixed
   so the two cannot collide. Not a fallback, a choice: an *unproven* name is a
