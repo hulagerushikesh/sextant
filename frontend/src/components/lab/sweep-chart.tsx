@@ -29,7 +29,6 @@ export function SweepChart({ rows, metric }: { rows: SweepRow[]; metric: 'p50' |
   // 1-2-5 ticks per decade, clipped to the domain, so a log axis reads as one.
   // `domain` is a fresh array every render, so depending on it would recompute
   // every render and the memo would do nothing. Its two numbers are the inputs.
-  // oxlint-disable-next-line react/exhaustive-deps -- deps are domain's values
   const ticks = useMemo(() => {
     const out: number[] = []
     for (let e = Math.floor(Math.log10(domain[0])); e <= Math.ceil(Math.log10(domain[1])); e++)
