@@ -27,14 +27,15 @@ export function SweepChart({ rows, metric }: { rows: SweepRow[]; metric: 'p50' |
   const xs = rows.map((r) => r.latency_ms[metric])
   const domain: [number, number] = [Math.min(...xs) * 0.7, Math.max(...xs) * 1.4]
   // 1-2-5 ticks per decade, clipped to the domain, so a log axis reads as one.
+  // `domain` is a fresh array every render, so depending on it would recompute
+  // every render and the memo would do nothing. Its two numbers are the inputs.
+  // oxlint-disable-next-line react/exhaustive-deps -- deps are domain's values
   const ticks = useMemo(() => {
     const out: number[] = []
     for (let e = Math.floor(Math.log10(domain[0])); e <= Math.ceil(Math.log10(domain[1])); e++)
       for (const m of [1, 2, 5]) { const v = m * 10 ** e; if (v >= domain[0] && v <= domain[1]) out.push(v) }
     return out
-    // oxlint-disable-next-line react/exhaustive-deps -- `domain` is a fresh
-    // array every render, so depending on it would recompute every render and
-    // the memo would do nothing. The two numbers are the actual inputs.
+    // oxlint-disable-next-line react/exhaustive-deps -- indexing is deliberate
   }, [domain[0], domain[1]])
 
   return (
