@@ -2,22 +2,13 @@ import { useMemo } from 'react'
 import { CartesianGrid, Line, LineChart, Scatter, XAxis, YAxis } from 'recharts'
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
 import type { IndexName, SweepRow } from '@/lib/types'
+import { SERIES } from './series'
 
 /**
  * Recall against latency — the tradeoff curve the lab exists to show. Log x:
  * latencies span 0.01ms to several ms and a linear axis smears the fast points
- * into the y-axis. Series hues are the app's provenance colours; FAISS rows are
- * C++ references, drawn dashed and set apart.
+ * into the y-axis. Series colours live in `series.ts`, which `lab.tsx` reads too.
  */
-
-export const SERIES: Record<IndexName, { label: string; color: string; dashed?: boolean }> = {
-  flat: { label: 'Exact (flat)', color: 'var(--muted-foreground)' },
-  hnsw: { label: 'HNSW', color: 'var(--corpus)' },
-  ivfpq: { label: 'IVF-PQ', color: 'var(--web)' },
-  ivfpq_rerank: { label: 'IVF-PQ + rerank', color: 'var(--success)' },
-  faiss_hnsw: { label: 'FAISS HNSW · C++', color: 'var(--chart-5)', dashed: true },
-  faiss_ivfpq: { label: 'FAISS IVF-PQ · C++', color: 'oklch(0.7 0.2 330)', dashed: true },
-}
 
 const fmtMs = (ms: number) => (ms >= 1 ? `${ms.toFixed(1)}ms` : `${(ms * 1000).toFixed(0)}µs`)
 
@@ -41,6 +32,9 @@ export function SweepChart({ rows, metric }: { rows: SweepRow[]; metric: 'p50' |
     for (let e = Math.floor(Math.log10(domain[0])); e <= Math.ceil(Math.log10(domain[1])); e++)
       for (const m of [1, 2, 5]) { const v = m * 10 ** e; if (v >= domain[0] && v <= domain[1]) out.push(v) }
     return out
+    // oxlint-disable-next-line react/exhaustive-deps -- `domain` is a fresh
+    // array every render, so depending on it would recompute every render and
+    // the memo would do nothing. The two numbers are the actual inputs.
   }, [domain[0], domain[1]])
 
   return (

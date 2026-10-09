@@ -59,6 +59,9 @@ function useCorpus(): [CorpusState, () => Promise<void>] {
     const stats = await fetchStats()
     setCorpus(stats ? { status: 'ready', stats } : { status: 'failed', stats: null })
   }, [])
+  // oxlint-disable-next-line react/set-state-in-effect -- `refresh` awaits the
+  // server before it sets anything, so this is not a synchronous setState in an
+  // effect; fetching on mount is what an effect is for.
   useEffect(() => { refresh() }, [refresh])
   return [corpus, refresh]
 }
@@ -116,7 +119,9 @@ export default function App() {
     setLifetime(seedFrom(saved))
     const first = saved[0]
     if (first) { setMessages(first.messages); setSources(first.sources); sourcesRef.current = first.sources }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- restoring the
+    // last conversation is a mount-only act. Depending on `saved` would reopen
+    // the newest thread every time one is saved, discarding what is on screen.
   }, [])
 
   const persist = useCallback((m: Message[], s: Source[]) => {
@@ -241,7 +246,11 @@ export default function App() {
     list.push({ id: 'reset', group: 'Spend', label: 'Reset all-time spend counter', run: () => { setLifetime(resetLifetime()); toast('All-time spend reset') } })
     list.push({ id: 'help', group: 'Help', label: 'Show getting started again', keywords: 'onboarding tour', run: showFirstRun })
     return list
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the listed deps
+    // are the values that change what the palette offers. The `run` callbacks
+    // it closes over (`open`, `showFirstRun`, `refreshCorpus`, the refs) are
+    // stable by construction, and naming them would rebuild every entry on
+    // every render for no change in the list.
   }, [streaming, messages.length, lastAnswer, webSearch, view, theme, supported, saved, activeId, exportConversation])
 
   useEffect(() => {
@@ -265,7 +274,10 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deps are the
+    // values the handlers read when a key arrives. The rest are stable
+    // callbacks and refs; adding them would detach and reattach a window
+    // listener on most renders.
   }, [paletteOpen, streaming, activeSource, messages.length, toggleTheme])
 
   const rail = (

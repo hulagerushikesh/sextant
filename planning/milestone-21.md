@@ -1368,3 +1368,108 @@ CI may run *more* of a gate command — it runs `npm ci && npm run build`, and t
 caught: narrowing mypy to one tree, and dropping `-q` from pytest. The item 12
 pin passes the first of those, which is the proof the new clause is not a
 duplicate of it.
+
+## 18 · The one header whose other end nobody reads — ₹0
+
+**Unplanned.** Three headers cross the boundary between four separate
+programs — Caddy, FastAPI, the browser, and `trip.sh` — and each writes the
+name by hand. Two of them, `X-Sextant-User` and `X-Sextant-Proxy-Auth`, were
+pinned against `deploy/Caddyfile` the day they shipped, and
+`tests/test_deploy_config.py` opens by saying exactly why:
+
+> Rename `USER_HEADER` in Python and every Python test still passes; the proxy
+> then forwards a header nobody reads, every authenticated user falls back to
+> their browser id, and the only symptom is that uploads land in the wrong
+> namespace.
+
+The third header was left out of that file. `X-Sextant-Client`'s other end is
+TypeScript, not a Caddyfile, so nothing in a Python suite reads it — and for
+three versions it existed in **exactly two places in the whole repository**,
+`mcp_server/identity.py` and `frontend/src/lib/api.ts`, with no test naming it
+at all.
+
+**Measured, not argued:** renaming `CLIENT_HEADER` to `X-Sextant-Browser`
+leaves **143 tests green** across `test_api.py`, `test_observability.py` and
+`test_scope.py` — every test that exercises the header takes the constant, so
+all of them move with it. `tsc -b` and `vite build` do not know the server
+exists. The browser goes on sending a header nobody reads, every request is
+answered as `shared`, and that is not a feature going quiet: it is the return
+of the defect **0.8.2** shipped against — two people behind one password
+storing `notes.pdf` over each other, and an unnamespaced id that `shared` is
+allowed to overwrite.
+
+**A seam is pinned on the side you can read, which is the side that is not the
+problem.** The two headers whose far end was a file the gate already parsed got
+pinned immediately; the one whose far end needed reading a `.ts` file as text
+waited three versions. The language of the far end decided whether the seam was
+checked, which is items 12 and 13 again — the environment deciding whether the
+check ran — and this is the fourth instance.
+
+### Second half: a convention held up by a comment
+
+`sent()` in `api.ts` carries this comment:
+
+> One helper, used everywhere, so a call site added later does not have to
+> remember.
+
+Nothing made that true. A function added later that builds its own `headers`
+object compiles, type-checks, lints and builds, and is answered as `shared` —
+which since 0.8.4 means that call stops seeing the browser's own uploads, and
+on `/upload` means the file lands where anyone can overwrite it. This is item
+4's defect one side of the wire over: every M21 scoping defect was a *route*,
+and nothing pinned the route list until something did.
+
+`TestTheBrowserSendsWhatTheAppReads` pins four things: the name
+`identity.py` declares appears in `api.ts`; it appears in **one** place, so a
+rename has one site; every `fetch` in that file routes its headers through
+`sent()`; and **no other frontend file calls `fetch` at all**. The scan is a
+helper over source text with its own synthetic plant, the same shape as
+`TestTheRepoHoldsNoRealAddresses`, plus an anti-vacuity test — it returns
+nothing for a file with no `fetch` in it, so the call-site count is checked
+too.
+
+All three plants caught, each on its own assertion: the Python rename (2 of 7),
+a call site that drops `sent()` (1 of 7), and a request built in a second file
+(1 of 7).
+
+### Third half: a linter configured, committed, and never run
+
+`frontend/package.json` has defined `npm run lint` since the UI port, and
+`.oxlintrc.json` is committed with a rules block someone chose. Neither the
+gate nor the workflow has ever called it. The lint result for this tree was
+not green — it was **unknown**, and nobody could have said whether it was zero
+problems or a hundred.
+
+It could not be established on this laptop: npm 10.5.0 does not install
+oxlint's platform binding even though the lockfile carries it with matching
+`os`/`cpu`, and oxlint's own error names npm/cli#4828. `npm ci`,
+`npm install --save-optional` and a clean reinstall all leave
+`node_modules/@oxlint` absent. So it was probed on CI, the same way the
+`ubuntu-26.04` image was: **11 warnings, 0 errors, 47 files, 116 rules.**
+
+**None of the eleven was a defect**, and one was the rule being right:
+
+| What | Count | Decision |
+| --- | --- | --- |
+| shadcn files exporting a `cva` variants object beside the component | 6 | rule off for `src/components/ui/**` — vendored code, and the rule is about Vite's fast-refresh granularity |
+| mount-time reads of `window` and of the server | 2 | in-line, with the reason: render cannot read either |
+| a deliberately by-value dependency array | 2 | in-line: depending on `domain` would recompute every render and the memo would do nothing |
+| `SERIES` exported from `sweep-chart.tsx` and imported by `lab.tsx` | 1 | **fixed** — moved to `components/lab/series.ts` |
+
+So the finding is not a pile of unfixed problems. It is that **oxlint exits 0
+on eleven warnings**: adding the step as it stood would have bought a green
+tick that cannot go red, which is this milestone's subject from item 5 onward.
+`denyWarnings` is in the committed config rather than the CI command, so a
+hand run makes the same claim CI does.
+
+Turning `only-export-components` off globally would have been the cheap way to
+zero, and would have thrown away the one warning that was right. The override
+is scoped to the vendored tree and a test pins that scope.
+
+The pin also found three suppressions that were already there — three
+`eslint-disable-next-line react-hooks/exhaustive-deps` in `App.tsx` with **no
+reason given**. All three turned out to be deliberate and all three now say
+why, because a silenced rule without a reason is a silence, not a decision.
+`reportUnusedDisableDirectives` closes the loop: a suppression that stops being
+needed is reported rather than left as a comment, which is item 11 applied to
+the suppressions themselves.

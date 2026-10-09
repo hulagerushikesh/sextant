@@ -71,7 +71,11 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Frontend lint (probe)
+      # Configured and committed at the UI port, run by nothing until now: the
+      # lint result for this tree was unknown rather than green. `if: always()`
+      # on the build keeps the two claims independent, so a lint failure does
+      # not hide a type error.
+      - name: Frontend lint
         working-directory: frontend
         run: npm run lint
 

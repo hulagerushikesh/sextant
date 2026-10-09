@@ -11,6 +11,10 @@ export function useIsMobile() {
       setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
     }
     mql.addEventListener("change", onChange)
+    // oxlint-disable-next-line react/set-state-in-effect -- the first value
+    // has to come from `window`, which render may not read. `undefined` until
+    // mounted is the point: `!!isMobile` is false, so nothing renders the
+    // mobile layout before the measurement exists.
     setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
     return () => mql.removeEventListener("change", onChange)
   }, [])

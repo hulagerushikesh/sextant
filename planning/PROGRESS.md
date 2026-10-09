@@ -5,6 +5,57 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-09 — the one header whose other end nobody reads (₹0)
+
+Three headers cross the boundary between four separate programs — Caddy,
+FastAPI, the browser, and `trip.sh` — and each writes the name by hand.
+`X-Sextant-User` and `X-Sextant-Proxy-Auth` were pinned against
+`deploy/Caddyfile` the day they shipped, and the test file that does it opens
+by stating the failure: *rename `USER_HEADER` in Python and every Python test
+still passes.*
+
+The third header was left out of that file. `X-Sextant-Client`'s other end is
+**TypeScript**, so nothing in a Python suite reads it, and for three versions
+it existed in exactly two places in the repository with no test naming it.
+
+Measured rather than argued: renaming `CLIENT_HEADER` leaves **143 tests
+green** across `test_api.py`, `test_observability.py` and `test_scope.py` —
+every one of them takes the constant, so they all move with it — while
+`tsc -b` and `vite build` do not know the server exists. Every request is then
+answered as `shared`, which is not a feature going quiet but the return of the
+defect **0.8.2** shipped against: two people behind one password storing
+`notes.pdf` over each other, and an unnamespaced id that `shared` may
+overwrite.
+
+**A seam is pinned on the side you can read, which is the side that is not the
+problem.** The language of the far end decided whether the seam was checked —
+items 12 and 13 again, the environment deciding whether the check ran, and the
+fourth instance of it.
+
+Second half: `sent()`'s own comment says it is used everywhere "so a call site
+added later does not have to remember", and nothing made that true. A function
+added later that builds its own `headers` compiles, type-checks and builds, and
+is answered as `shared`. That is item 4's defect one side of the wire over.
+`TestTheBrowserSendsWhatTheAppReads` forces the name into `api.ts` in one
+place, every `fetch` there through `sent()`, and no `fetch` in any other
+frontend file — with an anti-vacuity check on the call-site count and a
+synthetic plant for the scan itself. Three plants, each on its own assertion.
+
+Third half, the same shape: `npm run lint` has been defined since the UI port
+and `.oxlintrc.json` committed with a chosen rules block, and nothing ever
+called it — so the lint result was **unknown**, not green. Probed on CI
+(npm 10.5.0 here will not install oxlint's platform binding, npm/cli#4828):
+**11 warnings, 0 errors, 47 files.** None of the eleven was a defect and one
+was the rule being right — `SERIES` exported from a component file, now
+`components/lab/series.ts`. The real finding is that **oxlint exits 0 on
+eleven warnings**, so adding the step as it stood would have bought a tick
+that cannot go red. `denyWarnings` now lives in the committed config, the six
+shadcn warnings are a scoped override rather than a global off, four are
+in-line judgements with reasons, and `reportUnusedDisableDirectives` reports a
+suppression that stops being needed. The pin also caught three
+`exhaustive-deps` suppressions already in `App.tsx` with no reason given; all
+three were deliberate and all three now say so.
+
 ## 2026-10-08 — the gate's environment is chosen here now (₹0)
 
 Item 16's own green run carried two annotations. Five actions target the
