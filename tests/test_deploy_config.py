@@ -31,10 +31,17 @@ from pathlib import Path
 
 import pytest
 
-from mcp_server.identity import PROXY_HEADER, PROXY_SECRET, USER_HEADER
+from mcp_server.identity import (
+    CLIENT_HEADER,
+    PROXY_HEADER,
+    PROXY_SECRET,
+    USER_HEADER,
+)
 from tools import settings
 
 DEPLOY = Path(__file__).resolve().parents[1] / "deploy"
+FRONTEND = Path(__file__).resolve().parents[1] / "frontend" / "src"
+API_CLIENT = FRONTEND / "lib" / "api.ts"
 
 
 @pytest.fixture(scope="module")
@@ -45,6 +52,11 @@ def caddyfile() -> str:
 @pytest.fixture(scope="module")
 def env_example() -> str:
     return (DEPLOY / "env.example").read_text()
+
+
+@pytest.fixture(scope="module")
+def api_client() -> str:
+    return API_CLIENT.read_text()
 
 
 class TestTheProxySetsWhatTheAppReads:
@@ -1848,3 +1860,239 @@ class TestTheSshStubCannotFailQuietly:
             "ssh fails whatever FAKE_SSH_DEAD says, so every assertion about an "
             "unreachable box is vacuous"
         )
+
+
+def _calls_without_headers(source: str) -> list[str]:
+    """Exported functions that reach the server without routing headers
+    through the one helper that adds the browser's name.
+
+    Split per exported function rather than per `fetch(`: each call site in
+    `api.ts` lives in one exported function, and its options object sits
+    between the `fetch(` and the end of that function. Counting both inside
+    the block catches the two ways this comes apart -- a function added later
+    that builds its own headers object, and a second `fetch` added to a
+    function that already had one -- without needing to parse TypeScript.
+    """
+    offenders = []
+    for block in source.split("\nexport "):
+        calls = block.count("fetch(")
+        if not calls:
+            continue
+        protected = block.count("sent(")
+        if protected != calls:
+            name = block.split("(")[0].split()[-1] if "(" in block else "?"
+            offenders.append(f"{name}: {calls} fetch, {protected} through sent()")
+    return offenders
+
+
+class TestTheBrowserSendsWhatTheAppReads:
+    """The third header, whose other end is TypeScript.
+
+    `TestTheProxySetsWhatTheAppReads` pins two of the three names
+    `identity.py` declares against the file that writes them, and this one
+    was left out -- for exactly the reason that class's docstring gives about
+    the other two. Its other end is not Python, so no test in the suite reads
+    it. Before this class, `X-Sextant-Client` appeared in two places in the
+    whole repository, `mcp_server/identity.py` and
+    `frontend/src/lib/api.ts`, and no test named it at all.
+
+    Renaming `CLIENT_HEADER` is green in every check there is: the Python
+    tests take the constant, `tsc -b` and `vite build` do not know the server,
+    and the browser keeps sending a header nobody reads. Every browser then
+    falls back to `shared`, which is not a feature going missing but the
+    return of the defect 0.8.2 shipped against: two people behind one
+    password storing `notes.pdf` over each other, and an upload that anybody
+    may overwrite because an unnamespaced id is writable by `shared`.
+
+    The second half is the same failure one step earlier. `sent()` carries a
+    comment saying it is used everywhere "so a call site added later does not
+    have to remember" -- a convention held up by prose, which is what every
+    item of this milestone has been about.
+    """
+
+    def test_the_client_module_is_where_this_expects_it(self):
+        # Everything below reads one file. If it moves, these tests must fail
+        # rather than pass over an empty string.
+        assert API_CLIENT.is_file(), f"{API_CLIENT} is the file this pins"
+
+    def test_the_browser_sends_the_name_python_reads(self, api_client):
+        assert f"'{CLIENT_HEADER}'" in api_client, (
+            f"the frontend does not send {CLIENT_HEADER}, so every request is "
+            "answered as the shared owner"
+        )
+
+    def test_the_name_is_written_once_so_a_rename_has_one_site(self, api_client):
+        keys = [
+            line
+            for line in api_client.splitlines()
+            if f"'{CLIENT_HEADER}':" in line
+        ]
+        assert len(keys) == 1, (
+            "the header name belongs in one helper; copies are how one of them "
+            f"gets renamed and the other does not: {keys}"
+        )
+
+    def test_the_server_is_reached_through_the_one_module(self):
+        others = sorted(
+            str(path.relative_to(FRONTEND))
+            for path in FRONTEND.rglob("*.ts*")
+            if path != API_CLIENT and "fetch(" in path.read_text()
+        )
+        assert not others, (
+            "a request built outside api.ts does not go through sent() and is "
+            f"answered as the shared owner: {others}"
+        )
+
+    def test_every_call_to_the_server_carries_the_browser_name(self, api_client):
+        assert not _calls_without_headers(api_client), _calls_without_headers(
+            api_client
+        )
+
+    def test_the_scan_is_looking_at_the_call_sites(self, api_client):
+        """Anti-vacuity: `_calls_without_headers` returns nothing for a file
+        with no `fetch` in it at all, so the count has to be checked too."""
+        calls = api_client.count("fetch(")
+        assert calls >= 5, f"only {calls} call sites found -- has api.ts moved?"
+        assert calls == api_client.count("${SERVER_URL}"), (
+            "every fetch addresses SERVER_URL and every SERVER_URL is fetched; "
+            "if that stops being true this scan is reading the wrong thing"
+        )
+
+    def test_the_scan_would_notice_a_call_site_that_forgot(self):
+        forgot = (
+            "export async function fetchSpend(): Promise<unknown> {\n"
+            "  const response = await fetch(`${SERVER_URL}/spend`, {\n"
+            "    headers: { 'Content-Type': 'application/json' },\n"
+            "  })\n"
+            "  return response.json()\n"
+            "}\n"
+        )
+        kept = (
+            "export async function fetchSpend(): Promise<unknown> {\n"
+            "  const response = await fetch(`${SERVER_URL}/spend`, {\n"
+            "    headers: sent({ 'Content-Type': 'application/json' }),\n"
+            "  })\n"
+            "  return response.json()\n"
+            "}\n"
+        )
+        assert _calls_without_headers("\n" + forgot) == [
+            "fetchSpend: 1 fetch, 0 through sent()"
+        ]
+        assert _calls_without_headers("\n" + kept) == []
+        # A second call added to a function that already had one.
+        twice = kept.replace(
+            "  return response.json()",
+            "  await fetch(`${SERVER_URL}/spend`)\n  return response.json()",
+        )
+        assert _calls_without_headers("\n" + twice) == [
+            "fetchSpend: 2 fetch, 1 through sent()"
+        ]
+
+
+class TestTheFrontendLinterRuns:
+    """A linter configured, committed, and never once invoked.
+
+    `frontend/package.json` has defined `npm run lint` since the UI port and
+    `.oxlintrc.json` is committed with a rules block someone chose. Neither the
+    gate nor the workflow ever called it, so the lint result for this tree was
+    not green -- it was **unknown**. Nobody could have said whether it was zero
+    problems or a hundred.
+
+    Probed on CI rather than guessed (`workflow_dispatch` on
+    `the-client-half-of-the-boundary`): **11 warnings, 0 errors, 47 files, 116
+    rules.** None of the eleven was a defect -- six were shadcn's own files
+    exporting a `cva` variants object beside the component, two were
+    mount-time reads of `window` and of the server, and three were a
+    deliberately by-value dependency array. The eleventh, `SERIES` exported
+    from `sweep-chart.tsx` and imported by `lab.tsx`, was the rule being right,
+    and it moved to `series.ts`.
+
+    So the finding is not a pile of unfixed problems. It is that **the step
+    exits 0 on eleven warnings**: adding it as it stood would have bought a
+    green tick that cannot go red, which is this milestone's whole subject. The
+    strictness lives in the committed config (`denyWarnings`) so that running
+    the linter by hand makes the same claim CI does, each of the eleven is a
+    recorded decision rather than a silence, and
+    `reportUnusedDisableDirectives` means a suppression that stops being needed
+    is itself reported.
+
+    It is CI-only, and that is not a preference. npm 10.5.0 on this machine
+    does not install oxlint's platform binding even though the lockfile carries
+    it with matching `os`/`cpu`; oxlint's own error names npm/cli#4828. `npm
+    ci`, `npm install --save-optional` and a clean reinstall all leave
+    `node_modules/@oxlint` absent, so the laptop cannot run it and the gate
+    must not claim to. CI's newer npm installs it fine.
+    """
+
+    ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+    def _package(self) -> dict:
+        import json
+
+        return json.loads((self.ROOT / "frontend" / "package.json").read_text())
+
+    def _config(self) -> dict:
+        import json
+
+        return json.loads((self.ROOT / "frontend" / ".oxlintrc.json").read_text())
+
+    def _workflow(self) -> str:
+        found = sorted((self.ROOT / ".github" / "workflows").glob("*.yml"))
+        assert found, "no CI workflow at all"
+        return "\n".join(path.read_text() for path in found)
+
+    def _suppressions(self) -> list[str]:
+        out = []
+        for path in (self.ROOT / "frontend" / "src").rglob("*.ts*"):
+            for line_no, line in enumerate(path.read_text().splitlines(), 1):
+                if "oxlint-disable" in line or "eslint-disable" in line:
+                    out.append(f"{path.relative_to(self.ROOT)}:{line_no}: {line.strip()}")
+        return out
+
+    def test_the_script_exists_to_be_run(self):
+        assert "lint" in self._package()["scripts"]
+
+    def test_ci_runs_it(self):
+        assert "npm run lint" in self._workflow(), (
+            "the linter is configured and invoked by nothing, which is how its "
+            "result stayed unknown for three versions"
+        )
+
+    def test_a_warning_is_allowed_to_fail_the_step(self):
+        """Without this the step is a tick that cannot go red: oxlint exits 0
+        on warnings, and the probe found eleven of them."""
+        assert self._config()["options"]["denyWarnings"] is True
+
+    def test_a_suppression_that_stops_being_needed_is_reported(self):
+        """Otherwise the decisions below rot into comments -- a result produced
+        and never compared, in the suppressions themselves."""
+        setting = self._config()["options"]["reportUnusedDisableDirectives"]
+        assert setting in {"warn", "error", "deny"}, setting
+
+    def test_every_suppression_says_why(self):
+        unexplained = [s for s in self._suppressions() if " -- " not in s]
+        assert not unexplained, (
+            "a silenced rule without a reason is a silence, not a decision:\n"
+            + "\n".join(unexplained)
+        )
+
+    def test_there_are_suppressions_to_check(self):
+        """Anti-vacuity: the test above passes an empty list, and the three
+        recorded judgements are the thing it exists to hold to a standard."""
+        assert len(self._suppressions()) >= 3, self._suppressions()
+
+    def test_the_rule_is_only_off_where_the_code_is_not_ours(self):
+        """`react/only-export-components` is off for the vendored shadcn tree
+        and on everywhere else. Turning it off globally would have been the
+        cheaper way to reach zero, and would have lost the one warning that was
+        right."""
+        rules = self._config()["rules"]
+        assert rules["react/only-export-components"][0] == "warn"
+        overrides = self._config()["overrides"]
+        scoped = [
+            o
+            for o in overrides
+            if o.get("rules", {}).get("react/only-export-components") == "off"
+        ]
+        assert len(scoped) == 1, scoped
+        assert scoped[0]["files"] == ["src/components/ui/**"], scoped[0]["files"]
