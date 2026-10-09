@@ -136,6 +136,15 @@ lifetime rather than per day.
   `node_modules/@oxlint` absent), and a gate must not claim a check the machine
   cannot run. A new suppression needs a `--` reason or
   `TestTheFrontendLinterRuns` fails.
+- **An oxlint suppression goes on the line the rule reports, and the reason
+  goes above it.** Established from three CI runs, not from convention. A
+  multi-line reason breaks `-disable-next-line` — the "next line" becomes the
+  second comment line — so the directive must be the *last* line before the
+  code, with any explanation in plain comments above it. And
+  `react/exhaustive-deps` reports at the closing `}, [deps])` line, where
+  ESLint's convention also puts it, while `react/set-state-in-effect` reports
+  at the statement. Put one in the wrong place and
+  `reportUnusedDisableDirectives` says so — which is how this was found.
 - **The offline `trip.sh` run is cross-platform now, and was not.** Step 3's
   tar used `--no-fflags` / `--no-mac-metadata`, which are BSD-only, and GNU tar
   *exits* on an unknown flag -- so the offline harness added 2026-10-06 could
