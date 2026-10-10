@@ -2170,7 +2170,12 @@ class TestEveryVariableTheSubprocessNeedsCrosses:
         keeping narrow: what does the api container get.
         """
         lines = compose.splitlines()
-        start = next(i for i, line in enumerate(lines) if line.startswith("  api:"))
+        starts = [i for i, line in enumerate(lines) if line.startswith("  api:")]
+        # Fails closed, and on an assertion rather than a StopIteration: a
+        # renamed service would otherwise make this an error nobody reads as a
+        # scan that found nothing.
+        assert len(starts) == 1, f"expected one `api:` service, found {len(starts)}"
+        start = starts[0]
         end = next(
             (
                 i
