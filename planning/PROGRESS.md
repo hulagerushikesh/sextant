@@ -5,6 +5,69 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-10 — the environment the subprocess does not get (₹0)
+
+A live defect this time, not a missing pin — running on the box since
+2026-09-28.
+
+The knowledge base is a separate process on purpose, and `mcp_host.py` has said
+why since the day it was written: importing the store into the agent server
+"would pull chromadb and torch into the agent server's import graph, and keeping
+the knowledge base out of this process is the whole point of speaking to it over
+a protocol." So the embedder and the cross-encoder — 180 MB of weights — load in
+the **child**.
+
+MCP's stdio client does not give that child the parent's environment. It builds
+`get_default_environment() | params.env`, and on POSIX that default is `HOME`,
+`LOGNAME`, `PATH`, `SHELL`, `TERM`, `USER` and nothing else. `_FORWARDED_ENV`
+is therefore the entire set of things the knowledge base knows about the machine
+it runs on. It held seven `SEXTANT_*` retrieval knobs.
+
+The Dockerfile sets two more and says exactly why: bake the models into
+`HF_HOME=/opt/models`, because otherwise "the first query after `docker compose
+up` silently downloads ~180 MB and appears to hang", and `HF_HUB_OFFLINE=1`
+because "the image is the pin". **Neither crossed the boundary.** Assembling the
+child's environment the way the client does resolves
+`/home/app/.cache/huggingface/hub`, while the image wrote `/opt/models/hub`. The
+cache the build pays for has never been read, every `compose up` downloads the
+weights again into a path that dies with the container, and the offline pin was
+never in force. The compose healthcheck's own comment — "the embedder loads on
+first use, so this can take a minute on a cold boot" — had been reading as
+normal for six weeks.
+
+**The guard that existed could not see it.** Its comment is the right sentence
+("a knob the KB reads but the host does not forward is a silent no-op in the app
+while working in every test and CLI") and it named three of the seven, under the
+name `test_every_retrieval_knob_crosses_the_process_boundary`. `CLAUDE.md`'s
+rule said "new `SEXTANT_*` knobs". A model cache path is not a retrieval knob
+and is not `SEXTANT_*`-prefixed, so the rule, the test name and the list all
+agreed with each other and all excluded the variable that mattered. **A pin
+named after the kind of thing you were thinking about cannot grow** — the next
+thing to cross that boundary will not be of that kind.
+
+Three declared lists replaced the one remembered one: `_FORWARDED_SETTINGS`
+(ours), `_FORWARDED_VERBATIM` (six names, each cited to the line of the
+installed library that reads it) and `_NOT_FORWARDED` (four, each with a
+reason). `TestEveryVariableTheSubprocessNeedsCrosses` scans **both** sides of
+the seam — every variable named by code under `tools/`, and every variable the
+`Dockerfile` or the compose `api` service sets — and fails on anything in
+neither list. An exemption whose variable no scan still finds fails too, which
+is oxlint's `reportUnusedDisableDirectives` lesson from the frontend half.
+
+Found in passing: the three existing assertions compare the **whole** forwarded
+dict, so they passed on this laptop only because none of the six cache
+variables is set here — and `HF_HOME` is set in our own production image, so
+they would have failed inside the container they describe. They clear the
+declared list first now. Fifth instance of the environment deciding whether a
+check holds, found while fixing the fourth.
+
+Seven plants, each failing on its own assertion, including the regex-stops-
+matching one — both scan tests pass against an empty set, so that is how this
+check would have died quietly.
+
+Not claimed: a faster cold start. The fix is verified at the seam and in the
+resolver, not on the VM. The next trip is where it would show.
+
 ## 2026-10-09 — the one header whose other end nobody reads (₹0)
 
 Three headers cross the boundary between four separate programs — Caddy,

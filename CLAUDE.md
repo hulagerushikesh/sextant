@@ -408,9 +408,31 @@ lifetime rather than per day.
   printed by the agent server and the ingest CLI with the name to move it to.
   **The deployed box's `.env` must be rewritten before this tree is built on
   it**, or the container loses its budget cap and CORS allowlist to defaults.
-- MCP stdio strips the environment: new `SEXTANT_*` knobs the KB needs must
-  be added to `_FORWARDED_ENV` in `mcp_host.py` or they silently no-op
-  (`test_every_retrieval_knob_crosses_the_process_boundary` pins the latest).
+- MCP stdio strips the environment: anything the KB subprocess needs must be
+  in `_FORWARDED_ENV` in `mcp_host.py` or it silently no-ops. The client builds
+  `get_default_environment() | params.env`, and on POSIX that default is HOME,
+  LOGNAME, PATH, SHELL, TERM, USER -- so that list is the whole of what the
+  subprocess knows about the box. **The rule above used to read "new `SEXTANT_*`
+  knobs", and the test guarding it was called `every_retrieval_knob` and named
+  three of seven.** Both were true and both were too narrow, which is how
+  `HF_HOME` was dropped for three versions: the image bakes 180 MB of weights
+  into `/opt/models` and sets `HF_HUB_OFFLINE=1` so the first query does not
+  download them, the models load *in the subprocess*, and neither name crossed
+  -- so the child resolved `$HOME/.cache/huggingface`, found it empty, and
+  downloaded them into a path that dies with the container. A cache path is not
+  a retrieval knob, and the category in the rule decided what got checked.
+  Three declared lists now, and `TestEveryVariableTheSubprocessNeedsCrosses`
+  scans both sides of the seam: every variable named under `tools/`, and every
+  variable the `Dockerfile` or the compose `api` service sets, must be
+  forwarded or be in `_NOT_FORWARDED` **with a reason** -- and an exemption
+  whose variable nothing reads or sets any more fails too, so the table cannot
+  fossilise.
+- **Name a pin after the boundary it guards, not after the kind of thing you
+  were thinking about.** `every_retrieval_knob` is a test that cannot grow: the
+  next variable to cross that boundary was not a retrieval knob, so nobody
+  broke the test and nobody noticed. The same sentence is in `CLAUDE.md`'s own
+  history -- `_FORWARDED_ENV` was documented as being for `SEXTANT_*` names.
+  A scan driven off the declared list has no category to fall outside of.
 - Results are capped at 2 chunks per document (`SEXTANT_MAX_PER_DOCUMENT`,
   dense + rerank only, score-guarded). Set it to `0` for any experiment's
   control, or dense numbers will not match notes written before 2026-09-17.
