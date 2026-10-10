@@ -207,3 +207,60 @@ class TestTheOldEnvironmentPrefixIsLoudNotSilent:
         for name in settings.legacy_names():
             monkeypatch.delenv(name, raising=False)
         assert settings.legacy_warning() is None
+
+
+class TestTheSubprocessGetsTheModelCache:
+    """Shipped 2026-09-28 and live until now: the image bakes the embedder and
+    the cross-encoder into `HF_HOME=/opt/models` and sets `HF_HUB_OFFLINE=1` so
+    that, in the Dockerfile's own words, the first query does not "silently
+    download ~180 MB and appear to hang". Both names are set on the *agent
+    server*. The models load in the knowledge-base subprocess -- keeping torch
+    out of the agent server's import graph is the entire reason the knowledge
+    base speaks a protocol -- and MCP's stdio client does not pass this
+    process's environment to its child. It builds
+    `get_default_environment() | params.env`, and on POSIX that default is
+    HOME, LOGNAME, PATH, SHELL, TERM, USER and nothing else.
+
+    So the process that loads the weights resolved
+    `$HOME/.cache/huggingface/hub` instead of `/opt/models/hub`, found it
+    empty, and downloaded them -- with the offline pin also dropped, so it
+    checked the hub for newer weights too -- into a path that dies with the
+    container. The baked cache the image pays for was never read.
+    """
+
+    def test_the_cache_location_crosses_the_process_boundary(self, monkeypatch):
+        from mcp_server.mcp_host import kb_server
+
+        monkeypatch.setenv("HF_HOME", "/opt/models")
+        monkeypatch.setenv("HF_HUB_OFFLINE", "1")
+        env = kb_server().env or {}
+        assert env.get("HF_HOME") == "/opt/models"
+        assert env.get("HF_HUB_OFFLINE") == "1"
+
+    def test_the_subprocess_resolves_the_baked_cache(self, monkeypatch):
+        """The consequence, not just the mechanism.
+
+        `huggingface_hub` derives its cache from HF_HOME and falls back to
+        $HOME. Resolving the same way the child does proves the dropped name
+        changes *where the weights are looked for*, which is the failure --
+        rather than only proving a dict has a key.
+        """
+        from mcp.client.stdio import get_default_environment
+
+        from mcp_server.mcp_host import kb_server
+
+        monkeypatch.setenv("HOME", "/home/app")
+        monkeypatch.setenv("HF_HOME", "/opt/models")
+        # The child's actual environment, assembled MCP's way rather than ours.
+        child = get_default_environment() | (kb_server().env or {})
+
+        def hub_cache(env: dict[str, str]) -> str:
+            home = env.get("HF_HOME") or f"{env.get('HOME', '')}/.cache/huggingface"
+            return f"{home}/hub"
+
+        assert hub_cache(child) == "/opt/models/hub"
+        # The failure this replaced, spelled out: with the name dropped the
+        # child looks somewhere the image never wrote.
+        assert hub_cache({k: v for k, v in child.items() if k != "HF_HOME"}) == (
+            "/home/app/.cache/huggingface/hub"
+        )
