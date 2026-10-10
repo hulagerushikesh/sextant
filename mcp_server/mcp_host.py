@@ -38,7 +38,6 @@ PERSIST_DIR_ENV = settings.env_name("CHROMA_DIR")
 # it changes what retrieval does, so dropping it would silently run the default.
 ANN_BACKEND_ENV = settings.env_name("ANN_INDEX")
 
-# Variables the subprocess needs but MCP's stdio client would otherwise strip.
 class ToolHost(Protocol):
     """What the agent actually needs: the schemas, and a way to call one.
 
@@ -54,17 +53,74 @@ class ToolHost(Protocol):
     async def call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]: ...
 
 
-_FORWARDED_ENV = tuple(
-    settings.env_name(key)
-    for key in (
-        "CHROMA_DIR",
-        "ANN_INDEX",
-        "EMBEDDER",
-        "CHUNK_TOKENS",
-        "MAX_PER_DOCUMENT",
-        "SUBFLOOR_ORDER",
-        "FLOOR_FALLBACK",
-    )
+# --- What the subprocess inherits --------------------------------------------
+#
+# MCP's stdio client does not hand its child this process's environment. It
+# builds `get_default_environment() | params.env`, and on POSIX that default is
+# HOME, LOGNAME, PATH, SHELL, TERM, USER. So a variable not named below does
+# not exist for the subprocess, whatever the container sets -- and the failure
+# is silent, because everything the subprocess reads has a default.
+#
+# Two kinds of name cross. These are ours, read through `tools.settings`, so
+# they arrive with the SEXTANT_ prefix. Each one changes what retrieval does,
+# which is why dropping one is worse than not starting: the server would open
+# the default collection with the default index and answer anyway.
+_FORWARDED_SETTINGS = (
+    "CHROMA_DIR",
+    "ANN_INDEX",
+    "EMBEDDER",
+    "CHUNK_TOKENS",
+    "MAX_PER_DOCUMENT",
+    "SUBFLOOR_ORDER",
+    "FLOOR_FALLBACK",
+)
+
+# And these are other people's, read by the libraries only the subprocess
+# imports. The embedder and the cross-encoder load *here*; the image bakes them
+# into HF_HOME=/opt/models and sets HF_HUB_OFFLINE=1 so the first query does
+# not download 180 MB and appear to hang. Until 2026-10-10 neither name
+# crossed, so the child resolved $HOME/.cache/huggingface, found it empty, and
+# downloaded the weights into a path that dies with the container -- see
+# `TestTheSubprocessGetsTheModelCache`.
+#
+# Every name here is one the loader actually reads, not a guess:
+#   huggingface_hub/constants.py   HF_HOME, HF_HUB_CACHE, XDG_CACHE_HOME,
+#                                  HF_HUB_OFFLINE, TRANSFORMERS_OFFLINE
+#   sentence_transformers/base/model.py   SENTENCE_TRANSFORMERS_HOME
+_FORWARDED_VERBATIM = (
+    "HF_HOME",
+    "HF_HUB_CACHE",
+    "XDG_CACHE_HOME",
+    "HF_HUB_OFFLINE",
+    "TRANSFORMERS_OFFLINE",
+    "SENTENCE_TRANSFORMERS_HOME",
+)
+
+# Names the deploy sets, or the subprocess's own modules read, that deliberately
+# do not cross -- each with the reason, so an entry is a claim somebody can
+# check rather than an omission nobody can see. Pinned both ways: nothing here
+# may also be forwarded, and nothing may name a variable no scan still finds.
+_NOT_FORWARDED = {
+    settings.env_name("MODEL"): (
+        "summaries.py reads it at import, for summarise(), which only runs in "
+        "sextant-ingest in the operator's shell. The subprocess imports that "
+        "module for its chunk-id helpers and never calls it."
+    ),
+    "GEMINI_API_KEY": (
+        "the same path: nothing the subprocess can be asked to do generates "
+        "text. A key that does not cross cannot leak from here."
+    ),
+    settings.env_name("LOG_FORMAT"): (
+        "the subprocess calls logging.basicConfig itself and never reads it; "
+        "its stderr is text by design and the container collects it either way."
+    ),
+    settings.env_name("ALLOWED_ORIGINS"): (
+        "CORS belongs to the HTTP layer, two processes above this one."
+    ),
+}
+
+_FORWARDED_ENV = (
+    tuple(settings.env_name(key) for key in _FORWARDED_SETTINGS) + _FORWARDED_VERBATIM
 )
 
 

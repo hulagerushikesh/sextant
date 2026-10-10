@@ -113,37 +113,57 @@ class TestTheStoreOverrideReachesTheServer:
 
         assert stats["persist_dir"] == str(store)
 
+    @staticmethod
+    def _quiet(monkeypatch) -> None:
+        """Unset every name the host forwards.
+
+        These tests assert on the *whole* dict the host builds, so any one of
+        those names left set in the shell changes the answer. They passed on
+        this laptop because none of the cache variables happens to be set here
+        -- and HF_HOME is set in our own production image. An assertion whose
+        result depends on who runs it is the failure this milestone keeps
+        finding, so the environment is made explicit rather than inherited.
+        """
+        from mcp_server.mcp_host import _FORWARDED_ENV
+
+        for name in _FORWARDED_ENV:
+            monkeypatch.delenv(name, raising=False)
+
     def test_the_launch_parameters_carry_the_override(self, monkeypatch):
         from mcp_server.mcp_host import kb_server
 
+        self._quiet(monkeypatch)
         monkeypatch.setenv(PERSIST_DIR_ENV, "/tmp/somewhere")
         assert kb_server().env == {PERSIST_DIR_ENV: "/tmp/somewhere"}
 
     def test_no_override_means_no_forced_environment(self, monkeypatch):
         from mcp_server.mcp_host import kb_server
 
-        monkeypatch.delenv(PERSIST_DIR_ENV, raising=False)
+        self._quiet(monkeypatch)
         assert kb_server().env is None
 
     def test_every_retrieval_knob_crosses_the_process_boundary(self, monkeypatch):
-        # A knob the KB reads but the host does not forward is a silent no-op
-        # in the app while working in every test and CLI.
-        from mcp_server.mcp_host import kb_server
-        from tools.vector_db.vector_search import (
-            FLOOR_FALLBACK_ENV,
-            MAX_PER_DOCUMENT_ENV,
-            SUBFLOOR_ORDER_ENV,
-        )
+        """A knob the KB reads but the host does not forward is a silent no-op
+        in the app while working in every test and CLI.
 
-        monkeypatch.delenv(PERSIST_DIR_ENV, raising=False)
-        monkeypatch.setenv(MAX_PER_DOCUMENT_ENV, "0")
-        monkeypatch.setenv(SUBFLOOR_ORDER_ENV, "dense")
-        monkeypatch.setenv(FLOOR_FALLBACK_ENV, "dense")
-        assert kb_server().env == {
-            MAX_PER_DOCUMENT_ENV: "0",
-            SUBFLOOR_ORDER_ENV: "dense",
-            FLOOR_FALLBACK_ENV: "dense",
-        }
+        This used to name three knobs of the seven while calling itself
+        `every`, which is the same kind of claim as a title that outruns its
+        assertions. It is driven off the declared list now, so a knob added to
+        one place and not the other has somewhere to show up.
+        """
+        from mcp_server.mcp_host import _FORWARDED_SETTINGS, kb_server
+        from tools import settings
+
+        self._quiet(monkeypatch)
+        expected = {}
+        for i, key in enumerate(_FORWARDED_SETTINGS):
+            name = settings.env_name(key)
+            value = f"value-{i}"
+            monkeypatch.setenv(name, value)
+            expected[name] = value
+
+        assert len(expected) == 7, "seven knobs; update this count deliberately"
+        assert kb_server().env == expected
 
 
 class TestLongDocumentsAreReachable:

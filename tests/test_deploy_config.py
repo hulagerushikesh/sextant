@@ -2096,3 +2096,210 @@ class TestTheFrontendLinterRuns:
         ]
         assert len(scoped) == 1, scoped
         assert scoped[0]["files"] == ["src/components/ui/**"], scoped[0]["files"]
+
+
+class TestEveryVariableTheSubprocessNeedsCrosses:
+    """The third seam in this file, and the one with two readable sides.
+
+    MCP's stdio client does not give its child this process's environment: it
+    builds `get_default_environment() | params.env`, and on POSIX that default
+    is six names, none of them ours. So `mcp_host._FORWARDED_ENV` is not a
+    convenience -- it is the entire list of things the knowledge-base
+    subprocess knows about the box it is running on.
+
+    The failure is silent in both directions. Everything the subprocess reads
+    has a default, so a dropped name means the wrong store, the wrong index or
+    the wrong model cache, answered confidently. And the list is hand-written,
+    so the only thing that connects it to the code that reads those names, or
+    to the Dockerfile that sets them, is somebody remembering.
+
+    `HF_HOME` is what that costs. The image bakes 180 MB of weights into
+    `/opt/models` and the subprocess never looked there, because a cache path
+    is not a retrieval knob and the one test guarding this boundary was called
+    `every_retrieval_knob`. A category in a test name decided what got checked.
+    """
+
+    ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+    # Files that set the api container's runtime environment. Both are read,
+    # rather than one standing in for the other, because they set different
+    # names: the image bakes the model cache, compose adds the mount path and
+    # the CORS origin.
+    DEPLOY_SOURCES = ("Dockerfile", "docker-compose.prod.yml")
+
+    @staticmethod
+    def _declared() -> tuple[set[str], dict[str, str]]:
+        from mcp_server.mcp_host import _FORWARDED_ENV, _NOT_FORWARDED
+
+        return set(_FORWARDED_ENV), dict(_NOT_FORWARDED)
+
+    def _subprocess_reads(self) -> set[str]:
+        """Every environment variable named by code the subprocess imports.
+
+        `tools/` is the subprocess's half: `python -m tools.vector_db.server`
+        imports from nowhere else. Settings arrive through `tools.settings`, so
+        they are matched by key and prefixed here; a vendor name like
+        GEMINI_API_KEY is read straight off `os`, so it is matched whole.
+        """
+        found: set[str] = set()
+        sources = sorted((self.ROOT / "tools").rglob("*.py"))
+        assert len(sources) >= 8, f"expected the KB package, found {len(sources)}"
+        for path in sources:
+            if path.name == "settings.py":
+                continue  # the module that defines the mechanism, not a reader
+            try:
+                text = path.read_text()
+            except OSError as e:  # pragma: no cover - fails closed
+                pytest.fail(f"cannot read {path}: {e}")
+            for key in re.findall(r'settings\.(?:getenv|env_name|setenv)\(\s*"([A-Z_0-9]+)"', text):
+                found.add(settings.env_name(key))
+            for name in re.findall(r'os\.(?:getenv|environ\.get)\(\s*"([A-Z_0-9]+)"', text):
+                found.add(name)
+            for name in re.findall(r'os\.environ\[\s*"([A-Z_0-9]+)"\s*\]', text):
+                found.add(name)
+        return found
+
+    @staticmethod
+    def _api_service(compose: str) -> str:
+        """The `api:` block of a compose file, and only that.
+
+        Scanning the whole file would drag in the frontend's build args and
+        Caddy's own names, and every one of those would then need an entry in
+        the exemption table -- which is how a table of real decisions turns
+        into a list nobody reads. The question here is narrower and worth
+        keeping narrow: what does the api container get.
+        """
+        lines = compose.splitlines()
+        start = next(i for i, line in enumerate(lines) if line.startswith("  api:"))
+        end = next(
+            (
+                i
+                for i in range(start + 1, len(lines))
+                if lines[i][:3].strip() and not lines[i].startswith("   ")
+            ),
+            len(lines),
+        )
+        return "\n".join(lines[start:end])
+
+    def _deploy_sets(self) -> set[str]:
+        """Every variable the image or the production compose file sets for the
+        api container -- `ENV X=`, `ENV X= Y=`, and compose's `environment:`
+        mapping. This is the side someone edits when they add a knob to the
+        box, so it is the side that has to force a decision."""
+        found: set[str] = set()
+        for name in self.DEPLOY_SOURCES:
+            path = self.ROOT / name
+            try:
+                text = path.read_text()
+            except OSError as e:  # pragma: no cover - fails closed
+                pytest.fail(f"cannot read {path}: {e}")
+            if name.endswith((".yml", ".yaml")):
+                text = self._api_service(text)
+            for line in text.splitlines():
+                bare = line.strip()
+                if bare.startswith("ENV "):
+                    found.update(re.findall(r"\b([A-Z][A-Z_0-9]*)=", bare))
+                elif re.match(r"^[A-Z][A-Z_0-9]*:\s*\S", bare):
+                    found.add(bare.split(":", 1)[0])
+        # APP_UID is a build arg: the uid the image is built for, not something
+        # the running process reads.
+        return found - {"APP_UID"}
+
+    def test_forwarding_is_necessary_at_all(self):
+        """The premise. If MCP inherited the whole environment this list would
+        be dead weight, and the right fix would be to delete it rather than to
+        keep adding to it."""
+        from mcp.client.stdio import get_default_environment
+
+        inherited = set(get_default_environment())
+        forwarded, _ = self._declared()
+        assert not (inherited & forwarded), inherited & forwarded
+        assert "PATH" in inherited, "the default set is not what this assumes"
+
+    def test_the_child_keeps_the_defaults_as_well(self, monkeypatch):
+        """`env=` on StdioServerParameters is merged over the default set, not
+        substituted for it. If that ever changes, forwarding one name would
+        take PATH and HOME away from the subprocess, and the symptom would be
+        a knowledge base that cannot start rather than one that answers
+        wrongly -- a different failure, worth knowing about separately."""
+        from mcp.client.stdio import get_default_environment
+
+        from mcp_server.mcp_host import kb_server
+
+        monkeypatch.setenv(settings.env_name("CHROMA_DIR"), "/tmp/elsewhere")
+        child = get_default_environment() | (kb_server().env or {})
+        assert child[settings.env_name("CHROMA_DIR")] == "/tmp/elsewhere"
+        assert "PATH" in child and "HOME" in child
+
+    def test_every_variable_the_subprocess_reads_is_decided(self):
+        """Fail closed: a name read under `tools/` is forwarded, or it is in
+        `_NOT_FORWARDED` with a reason. Adding a setting and forgetting the
+        host is the defect this replaces guessing about."""
+        forwarded, exempt = self._declared()
+        undecided = sorted(self._subprocess_reads() - forwarded - set(exempt))
+        assert not undecided, f"read by the subprocess, never decided: {undecided}"
+
+    def test_every_variable_the_deploy_sets_is_decided(self):
+        """The same question from the other side. `HF_HOME` was set by the
+        Dockerfile, needed by the subprocess, and in neither list."""
+        forwarded, exempt = self._declared()
+        undecided = sorted(self._deploy_sets() - forwarded - set(exempt))
+        assert not undecided, f"set for the container, never decided: {undecided}"
+
+    def test_the_scans_are_looking_at_something(self):
+        """Anti-vacuity. Both tests above pass against an empty set, and a
+        regex that quietly stops matching is the way this check dies."""
+        reads = self._subprocess_reads()
+        sets = self._deploy_sets()
+        assert len(reads) >= 9, sorted(reads)
+        assert len(sets) >= 4, sorted(sets)
+        for name in (
+            settings.env_name("CHROMA_DIR"),
+            settings.env_name("MAX_PER_DOCUMENT"),
+            settings.env_name("MODEL"),
+            "GEMINI_API_KEY",
+        ):
+            assert name in reads, f"{name} should be found by the reads scan"
+        for name in ("HF_HOME", "HF_HUB_OFFLINE", settings.env_name("LOG_FORMAT")):
+            assert name in sets, f"{name} should be found by the deploy scan"
+
+    def test_an_exemption_that_stopped_being_needed_is_reported(self):
+        """The lesson oxlint taught in the frontend half: a suppression nobody
+        needs any more is a claim nobody checks. Every exempt name is still
+        named by one of the two scans, so deleting the code that reads one
+        turns its exemption into a failure rather than a fossil."""
+        _, exempt = self._declared()
+        live = self._subprocess_reads() | self._deploy_sets()
+        stale = sorted(set(exempt) - live)
+        assert not stale, f"exempted but no longer read or set anywhere: {stale}"
+
+    def test_nothing_is_both_forwarded_and_exempt(self):
+        forwarded, exempt = self._declared()
+        both = sorted(forwarded & set(exempt))
+        assert not both, both
+
+    def test_every_exemption_says_why(self):
+        _, exempt = self._declared()
+        assert exempt, "an empty exemption table makes the two scans vacuous"
+        for name, reason in exempt.items():
+            assert len(reason) > 40, f"{name}: {reason!r} is not a reason"
+
+    def test_the_model_cache_names_are_the_ones_the_loader_reads(self):
+        """Not a guess: each verbatim name is resolved by the installed library
+        that the subprocess imports. A name nobody reads would make the list
+        look careful while fixing nothing."""
+        import huggingface_hub.constants as hub
+        from sentence_transformers.base import model as st_model
+
+        from mcp_server.mcp_host import _FORWARDED_VERBATIM
+
+        sources = []
+        for module in (hub, st_model):
+            path = getattr(module, "__file__", None)
+            assert path, f"{module.__name__} has no source to read"
+            sources.append(pathlib.Path(path).read_text())
+        constants, st = sources
+        for name in _FORWARDED_VERBATIM:
+            assert f'"{name}"' in constants or f'"{name}"' in st, (
+                f"{name} is forwarded but no loader reads it"
+            )
