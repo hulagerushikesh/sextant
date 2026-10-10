@@ -1504,3 +1504,152 @@ Two things were bought that a green tick would not have been. A linter whose
 result is now known rather than assumed, and a placement rule established from
 the tool's own output twice over rather than from either project's convention —
 which is the only reason a suppression in this tree means anything.
+
+## 19 · The environment the subprocess does not get — ₹0
+
+Unplanned. Items 12, 13, 17 and 18 were all the same sentence: the environment
+decided whether the check ran. This one is the environment deciding whether the
+*code* ran, and it had been doing so on the box since 2026-09-28.
+
+The knowledge base is a separate process on purpose. `mcp_host.py` says why, in
+a comment that predates all of this: importing `vector_search` into the agent
+server "would pull chromadb and torch into the agent server's import graph, and
+keeping the knowledge base out of this process is the whole point of speaking
+to it over a protocol." So the embedder and the cross-encoder — 180 MB of
+weights — load in the child, not in the server that holds the HTTP routes.
+
+MCP's stdio client does not hand that child the parent's environment. It builds
+
+```python
+env=get_default_environment() | (server.env or {})
+```
+
+and on POSIX `get_default_environment()` is `HOME`, `LOGNAME`, `PATH`, `SHELL`,
+`TERM`, `USER`. Nothing else. So `_FORWARDED_ENV` in `mcp_host.py` is not a
+convenience list — it is the entire set of things the knowledge base knows
+about the machine it is running on.
+
+It held seven names, all `SEXTANT_*` retrieval knobs. The Dockerfile sets two
+more, and says exactly why:
+
+```dockerfile
+# Bake the models into the image. Without this the first query after
+# `docker compose up` silently downloads ~180 MB and appears to hang.
+# ...
+# HF_HUB_OFFLINE stops the runtime from phoning home to check for newer
+# weights on every start -- the image is the pin.
+ENV HF_HOME=/opt/models HF_HUB_OFFLINE=1
+```
+
+Both are set on the agent server. Neither crossed. Measured by assembling the
+child's environment the way the client does:
+
+| | resolves |
+| --- | --- |
+| the image's intent (`HF_HOME=/opt/models`) | `/opt/models/hub` |
+| what the subprocess actually got | `/home/app/.cache/huggingface/hub` |
+
+The baked cache the build pays for has never been read. Every `docker compose
+up` downloads the weights again, into a container-local path that dies with the
+container, and the offline pin meant to stop the runtime checking the hub for
+newer weights on every start was never in force. The compose healthcheck's own
+comment — "the embedder loads on first use, so this can take a minute on a cold
+boot" — is consistent with a download rather than a load, and had been read as
+normal for six weeks.
+
+### The pin that existed, and why it could not see this
+
+There was a guard. Its comment is the right sentence:
+
+```python
+def test_every_retrieval_knob_crosses_the_process_boundary(self, monkeypatch):
+    # A knob the KB reads but the host does not forward is a silent no-op
+    # in the app while working in every test and CLI.
+```
+
+It named three of the seven. And the name of the test is the specification:
+`every_retrieval_knob`. A model cache path is not a retrieval knob, so it was
+never in scope, and nothing was broken by leaving it out.
+
+`CLAUDE.md` had the same blind spot in the same words — "new `SEXTANT_*` knobs
+the KB needs must be added to `_FORWARDED_ENV`" — and that rule was written
+after a different forwarding bug. The rule, the test name and the list all
+agreed with each other and all excluded the variable that mattered.
+
+**A pin named after the kind of thing you were thinking about cannot grow.**
+The next thing to cross that boundary will not be of that kind, which is
+precisely why nobody will notice.
+
+### What replaced it
+
+Three declared lists instead of one remembered one:
+
+| | what it holds |
+| --- | --- |
+| `_FORWARDED_SETTINGS` | ours, read through `tools.settings`, so `SEXTANT_`-prefixed |
+| `_FORWARDED_VERBATIM` | other people's, read by libraries only the child imports |
+| `_NOT_FORWARDED` | set or read but deliberately not crossing, **with the reason** |
+
+The six verbatim names are each cited to the line of the installed library that
+reads them — `huggingface_hub/constants.py` for `HF_HOME`, `HF_HUB_CACHE`,
+`XDG_CACHE_HOME`, `HF_HUB_OFFLINE` and `TRANSFORMERS_OFFLINE`;
+`sentence_transformers/base/model.py` for `SENTENCE_TRANSFORMERS_HOME` — and a
+test re-reads those two files, so a name nobody reads cannot sit in the list
+looking careful.
+
+`TestEveryVariableTheSubprocessNeedsCrosses` then scans **both sides of the
+seam**, which is item 18's lesson applied to a boundary where both sides happen
+to be readable:
+
+- every variable named by code under `tools/` (the subprocess's own half —
+  `python -m tools.vector_db.server` imports from nowhere else), and
+- every variable the `Dockerfile` or the compose `api` service sets.
+
+Anything in neither list fails the gate. The compose scan is narrowed to the
+`api:` block on purpose: scanning the file whole dragged in the frontend's
+`VITE_SERVER_URL` on the first run, and an exemption table that collects other
+services' variables is a table nobody reads.
+
+And, borrowed from oxlint's `reportUnusedDisableDirectives` in item 18: an
+exemption whose variable no scan still finds **fails**. The four entries today
+are `SEXTANT_MODEL` and `GEMINI_API_KEY` (read by `summaries.py`, whose
+`summarise()` only runs in `sextant-ingest` in the operator's shell — the child
+imports that module for its chunk-id helpers and never calls it),
+`SEXTANT_LOG_FORMAT` (the subprocess calls `logging.basicConfig` itself) and
+`SEXTANT_ALLOWED_ORIGINS` (CORS, two processes up).
+
+### Two assertions that were being decided by the shell
+
+The three existing tests compare the **whole** forwarded dict with `==`. They
+passed here only because none of the six cache variables happens to be set on
+this laptop — and `HF_HOME` is set in our own production image, so the tests
+would have failed inside the very container they describe. They clear the
+declared list first now. Fifth instance of the recurring subject, found while
+fixing the fourth.
+
+`test_every_retrieval_knob_crosses_the_process_boundary` is driven off
+`_FORWARDED_SETTINGS`, so its name is now true.
+
+### Plants
+
+Seven, each failing on its own assertion and nothing else:
+
+| plant | fails |
+| --- | --- |
+| a new `settings.getenv` under `tools/` | `…reads_is_decided` |
+| a new `ENV` in the `Dockerfile` | `…deploy_sets_is_decided` |
+| `HF_HOME` removed from the forwarded list | `…deploy_sets_is_decided` + both regression tests |
+| an exemption for a variable nothing reads | `…stopped_being_needed_is_reported` |
+| a name both forwarded and exempt | `…both_forwarded_and_exempt` |
+| a verbatim name no loader reads | `…the_ones_the_loader_reads` |
+| the reads scan's regex stops matching | `…scans_are_looking_at_something` |
+
+The last one is the anti-vacuity check earning its place: both scan tests pass
+against an empty set, so a regex that quietly stops matching is how this check
+would have died.
+
+### What this does not prove
+
+That the box is now faster to start. The fix is verified at the seam and in the
+resolver, not on the VM — the next trip is where `/health` answering before the
+start period expires would show it. Worth watching rather than claiming.
