@@ -5,6 +5,52 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-12 — the report with a gap (₹0)
+
+`CLAUDE.md` names one command as the answer to "what is billing":
+`deploy/deploy.sh HOST status`. Item 16 fixed `start`, item 5 fixed the park.
+Nothing had ever run `status`.
+
+It said what is billing for **two of the eight states** the compute API
+documents. The billing line was a `case` with arms for `RUNNING` and
+`TERMINATED` and no default, so `STOPPING`, `SUSPENDING`, `SUSPENDED`,
+`STAGING`, `REPAIRING` and `PROVISIONING` printed the instance line, nothing
+after it, and exited 0 — and every one of those bills.
+
+`STOPPING` is the one that matters: it is what a person sees when a stop has
+been issued and has not finished, which is the moment right after a trip, and
+silence there is indistinguishable from the parked case. **A `case` with no
+default is a list of the states somebody thought of.**
+
+The worse half: `vm_status` is a `gcloud describe`, and when it fails — wrong
+project, expired credentials, an API error — the `read` gets an empty line, so
+the command printed `agenticrag (, us-central1-a):` and exited **0**. The ₹703
+incident was a box nobody checked; this is the check answering nothing and
+reporting success, which is worse because it looks like an answer. Every state
+has an arm now, the default says to assume the meter is on, and an unreadable
+state exits 1 naming the `describe` to run by hand.
+
+Third clause, in the harness: `deploy.sh` asks `describe` for
+`value(status,machineType,natIP)` — three tab-separated fields — while
+`trip.sh` asks for one. The stub ignored `--format` and answered one field to
+both, so the machine type and address in `status`'s own output line were
+produced by nothing, and the `(, us-central1-a)` in every test's output *was*
+the gap being printed. **Third time in this harness**, after the curl stub's
+`-o`/`-w` and the ssh stub's `cd ""`.
+
+Four plants. Two notes on them, because both were my own mistakes: plant 1
+**did not apply** on the first attempt — a quoting error left the file
+unchanged and all seven tests passed, which is seven green tests against
+nothing — and the second attempt over-applied and broke the script, so six
+tests failed on syntax rather than on the defect. `bash -n` is in the loop now.
+Plant 2 is caught only by the drift test, because the new default arm correctly
+covers a removed `STOPPING`: precision lost, safety kept, which is why both
+tests exist.
+
+Left alone and said so: `start` does not detect "already running" when
+`describe` fails. Starting is what was asked for, the cost is printed, `--yes`
+is required, and `gcloud start` is idempotent.
+
 ## 2026-10-10 — the environment the subprocess does not get (₹0)
 
 A live defect this time, not a missing pin — running on the box since
