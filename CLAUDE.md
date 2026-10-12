@@ -45,6 +45,29 @@ because each one was learned the expensive way.
   a human — a key to paste, a decision — parks first and restarts later.
   Restarting costs ₹2; on 2026-09-28 a box left running while waiting for a
   key rotation billed **₹703 over 125.5 hours**, against a ₹50-100/day cap.
+- **A report with a gap reads as reassurance.** `deploy.sh HOST status` is named
+  above as the command that says what is billing, and until 2026-10-12 it said
+  it for **two of GCP's eight instance states**: the billing `case` had arms for
+  `RUNNING` and `TERMINATED` and no default, so `STOPPING`, `SUSPENDING`,
+  `SUSPENDED`, `STAGING`, `REPAIRING` and `PROVISIONING` printed the instance
+  line, nothing after it, and exit 0. All six bill. `STOPPING` is the one that
+  matters, because it is what you see when a stop was issued and has not
+  finished — the moment right after a trip — and silence there is
+  indistinguishable from the parked case. And an **empty** state, which is what
+  a failed `describe` leaves behind, printed `agenticrag (, us-central1-a):` and
+  exited 0: the check answering nothing and reporting success, which is worse
+  than no check. Every state has an arm now, the default says "assume the VM
+  meter is on" (wrong in the safe direction, like the grounded-search price),
+  and an unreadable state exits 1 with the `describe` to run by hand.
+  **A `case` with no default is a list of the states somebody thought of.**
+- **A stub that answers one field to a `--format` asking for three makes every
+  assertion about the other two a comment.** The gcloud stub ignored
+  `--format`, so `status`'s machine type and address came from nothing and the
+  `(, us-central1-a)` in every test's output *was* the gap being printed. It
+  honours the format now: one field for `trip.sh`'s `value(status)`, three
+  tab-separated for `deploy.sh`, and nothing at all for a blank state, which is
+  what the real thing does when describe fails. Third time in this harness after
+  the curl stub's `-o`/`-w` and the ssh stub's `cd ""`.
 - **Two doors to the meter, one check.** `deploy/deploy.sh HOST start` is the
   other command that starts the box. It had neither of `trip.sh`'s
   protections: no door check, and an ssh wait that ended either way and then
