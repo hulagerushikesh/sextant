@@ -109,6 +109,7 @@ runs; none is started on a hunch.
 | Idea | Why it is on the list | Needs | Cost |
 | --- | --- | --- | --- |
 | Request-level index tier (`exact` flat / `fast` hnsw / `lean` ivfpq_rerank) | caller states a budget, server maps to index + params; only meaningful past ~25k chunks, where HNSW overtakes flat (`../learning/ivfpq-100k.md`) | corpus ≥ 25k | ₹0 |
+| `down` says nothing about the meter | `deploy.sh HOST down` stops the containers and leaves the VM billing ~₹5.6/hour. The usage header is honest ("containers only") but the command prints no epilogue, because it is an `exec ssh`. Found while fixing the preflight (item 21) and left there deliberately: the fix is about `down`, not about the preflight | — | ₹0 |
 | Let a person delete their own upload | `sextant-forget` is an operator command on the box; re-uploading replaces but nothing takes a file back. A gap, not a defect — design it against a deployment that has actually had two users | M21 item 3 | ₹0 |
 
 ## Decided against (with the reason, so it is not re-litigated)
