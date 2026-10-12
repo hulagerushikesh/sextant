@@ -5,6 +5,63 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-12 — the check nobody had run (₹0)
+
+`deploy/deploy.sh HOST preflight` is the only thing between a misconfigured box
+and twenty minutes of building torch on two vCPUs. Its own comment says so:
+"Check the box BEFORE spending twenty minutes building torch. Every one of
+these has a failure mode that only shows up at the very end."
+
+**Nothing had ever executed it.** Not in the suite, not in the offline trip
+harness, not once — and it could not be, because it calls GNU `stat -c`,
+`getent hosts` and `docker`, and tests `/data/chroma`, none of which exist on
+the laptop that wrote it. Items 5, 16 and 20 measured `start`, the park and
+`status`. This was the command in that file nothing had measured.
+
+Run for the first time against a fixture box, it reports thirteen checks and
+**none of them is about `SEXTANT_PROXY_SECRET`** — which `deploy/env.example`
+calls REQUIRED, `deploy/README.md` lists as one of two hard stops, `CLAUDE.md`
+calls a deploy prerequisite, `deploy/trip.sh` has refused to build without
+since 2026-10-06, and `planning/NEXT.md` puts first in the open row. Caddy has
+no conditionals: `header_up X-Sextant-User {http.auth.user.id}` goes out on
+every proxied request whether or not the app can verify where it came from, so
+with the secret empty `identity.resolve()` raises `ForgedIdentity` and the box
+answers **403 to everything**. `deploy.sh up` runs the preflight, prints
+`-- preflight passed`, ships the tree, builds for twenty minutes, and then the
+box serves nothing.
+
+Nor is any of them about gate slots 2 and 3. The `.env` reader was one
+hand-written `case` alternation of seven names; the Caddyfile has interpolated
+nine since 0.8.3. A variable the reader skips is a variable no check below can
+ask about, which is why the failure the script's own comment puts *first* — "a
+mangled hash rejects every password … Cheap to check, expensive to discover" —
+was only ever checked for slot 1. The worse half is a slot filled on one side:
+`env.example` records that Caddy then refuses to **start**, so the box serves
+nothing at all, after the build. And the open row's own criterion needs slot 2,
+because `trip.sh` step 7 uploads as two gate users to prove the isolation.
+
+Same shape as item 19, one directory over. **A list of variables that mirrors
+another file by hand falls behind it silently.**
+
+The key list is now held to `deploy/Caddyfile` and `docker-compose.prod.yml` by
+the gate, so it grows with them. The gate is checked slot by slot — unused,
+half-filled, or complete with an intact bcrypt hash. The secret is a hard FAIL
+carrying `trip.sh`'s remedy, which generates it on the box so the value never
+crosses a laptop. No value out of the `.env` is printed, only lengths, and that
+is pinned. A `DATA_DIR` override, defaulting to `/data/chroma` and never passed
+by the box, lets the script be executed start to finish in the suite against
+fixture `.env` files — behind three new stubs (`stat`, `getent`, `docker`) and
+an `_SSH_STUB` arm for the one call shape that arrives on stdin.
+
+Five plants. Plant 2 is the one worth recording: deleting the *check* while
+leaving the name in the key list passes the scan and fails only the
+behavioural tests. **A static pin on a list and a test of what the list is used
+for are two different claims.** Plant 5 found a line of mine — the in-script
+`DATA_DIR` default was unreachable, since `deploy.sh` always passes the
+assignment — and it is gone.
+
+Version stays 0.8.7; the box is still on 0.8.1.
+
 ## 2026-10-12 — the report with a gap (₹0)
 
 `CLAUDE.md` names one command as the answer to "what is billing":

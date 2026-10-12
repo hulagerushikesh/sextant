@@ -1739,3 +1739,119 @@ issue a start against a box that may already be up. Left alone: starting is
 what was asked for, the cost line is printed and `--yes` is required before
 anything happens, and the real `gcloud start` is idempotent. Noted rather than
 silently judged out of scope.
+
+---
+
+## 21 · The check nobody had run — ₹0
+
+`deploy/deploy.sh HOST preflight` is the only thing between a misconfigured box
+and twenty minutes of building torch on two vCPUs. Its own comment says so:
+
+> Check the box BEFORE spending twenty minutes building torch. Every one of
+> these has a failure mode that only shows up at the very end.
+
+Nothing had ever executed it. Not in the suite, not in the offline trip
+harness, not once — and it could not be, because it calls GNU `stat -c`,
+`getent hosts` and `docker`, and tests `/data/chroma`, none of which exist on
+the laptop that wrote it. Items 5, 16 and 20 fixed `start`, the park and
+`status`; `preflight` was the command in this file that nothing had measured.
+
+Run for the first time, against a fixture box, it reports thirteen checks.
+
+### First clause: none of them is about `SEXTANT_PROXY_SECRET`
+
+Five places in this repository call it required:
+
+| where | what it says |
+| --- | --- |
+| `deploy/env.example` | "**REQUIRED** from the first deploy that carries the `header_up` lines … the app refuses every request with a 403 that says so. Set it before building this tree on the box." |
+| `deploy/README.md` | one of the **two** failures that stop the trip before the build |
+| `CLAUDE.md` | a deploy prerequisite |
+| `deploy/trip.sh:260` | a hard stop, since 2026-10-06 |
+| `planning/NEXT.md` | step 1 of the open row, before anything else |
+
+Caddy has no conditionals. `header_up X-Sextant-User {http.auth.user.id}` goes
+out on every proxied request whether or not the app can verify where it came
+from, so with the secret empty `identity.resolve()` raises `ForgedIdentity`
+and the box answers **403 to everything** — not some requests, not only the
+authenticated ones. `deploy.sh up` runs the preflight, prints
+`-- preflight passed`, ships the tree, builds for twenty minutes, and then the
+box serves nothing.
+
+### Second clause: the bcrypt check reads one slot of three
+
+The `.env` reader was one hand-written `case` alternation:
+
+```bash
+case "$key" in SITE_ADDRESS|PUBLIC_URL|BASIC_AUTH_USER|BASIC_AUTH_HASH|GEMINI_API_KEY|ACME_EMAIL|APP_UID)
+```
+
+Seven names. The Caddyfile has interpolated **nine** since 0.8.3 — three
+`basic_auth` slots and the proxy secret — and compose two more. A variable this
+reader skips is a variable no check below can ask about, which is why the
+failure the script's own comment puts *first* ("a mangled hash rejects every
+password … Cheap to check, expensive to discover") was only ever checked for
+slot 1.
+
+The worse half is a slot filled on one side. `env.example` records what Caddy
+does with it: "fill a user without its hash and Caddy refuses to start, which
+is the right way round." Refuses to *start* — so the box serves nothing at all,
+and it refuses after the build. And this is not a hypothetical slot: the open
+row's own criterion needs slot 2, because `trip.sh` step 7 uploads as two gate
+users to prove the isolation.
+
+Same shape as item 19, one directory over. **A list of variables that mirrors
+another file by hand falls behind it silently.**
+
+### The fix
+
+| | |
+| --- | --- |
+| the key list | every name `deploy/Caddyfile` or `docker-compose.prod.yml` interpolates, held there by `TestEveryDeployTimeVariableReachesThePreflight` — add a `{$VAR}` and the gate fails until the preflight knows about it |
+| the gate | checked slot by slot: both halves empty is reported unused (that is how `env.example` ships, and a check that fails on the documented default is one people learn to ignore), one half filled names the missing half and says Caddy will refuse to start, both filled runs the bcrypt shape check — which is a function now, because it used to be run against one slot |
+| the secret | present or a FAIL, with `trip.sh`'s remedy: generated on the box so the value never crosses a laptop |
+| `DATA_DIR` | an override that exists only so the script can be executed off the VM. Defaults to `/data/chroma`; the box never passes it. Same arrangement `VM_SSH_TRIES` already has |
+| no value printed | the item-5 invariant, now that this script reads a secret and three hashes. Lengths are reported; the secret, the hashes, the key and the user names are not — pinned |
+
+### The harness
+
+Three new stubs, because without them no assertion about this script is worth
+more than a comment: GNU `stat -c` (`%a` and `%u`, and a loud exit for any
+other format), `getent hosts` (glibc, absent from macOS entirely), and
+`docker`/`docker compose version`. `_CURL_STUB` gained the address service the
+preflight asks — without it the call fell through to the gate logic and
+answered `401`, which the DNS compare then read as "this VM is 401". And
+`_SSH_STUB` learned the one call shape that arrives on **stdin**:
+`ssh host VAR=v 'bash -s'`. Real ssh joins everything after the host into one
+command line, so the env assignments reach the script; the stub's convention of
+reading only the last argument would have dropped `APP_DIR` and the preflight
+would have `cd`-ed to `"$HOME/"`.
+
+### Plants
+
+| plant | fails |
+| --- | --- |
+| the secret leaves the key list | the Caddyfile scan, **and** the three good-box tests — an uncaptured variable reads as empty |
+| the secret's *check* deleted, the capture kept | the three secret tests only; **the scan passes** |
+| the slot loop collapsed to slot 1 | all four slot tests |
+| the bcrypt length floor removed | `…truncated_hash_in_a_later_slot` only, the shape check still catches a mangled one |
+| `DATA_DIR`'s in-script default removed | **nothing** — see below |
+
+Plant 2 is the one worth keeping. A static pin on a list and a test of what the
+list is *used for* are two different claims, and the scan cannot see a name
+that is read and then ignored. Both halves stay.
+
+Plant 5 found a line of my own: the `DATA_DIR="${DATA_DIR:-/data/chroma}"`
+inside the heredoc was unreachable, because `deploy.sh` always passes the
+assignment. Removed. One declaration, and `set -u` makes a future edit that
+drops it loud rather than silently defaulting.
+
+### Considered and left
+
+`deploy.sh HOST down` stops the containers and says nothing about the VM meter,
+which keeps running at ~₹5.6/hour. The usage header is honest ("stop the stack
+(containers only)") but the command prints no epilogue — it is an `exec ssh`,
+so there is nowhere after it to print one. Left for a separate item rather than
+restructured here: the fix is small but it is about `down`, not about the
+preflight, and item 20's finding came precisely from asking which commands
+nothing had measured.
