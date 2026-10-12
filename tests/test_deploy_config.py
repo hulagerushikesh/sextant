@@ -229,7 +229,24 @@ case "$norm" in
   *"firewall-rules describe"*)
     echo "${FAKE_SSH_RANGES-203.0.113.7/32}" ;;
   *"instances describe"*)
-    cat "$S" 2>/dev/null || echo RUNNING ;;
+    # Honours the --format, because the two callers ask for different ones and
+    # the real gcloud answers each differently: trip.sh asks value(status) and
+    # gets one field, deploy.sh asks value(status,machineType,natIP) and gets
+    # three, tab separated. This stub answered one field to both, so the
+    # machine type and the ip in `status`'s own output line were never produced
+    # by anything -- `(, us-central1-a)` was the stub's gap being printed. The
+    # curl stub had to learn the same lesson about -o and -w.
+    st=$(cat "$S" 2>/dev/null)
+    if [ ! -f "$S" ]; then st=RUNNING; fi
+    # A describe that fails writes nothing to stdout. A blank state file is how
+    # a test asks for that, so emit nothing rather than a row of empty fields.
+    if [ -z "$st" ]; then exit 0; fi
+    case "$*" in
+      *machineType*)
+        printf '%s\t%s\t%s\n' "$st" "${FAKE_MACHINE_TYPE:-e2-standard-2}" \
+          "${FAKE_NAT_IP:-10.0.0.1}" ;;
+      *) echo "$st" ;;
+    esac ;;
   *"instances start"*)
     echo RUNNING > "$S" ;;
   *"instances stop"*)
@@ -2363,6 +2380,56 @@ class TestStatusSaysWhatIsBilling:
         code, out, _ = _run_deploy(tmp_path, args=("status",), vm_state="HIBERNATED")
         assert "billing" in out, out
         assert "meter off" not in out, out
+
+    def _status_block(self) -> str:
+        """The `status)` arm of deploy.sh, as text.
+
+        Read rather than executed because what is being pinned is the *shape*
+        of the decision -- that there is a default at all -- and no run can
+        show the absence of one.
+        """
+        text = (DEPLOY / "deploy.sh").read_text()
+        start = text.index("\n  status)")
+        end = text.index("\n  stop)", start)
+        return text[start:end]
+
+    def test_the_billing_case_keeps_a_default(self):
+        """The arms are a list of the states somebody thought of; the default
+        is the part that holds when the next one is invented. Removing it puts
+        this straight back to printing nothing for a box that bills."""
+        block = self._status_block()
+        assert "*)" in block, "the billing case has no default arm"
+        tail = block[block.index("*)") :]
+        assert "UNKNOWN" in tail and "meter is on" in tail, tail[:200]
+
+    def test_the_states_this_test_knows_are_the_states_the_script_knows(self):
+        """Anti-drift, and anti-vacuity: the run-every-state test above would
+        keep passing on the default arm alone, reporting UNKNOWN for states the
+        script used to name. Each one has to still be named."""
+        block = self._status_block()
+        missing = [s for s in (*self.BILLING_STATES, self.PARKED_STATE) if s not in block]
+        assert not missing, f"named by the test, not by the script: {missing}"
+
+    def test_the_line_carries_the_machine_type_and_the_address(self, tmp_path):
+        """What `status` prints, printed by something.
+
+        The stub answered one field to a `--format` asking for three, so
+        `status` rendered `agenticrag (, us-central1-a): RUNNING` in every test
+        and the two fields a person reads it for came from nowhere. A stub that
+        cannot produce them makes every assertion about them a comment -- the
+        lesson the curl stub learned about `-o` and `-w` in item 8.
+        """
+        code, out, _ = _run_deploy(
+            tmp_path,
+            args=("status",),
+            vm_state="RUNNING",
+            FAKE_MACHINE_TYPE="e2-standard-4",
+            FAKE_NAT_IP="198.51.100.9",
+        )
+        assert code == 0, out
+        assert "e2-standard-4" in out, out
+        assert "198.51.100.9" in out, out
+        assert "(, " not in out, f"an empty field is being printed: {out!r}"
 
     def test_a_describe_that_failed_is_not_a_parked_box(self, tmp_path):
         """The failure that reads as reassurance. An unreadable state has to be
