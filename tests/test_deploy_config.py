@@ -2308,3 +2308,65 @@ class TestEveryVariableTheSubprocessNeedsCrosses:
             assert f'"{name}"' in constants or f'"{name}"' in st, (
                 f"{name} is forwarded but no loader reads it"
             )
+
+
+class TestStatusSaysWhatIsBilling:
+    """`CLAUDE.md` says `deploy/deploy.sh HOST status` "says what is billing".
+    It said it for two of GCP's eight instance states.
+
+    The billing line was a `case` with arms for `RUNNING` and `TERMINATED` and
+    no default, so `STOPPING`, `SUSPENDED`, `STAGING`, `REPAIRING`,
+    `PROVISIONING` and `SUSPENDING` printed the instance line and nothing else,
+    and exited 0. Every one of those bills. The one that reads worst is
+    `STOPPING`: it is what you see when a stop was issued and has not finished,
+    which is exactly the moment after a trip when a person checks — and silence
+    there is indistinguishable from the parked case.
+
+    Worse, a `describe` that fails — wrong project, expired credentials, an API
+    error — leaves `state` empty, so the command whose job is to say what is
+    billing printed `agenticrag (, us-central1-a):` and exited 0. The 2026-09-28
+    ₹703 failure was a box nobody checked; this is the check answering nothing
+    and calling it success.
+    """
+
+    # Every state the compute API documents an instance can be in. The script
+    # has to have a verdict for each, which is the point: a `case` with no
+    # default is a list of the states somebody thought of.
+    BILLING_STATES = (
+        "PROVISIONING",
+        "STAGING",
+        "RUNNING",
+        "STOPPING",
+        "SUSPENDING",
+        "SUSPENDED",
+        "REPAIRING",
+    )
+    PARKED_STATE = "TERMINATED"
+
+    def test_every_state_that_bills_says_so(self, tmp_path):
+        for i, state in enumerate(self.BILLING_STATES):
+            work = tmp_path / f"s{i}"
+            work.mkdir()
+            code, out, _ = _run_deploy(work, args=("status",), vm_state=state)
+            assert "billing" in out, f"{state}: no billing verdict in {out!r}"
+            assert code == 0, f"{state}: exit {code}"
+
+    def test_the_parked_state_says_the_meter_is_off(self, tmp_path):
+        code, out, _ = _run_deploy(tmp_path, args=("status",), vm_state=self.PARKED_STATE)
+        assert "billing" in out
+        assert "meter off" in out, out
+        assert code == 0
+
+    def test_a_state_nobody_thought_of_is_assumed_to_be_billing(self, tmp_path):
+        """Wrong in the safe direction, like the grounded-search price. A new
+        state name must not read as parked."""
+        code, out, _ = _run_deploy(tmp_path, args=("status",), vm_state="HIBERNATED")
+        assert "billing" in out, out
+        assert "meter off" not in out, out
+
+    def test_a_describe_that_failed_is_not_a_parked_box(self, tmp_path):
+        """The failure that reads as reassurance. An unreadable state has to be
+        louder than any state, not quieter than all of them."""
+        code, out, _ = _run_deploy(tmp_path, args=("status",), vm_state="")
+        assert code != 0, f"exit 0 for an unreadable state: {out!r}"
+        assert "could not read" in out.lower() or "unknown" in out.lower(), out
