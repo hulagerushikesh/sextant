@@ -157,6 +157,11 @@ for a in "$@"; do cmd="$a"; done
 # missing box the same loud failure on both.
 cd "${FAKE_BOX:?the ssh stub was given no box to stand in for}" || exit 90
 case "$cmd" in
+  # `ssh host VAR=v 'bash -s'` -- the preflight, and the only call here that
+  # arrives on stdin. Real ssh joins every argument after the host into one
+  # command line, so the env assignments reach the script; reading only the
+  # last argument would drop APP_DIR and the preflight would cd to "$HOME/".
+  "bash -s")                   shift; HOME="$PWD" exec bash -c "$*" ;;
   # A stub that can only say yes makes "ssh came up" unfalsifiable, and
   # `--keep-up` on a box that never came up is the whole point of one of the
   # tests below.
@@ -278,6 +283,10 @@ _CURL_STUB = """#!/usr/bin/env bash
 # request to the box and must be answered before the gate arguments are read.
 case "$*" in
   *checkip*) echo "${FAKE_MY_IP-203.0.113.7}"; exit 0 ;;
+  # The preflight asks a different service for the same thing, and without
+  # this arm it fell through to the gate logic below and answered `401` --
+  # which the DNS compare then read as "this VM is 401".
+  *ifconfig.me*) echo "${FAKE_MY_IP-203.0.113.7}"; exit 0 ;;
 esac
 if [ "${FAKE_GATE_DOWN:-0}" = 1 ]; then echo 000; exit 7; fi
 auth=""; hdrs=""; URL_PATH="/health"; discard_body=0; want_code=0
@@ -2437,3 +2446,378 @@ class TestStatusSaysWhatIsBilling:
         code, out, _ = _run_deploy(tmp_path, args=("status",), vm_state="")
         assert code != 0, f"exit 0 for an unreadable state: {out!r}"
         assert "could not read" in out.lower() or "unknown" in out.lower(), out
+
+
+# --- The preflight ----------------------------------------------------------
+#
+# `deploy.sh preflight` is the only thing standing between a misconfigured box
+# and twenty minutes of building torch on two vCPUs, and until now nothing had
+# ever executed it -- not once, in any harness. It could not be: it calls GNU
+# `stat -c`, `getent hosts` and `docker`, and it tests `/data/chroma`, none of
+# which exist on the laptop that wrote it. So the three stubs below are not
+# decoration, they are the reason any assertion about this script is worth
+# more than a comment.
+
+_STAT_STUB = """#!/usr/bin/env bash
+# GNU `stat -c`, which the box has and macOS does not. The preflight asks for
+# two formats and nothing else; anything beyond them should fail loudly here
+# rather than be quietly answered wrong.
+fmt=""
+while [ $# -gt 0 ]; do
+  case "$1" in -c) fmt="$2"; shift 2 ;; *) break ;; esac
+done
+case "$fmt" in
+  '%a') /usr/bin/stat -f '%OLp' "$1" ;;
+  '%u') /usr/bin/stat -f '%u'   "$1" ;;
+  *)    echo "stat stub: unhandled format '$fmt'" >&2; exit 95 ;;
+esac
+"""
+
+_GETENT_STUB = """#!/usr/bin/env bash
+# `getent hosts <name>`, which is glibc and so is not on macOS at all. The
+# preflight takes the first field of the first line, so that is what this
+# prints. FAKE_DNS_A=none models a name that resolves to nothing, which is the
+# state a subdomain is in before it is created -- the failure the DNS check is
+# there for.
+[ "$1" = hosts ] || { echo "getent stub: unhandled database '$1'" >&2; exit 95; }
+case "${FAKE_DNS_A-203.0.113.7}" in
+  none) exit 2 ;;
+  *)    echo "${FAKE_DNS_A-203.0.113.7} $2" ;;
+esac
+"""
+
+_DOCKER_STUB = """#!/usr/bin/env bash
+# `command -v docker` finds this file; `docker compose version` decides whether
+# the plugin is reported present. FAKE_NO_COMPOSE=1 is a box with docker and no
+# compose plugin, which is what a plain `apt install docker.io` leaves behind.
+case "$1" in
+  compose) exit "${FAKE_NO_COMPOSE:-0}" ;;
+  *)       exit 0 ;;
+esac
+"""
+
+# 60 characters, which is the shape `caddy hash-password` prints: `$2a$14$`
+# and 53 more. The preflight's length floor is 59, so this is the first length
+# that passes rather than a comfortable one.
+_GOOD_HASH = "$2a$14$" + "u" * 53
+
+
+def _env_fixture(**over: str | None) -> str:
+    """A box `.env` that passes every preflight check, plus overrides.
+
+    A key set to `None` is left out of the file altogether. That is a different
+    failure from an empty value and both have to be separately checkable: the
+    trip learned the same distinction for `SEXTANT_PROXY_SECRET` in item 3.
+    """
+    rows: dict[str, str | None] = {
+        "SITE_ADDRESS": "agenticrag.example.in",
+        "PUBLIC_URL": "https://agenticrag.example.in",
+        "ACME_EMAIL": "you@example.com",
+        "BASIC_AUTH_USER": "admin",
+        "BASIC_AUTH_HASH": _GOOD_HASH,
+        "BASIC_AUTH_USER_2": "",
+        "BASIC_AUTH_HASH_2": "",
+        "BASIC_AUTH_USER_3": "",
+        "BASIC_AUTH_HASH_3": "",
+        "SEXTANT_PROXY_SECRET": "f" * 64,
+        "GEMINI_API_KEY": "AIza-fixture-not-a-key",
+        "APP_UID": str(os.getuid()),
+    }
+    rows.update(over)
+    return "".join(f"{k}={v}\n" for k, v in rows.items() if v is not None)
+
+
+def _run_preflight(tmp_path, env_text: str, **extra_env: str):
+    """Run the real `deploy/deploy.sh ... preflight`. Returns (code, output).
+
+    The box is a fixture directory; `DATA_DIR` points the data-mount checks at
+    one too. That override exists only so this script can be executed off the
+    VM -- it defaults to `/data/chroma` and the box never passes it, the same
+    arrangement `VM_SSH_TRIES` already has.
+    """
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for name, body in (
+        ("ssh", _SSH_STUB),
+        ("gcloud", _GCLOUD_STUB),
+        ("curl", _CURL_STUB),
+        ("stat", _STAT_STUB),
+        ("getent", _GETENT_STUB),
+        ("docker", _DOCKER_STUB),
+    ):
+        f = bin_dir / name
+        f.write_text(body)
+        f.chmod(f.stat().st_mode | stat.S_IEXEC)
+
+    box = tmp_path / "box" / "agenticrag"
+    box.mkdir(parents=True)
+    env_file = box / ".env"
+    env_file.write_text(env_text)
+    env_file.chmod(0o600)
+
+    data = tmp_path / "data"
+    data.mkdir()
+
+    state = tmp_path / "vm-state"
+    state.write_text("RUNNING\n")
+    state.with_suffix(".ip").write_text("10.0.0.1\n")
+
+    env = {
+        **os.environ,
+        "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        "FAKE_BOX": str(box.parent),
+        "FAKE_STATE": str(state),
+        "DATA_DIR": str(data),
+        "VM_INSTANCE": "agenticrag",
+        "VM_ZONE": "us-central1-a",
+        "VM_PROJECT": "test-project",
+        **extra_env,
+    }
+    done = subprocess.run(
+        [
+            "bash",
+            str(DEPLOY / "deploy.sh"),
+            "agenticrag.us-central1-a.test-project",
+            "preflight",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=120,
+    )
+    return done.returncode, done.stdout + done.stderr
+
+
+class TestThePreflightChecksWhatTheDeployActuallyNeeds:
+    """The check that passed a box which could not answer a single request.
+
+    `deploy.sh up` runs this, prints `-- preflight passed`, ships the tree and
+    builds for twenty minutes. Two configurations got all the way through it
+    and then took the box down:
+
+    `SEXTANT_PROXY_SECRET` empty. Caddy has no conditionals -- `header_up
+    X-Sextant-User {http.auth.user.id}` goes out on every proxied request
+    whether or not the app can verify where it came from -- so the app raises
+    `ForgedIdentity` and answers **403 to everything**. `deploy/env.example`
+    calls it REQUIRED, `deploy/README.md` lists it as one of two hard stops,
+    `CLAUDE.md` calls it a deploy prerequisite and `trip.sh` has refused to
+    build without it since 2026-10-06. The one command whose entire stated job
+    is "check the box BEFORE spending twenty minutes building torch" never
+    read the name.
+
+    A gate slot filled on one side. The Caddyfile has had three `basic_auth`
+    slots since 0.8.3 and Caddy refuses to *start* on a user with no hash, so
+    the box serves nothing at all -- after the build. The preflight's `.env`
+    reader named `BASIC_AUTH_USER` and `BASIC_AUTH_HASH` and stopped, so slots
+    2 and 3 were never captured and no check could have asked about them. The
+    bcrypt-shape check that the script's own comment puts first ("a mangled
+    hash rejects every password ... Cheap to check, expensive to discover")
+    looked at one slot of three. Same shape as item 19: a list named after the
+    variables somebody had in mind cannot grow with the file it mirrors.
+
+    And the open row's own criterion needs slot 2 -- `trip.sh` step 7 uploads
+    as two gate users to prove the isolation. So this is not a slot nobody
+    will fill; it is the next one to be filled.
+    """
+
+    def test_a_good_box_passes(self, tmp_path):
+        """The baseline, and the first time this script has ever run."""
+        code, out = _run_preflight(tmp_path, _env_fixture())
+        assert code == 0, out
+        assert "preflight passed" in out, out
+        assert "FAIL" not in out, out
+
+    def test_an_empty_proxy_secret_fails_before_the_build(self, tmp_path):
+        code, out = _run_preflight(tmp_path, _env_fixture(SEXTANT_PROXY_SECRET=""))
+        assert code != 0, f"a box that would 403 every request passed: {out!r}"
+        assert "SEXTANT_PROXY_SECRET" in out, out
+        assert "403" in out, out
+
+    def test_a_missing_proxy_secret_line_fails_too(self, tmp_path):
+        """Absent is not the same as empty, and both reach the same box."""
+        code, out = _run_preflight(tmp_path, _env_fixture(SEXTANT_PROXY_SECRET=None))
+        assert code != 0, f"a .env with no secret line passed: {out!r}"
+        assert "SEXTANT_PROXY_SECRET" in out, out
+
+    def test_the_remediation_generates_the_value_on_the_box(self, tmp_path):
+        """The same remedy `trip.sh` prints: generated there, so the value
+        never crosses a laptop and nothing has to be pasted."""
+        _, out = _run_preflight(tmp_path, _env_fixture(SEXTANT_PROXY_SECRET=""))
+        assert "openssl rand -hex 32" in out, out
+        assert ">> .env" in out, out
+
+    def test_a_user_without_its_hash_is_caught(self, tmp_path):
+        """Caddy refuses to start on this, so the box serves nothing -- and it
+        refuses after the build, which is the one thing this script prevents."""
+        code, out = _run_preflight(tmp_path, _env_fixture(BASIC_AUTH_USER_2="second"))
+        assert code != 0, f"a box Caddy would refuse to start passed: {out!r}"
+        assert "BASIC_AUTH_HASH_2" in out, out
+
+    def test_a_hash_without_its_user_is_caught_too(self, tmp_path):
+        code, out = _run_preflight(
+            tmp_path, _env_fixture(BASIC_AUTH_HASH_3=_GOOD_HASH)
+        )
+        assert code != 0, f"a half-filled third slot passed: {out!r}"
+        assert "BASIC_AUTH_USER_3" in out, out
+
+    def test_a_truncated_hash_in_a_later_slot_is_caught(self, tmp_path):
+        """The failure the script's own comment names first, in a slot it had
+        never read. 20 characters is what survives compose eating the `$`."""
+        code, out = _run_preflight(
+            tmp_path,
+            _env_fixture(BASIC_AUTH_USER_2="second", BASIC_AUTH_HASH_2="$2a$14$short"),
+        )
+        assert code != 0, f"a truncated hash in slot 2 passed: {out!r}"
+        assert "BASIC_AUTH_HASH_2" in out, out
+
+    def test_a_mangled_hash_in_a_later_slot_is_caught(self, tmp_path):
+        code, out = _run_preflight(
+            tmp_path,
+            _env_fixture(
+                BASIC_AUTH_USER_2="second", BASIC_AUTH_HASH_2="2a14" + "u" * 56
+            ),
+        )
+        assert code != 0, f"a hash with its $ signs eaten passed: {out!r}"
+        assert "BASIC_AUTH_HASH_2" in out, out
+
+    def test_three_filled_slots_pass(self, tmp_path):
+        """What the box looks like on the trip that proves the isolation."""
+        code, out = _run_preflight(
+            tmp_path,
+            _env_fixture(
+                BASIC_AUTH_USER_2="second",
+                BASIC_AUTH_HASH_2=_GOOD_HASH,
+                BASIC_AUTH_USER_3="third",
+                BASIC_AUTH_HASH_3=_GOOD_HASH,
+            ),
+        )
+        assert code == 0, out
+        assert "preflight passed" in out, out
+
+    def test_an_unused_slot_is_not_a_failure(self, tmp_path):
+        """Both halves empty is how env.example ships, and the Caddyfile drops
+        the line before parsing it. A check that fails on the documented
+        default is a check that gets ignored."""
+        code, out = _run_preflight(tmp_path, _env_fixture())
+        assert code == 0, out
+
+    def test_a_gate_with_nobody_in_it_is_a_failure(self, tmp_path):
+        code, out = _run_preflight(
+            tmp_path, _env_fixture(BASIC_AUTH_USER="", BASIC_AUTH_HASH="")
+        )
+        assert code != 0, f"a gate nobody can pass was reported ready: {out!r}"
+
+    def test_no_value_out_of_the_env_is_ever_printed(self, tmp_path):
+        """The invariant item 5 pinned for the trip, now that this script reads
+        a secret and three hashes. Lengths are reported; values are not."""
+        secret = "deadbeef" * 8
+        _, out = _run_preflight(
+            tmp_path,
+            _env_fixture(
+                SEXTANT_PROXY_SECRET=secret,
+                BASIC_AUTH_USER_2="second",
+                BASIC_AUTH_HASH_2=_GOOD_HASH,
+            ),
+        )
+        for value in (secret, _GOOD_HASH, "AIza-fixture-not-a-key", "admin", "second"):
+            assert value not in out, f"{value[:6]}... was printed: {out!r}"
+
+    def test_the_checks_can_still_fail_for_the_old_reasons(self, tmp_path):
+        """The harness is new, so the checks that were already here get run
+        through it once -- otherwise a stub that answers everything `ok` would
+        make this whole class green against any script at all."""
+        code, out = _run_preflight(tmp_path, _env_fixture(FAKE_DNS_A="none"))
+        assert code != 0, out
+        assert "fix DNS" in out, out
+        code, out = _run_preflight(tmp_path, _env_fixture(), FAKE_NO_COMPOSE="1")
+        assert code != 0, out
+        assert "compose plugin" in out, out
+        code, out = _run_preflight(
+            tmp_path, _env_fixture(PUBLIC_URL="https://elsewhere.example.in")
+        )
+        assert code != 0, out
+        assert "PUBLIC_URL" in out, out
+
+
+class TestEveryDeployTimeVariableReachesThePreflight:
+    """The list that cannot fall behind the files it mirrors.
+
+    The preflight can only check a variable it captured, and what it captures
+    is one hand-written `case` alternation. That list sat at seven names while
+    the Caddyfile grew to nine and compose to two, and nothing noticed -- the
+    same failure as item 19's `_FORWARDED_ENV`, one directory over. So the
+    check here is not "are these particular names present": it is that the
+    set of names the deploy interpolates is a subset of the set the preflight
+    reads, computed from the files each time. Add a `{$VAR}` to the Caddyfile
+    and this fails until the preflight knows about it.
+    """
+
+    PREFLIGHT_START = "<<'PREFLIGHT'"
+    PREFLIGHT_END = "\nPREFLIGHT\n"
+
+    @staticmethod
+    def _preflight() -> str:
+        body = (DEPLOY / "deploy.sh").read_text()
+        start = body.index(TestEveryDeployTimeVariableReachesThePreflight.PREFLIGHT_START)
+        end = body.index(
+            TestEveryDeployTimeVariableReachesThePreflight.PREFLIGHT_END, start
+        )
+        return body[start:end]
+
+    @staticmethod
+    def _uncommented(text: str) -> str:
+        """Lines with the `#` comments stripped. The Caddyfile's own prose
+        mentions `{$VAR}` as an example, and a scan that counts prose finds a
+        variable nobody interpolates."""
+        return "\n".join(line.split("#", 1)[0] for line in text.splitlines())
+
+    @classmethod
+    def _caddy_vars(cls) -> set[str]:
+        text = cls._uncommented((DEPLOY / "Caddyfile").read_text())
+        return set(re.findall(r"\{\$([A-Z_][A-Z0-9_]*)\}", text))
+
+    @classmethod
+    def _compose_vars(cls) -> set[str]:
+        compose = DEPLOY.parent / "docker-compose.prod.yml"
+        text = cls._uncommented(compose.read_text())
+        return set(re.findall(r"\$\{([A-Z_][A-Z0-9_]*)[:}]", text))
+
+    @classmethod
+    def _captured(cls) -> set[str]:
+        """The names the preflight's `.env` reader keeps."""
+        block = cls._preflight()
+        match = re.search(r'case "\$key" in\s*(.*?)\)\s*\n', block, re.S)
+        assert match, f"cannot find the .env reader's key list in:\n{block}"
+        return set(re.findall(r"[A-Z_][A-Z0-9_]*", match.group(1)))
+
+    def test_every_variable_the_proxy_interpolates_is_read(self):
+        missing = self._caddy_vars() - self._captured()
+        assert not missing, (
+            f"the Caddyfile interpolates {sorted(missing)} and the preflight "
+            "never reads them, so no check about them can exist"
+        )
+
+    def test_every_variable_the_compose_interpolates_is_read(self):
+        missing = self._compose_vars() - self._captured()
+        assert not missing, (
+            f"docker-compose.prod.yml interpolates {sorted(missing)} and the "
+            "preflight never reads them"
+        )
+
+    def test_the_scans_are_looking_at_something(self):
+        """Rename the `basic_auth` block or the api service and the scans go
+        quiet rather than red; an empty set is a subset of everything."""
+        caddy = self._caddy_vars()
+        assert "SEXTANT_PROXY_SECRET" in caddy, caddy
+        assert "BASIC_AUTH_HASH_3" in caddy, caddy
+        assert len(caddy) >= 9, caddy
+        compose = self._compose_vars()
+        assert {"PUBLIC_URL", "APP_UID"} <= compose, compose
+
+    def test_the_reader_is_the_list_the_tests_above_measure(self):
+        """If `_captured` silently matched the whole heredoc, both subset tests
+        would pass against any script."""
+        captured = self._captured()
+        assert "SITE_ADDRESS" in captured, captured
+        assert "PREFLIGHT" not in captured, captured
+        assert len(captured) <= 20, f"this is matching more than the key list: {captured}"
