@@ -2535,8 +2535,12 @@ def _run_preflight(tmp_path, env_text: str, **extra_env: str):
     VM -- it defaults to `/data/chroma` and the box never passes it, the same
     arrangement `VM_SSH_TRIES` already has.
     """
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
+    # Its own root per call, so one test can run the script more than once --
+    # which the last test in the class does, because a harness that can only
+    # show a pass is a harness that proves nothing about the checks.
+    root = tmp_path / f"run{len(list(tmp_path.iterdir()))}"
+    bin_dir = root / "bin"
+    bin_dir.mkdir(parents=True)
     for name, body in (
         ("ssh", _SSH_STUB),
         ("gcloud", _GCLOUD_STUB),
@@ -2549,16 +2553,16 @@ def _run_preflight(tmp_path, env_text: str, **extra_env: str):
         f.write_text(body)
         f.chmod(f.stat().st_mode | stat.S_IEXEC)
 
-    box = tmp_path / "box" / "agenticrag"
+    box = root / "box" / "agenticrag"
     box.mkdir(parents=True)
     env_file = box / ".env"
     env_file.write_text(env_text)
     env_file.chmod(0o600)
 
-    data = tmp_path / "data"
+    data = root / "data"
     data.mkdir()
 
-    state = tmp_path / "vm-state"
+    state = root / "vm-state"
     state.write_text("RUNNING\n")
     state.with_suffix(".ip").write_text("10.0.0.1\n")
 
@@ -2726,7 +2730,7 @@ class TestThePreflightChecksWhatTheDeployActuallyNeeds:
         """The harness is new, so the checks that were already here get run
         through it once -- otherwise a stub that answers everything `ok` would
         make this whole class green against any script at all."""
-        code, out = _run_preflight(tmp_path, _env_fixture(FAKE_DNS_A="none"))
+        code, out = _run_preflight(tmp_path, _env_fixture(), FAKE_DNS_A="none")
         assert code != 0, out
         assert "fix DNS" in out, out
         code, out = _run_preflight(tmp_path, _env_fixture(), FAKE_NO_COMPOSE="1")
