@@ -213,7 +213,10 @@ case "$CMD" in
     # frontend bundle, and a premature start burns Let's Encrypt's failure
     # budget for the domain. Cheap to check, expensive to discover.
     echo ">> preflight on $REMOTE ..."
-    ssh "$REMOTE" APP_DIR="$APP_DIR" 'bash -s' <<'PREFLIGHT'
+    # DATA_DIR exists only so this script can be run off the VM, which until
+    # 2026-10-12 nothing ever had -- a check nobody can execute is a check
+    # nobody has read. The box never passes it; the default is the mount.
+    ssh "$REMOTE" APP_DIR="$APP_DIR" DATA_DIR="${DATA_DIR:-/data/chroma}" 'bash -s' <<'PREFLIGHT'
 set -uo pipefail
 fail=0
 say()  { printf '   %-6s %s\n' "$1" "$2"; }
@@ -231,26 +234,81 @@ perms=$(stat -c '%a' .env)
 while IFS= read -r line; do
   case "$line" in ''|'#'*) continue ;; esac
   key=${line%%=*}; val=${line#*=}
-  case "$key" in SITE_ADDRESS|PUBLIC_URL|BASIC_AUTH_USER|BASIC_AUTH_HASH|GEMINI_API_KEY|ACME_EMAIL|APP_UID)
-    printf -v "v_$key" '%s' "$val" ;;
+  # Every name the deploy interpolates, because a variable this reader skips
+  # is a variable no check below can ask about -- which is how an empty
+  # SEXTANT_PROXY_SECRET and a half-filled gate slot both got through. The
+  # list used to stop after BASIC_AUTH_HASH. It is now held to
+  # deploy/Caddyfile and docker-compose.prod.yml by
+  # TestEveryDeployTimeVariableReachesThePreflight, so it grows with them
+  # rather than with whoever remembers.
+  case "$key" in
+    SITE_ADDRESS|PUBLIC_URL|ACME_EMAIL|APP_UID|GEMINI_API_KEY|SEXTANT_PROXY_SECRET \
+    |BASIC_AUTH_USER|BASIC_AUTH_HASH \
+    |BASIC_AUTH_USER_2|BASIC_AUTH_HASH_2 \
+    |BASIC_AUTH_USER_3|BASIC_AUTH_HASH_3)
+      printf -v "v_$key" '%s' "$val" ;;
   esac
 done < .env
 
-for k in SITE_ADDRESS PUBLIC_URL ACME_EMAIL BASIC_AUTH_USER GEMINI_API_KEY; do
+for k in SITE_ADDRESS PUBLIC_URL ACME_EMAIL GEMINI_API_KEY; do
   eval "v=\${v_$k-}"
   [ -n "$v" ] && ok "$k set" || bad "$k is empty in .env"
 done
 
 # A bcrypt hash is $2a$14$<53 chars>. If compose or an editor ate the $ signs
-# this is where it shows, not on the first login attempt.
-eval "h=\${v_BASIC_AUTH_HASH-}"
-case "$h" in
-  '$2'[aby]'$'*) [ ${#h} -ge 59 ] \
-      && ok "BASIC_AUTH_HASH looks like bcrypt (${#h} chars)" \
-      || bad "BASIC_AUTH_HASH is only ${#h} chars -- truncated, re-paste it" ;;
-  '') bad "BASIC_AUTH_HASH is empty -- run: docker run --rm caddy caddy hash-password --plaintext 'pw'" ;;
-  *)  bad "BASIC_AUTH_HASH doesn't start with \$2a\$ -- it was mangled or quoted" ;;
-esac
+# this is where it shows, not on the first login attempt. A function, because
+# the Caddyfile has three slots and this used to be run against one of them.
+bcrypt() {   # bcrypt <name> <value>
+  case "$2" in
+    '$2'[aby]'$'*) [ ${#2} -ge 59 ] \
+        && ok "$1 looks like bcrypt (${#2} chars)" \
+        || bad "$1 is only ${#2} chars -- truncated, re-paste it" ;;
+    *)  bad "$1 doesn't start with \$2a\$ -- it was mangled or quoted" ;;
+  esac
+}
+
+# The gate, slot by slot. Caddy refuses to START on a user with no hash, so a
+# half-filled slot is not a degraded box, it is a box that serves nothing --
+# and it refuses after the build, which is the one thing this script exists to
+# prevent. env.example ships slots 2 and 3 with both halves empty, and the
+# Caddyfile drops those lines before parsing, so unused is reported as fine:
+# a check that fails on the documented default is a check people learn to
+# ignore. No name and no hash is ever printed, only lengths.
+for n in '' _2 _3; do
+  eval "u=\${v_BASIC_AUTH_USER$n-}"; eval "h=\${v_BASIC_AUTH_HASH$n-}"
+  if [ -z "$u" ] && [ -z "$h" ]; then
+    if [ -z "$n" ]; then
+      bad "BASIC_AUTH_USER and BASIC_AUTH_HASH are both empty -- nobody could log in"
+    else
+      ok "gate slot ${n#_} unused (both halves empty)"
+    fi
+    continue
+  fi
+  if [ -z "$u" ]; then
+    bad "BASIC_AUTH_HASH$n is set but BASIC_AUTH_USER$n is empty -- Caddy will refuse to start"
+  elif [ -z "$h" ]; then
+    bad "BASIC_AUTH_USER$n is set but BASIC_AUTH_HASH$n is empty -- Caddy will refuse to start"
+    say "" "  docker run --rm caddy caddy hash-password --plaintext 'pw'"
+  else
+    ok "BASIC_AUTH_USER$n set"
+    bcrypt "BASIC_AUTH_HASH$n" "$h"
+  fi
+done
+
+# Caddy has no conditionals: `header_up X-Sextant-User {http.auth.user.id}`
+# goes out on every proxied request whether or not the app can verify where it
+# came from. With this empty the app raises ForgedIdentity and answers 403 to
+# EVERY request -- not some, and not only the authenticated ones. trip.sh has
+# hard-stopped on it since 2026-10-06; the command whose stated job is to find
+# this out before twenty minutes of building torch never read the name.
+eval "ps=\${v_SEXTANT_PROXY_SECRET-}"
+if [ -n "$ps" ]; then
+  ok "SEXTANT_PROXY_SECRET set (${#ps} chars)"
+else
+  bad "SEXTANT_PROXY_SECRET is empty -- Caddy forwards the name anyway, so every request would 403"
+  say "" 'generate it here, so the value never leaves the box:'
+  say "" '  printf "SEXTANT_PROXY_SECRET=%s\n" $(openssl rand -hex 32) >> .env'
+fi
 
 # The frontend bakes PUBLIC_URL in at build time; a mismatch here ships a UI
 # that calls the wrong origin and cannot be fixed without a rebuild.
@@ -265,15 +323,15 @@ seen=$(getent hosts "$s" | awk '{print $1; exit}')
 [ -n "$seen" ] && [ "$seen" = "$mine" ] && ok "$s resolves to this VM ($mine)" \
   || bad "$s resolves to '${seen:-nothing}' but this VM is $mine -- fix DNS before starting Caddy"
 
-[ -w /data/chroma ] && ok "/data/chroma is writable" \
-  || bad "/data/chroma missing or not writable -- mount the data disk (README B2)"
+[ -w "$DATA_DIR" ] && ok "$DATA_DIR is writable" \
+  || bad "$DATA_DIR missing or not writable -- mount the data disk (README B2)"
 
 # The container drops to APP_UID; the bind mount keeps the host's ownership,
 # so a mismatch here is a crash loop on the first ingest, not a warning.
 eval "u=\${v_APP_UID-1001}"
-owner=$(stat -c '%u' /data/chroma 2>/dev/null || echo '?')
-[ "$owner" = "$u" ] && ok "/data/chroma owned by uid $u (APP_UID)" \
-  || bad "/data/chroma owned by uid $owner but the container runs as $u -- chown it or set APP_UID=$owner in .env"
+owner=$(stat -c '%u' "$DATA_DIR" 2>/dev/null || echo '?')
+[ "$owner" = "$u" ] && ok "$DATA_DIR owned by uid $u (APP_UID)" \
+  || bad "$DATA_DIR owned by uid $owner but the container runs as $u -- chown it or set APP_UID=$owner in .env"
 
 command -v docker >/dev/null && ok "docker present" || bad "docker not installed"
 docker compose version >/dev/null 2>&1 && ok "compose plugin present" \
