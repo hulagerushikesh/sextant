@@ -60,6 +60,31 @@ for are two different claims.** Plant 5 found a line of mine — the in-script
 `DATA_DIR` default was unreachable, since `deploy.sh` always passes the
 assignment — and it is gone.
 
+**CI failed where the local gate did not, and both failures were real.** The
+`stat` stub was written with BSD flags — it delegated to
+`/usr/bin/stat -f '%OLp'`, which on Linux means *file system* status and reads
+`%OLp` as a filename, so the preflight printed a tmpfs report where the
+permission bits go. Item 13 was BSD-only `tar` flags making the trip harness
+Mac-only; this is the same defect inside the stub whose entire job is to stand
+in for the GNU tool, written in the same commit as the work to make a
+Linux-only script runnable. It is `python3` now, checked against the
+platform's own `stat`.
+
+And **14 of the 17 tests were green for the wrong reason**: a broken stub makes
+every check FAIL, so every test asserting a non-zero exit passed, and only the
+three asserting a *pass* noticed. The stubs print `STUB FAULT` and exit 95 on
+anything they cannot represent, and the runner asserts that string is absent
+before returning — re-breaking the stub now fails 13 of 13 instead of 3.
+
+CI's second failure was a **lie about the frontend**. `if: always()` sat on
+`Frontend build` to keep it independent of the lint; it reached past the
+build's own prerequisite, so a failing `Unit tests` skipped `Frontend install`,
+the build ran without `node_modules`, and CI reported `tsc: not found` for a
+tree whose frontend was fine. Every frontend step now carries
+`if: ${{ !cancelled() }}`: the frontend half of the gate does not depend on the
+Python half, and a gate command skipped because an unrelated step failed is a
+gate command that did not run.
+
 Version stays 0.8.7; the box is still on 0.8.1.
 
 ## 2026-10-12 — the report with a gap (₹0)

@@ -80,6 +80,29 @@ because each one was learned the expensive way.
   `docker-compose.prod.yml`, and every slot is checked. **A list of variables
   that mirrors another file by hand falls behind it silently** — second time
   after `_FORWARDED_ENV`, one directory over.
+- **A stub that stands in for a GNU tool must not be written with BSD flags.**
+  The `stat` stub for the preflight harness delegated to
+  `/usr/bin/stat -f '%OLp'`, which on Linux means *file system* status and
+  reads `%OLp` as a filename. It passed 17/17 locally and broke on CI, where
+  the preflight printed a tmpfs report as the permission bits. Item 13 was
+  BSD-only `tar` flags making the trip harness Mac-only; this is the same
+  defect **inside the stub whose whole job is to be the GNU tool**. Implement
+  that kind of stub in something with no platform flags — `python3` is on both.
+- **A harness fault must never be the reason a test is green.** With that stub
+  broken, every preflight check FAILed, so every test asserting a non-zero
+  exit passed: **14 of 17 were green for the wrong reason** and only the three
+  asserting a *pass* noticed. Stubs now print `STUB FAULT` and exit 95 on
+  anything they cannot represent, and the runner asserts that string is absent
+  before returning — so a broken harness fails every test instead of three.
+- **A step's `if:` must not reach past its own prerequisite.** `if: always()`
+  sat on CI's `Frontend build` to keep it independent of the lint. It reached
+  further: a failing `Unit tests` skipped `Frontend install`, the build ran
+  without `node_modules`, and CI reported `Frontend build -> failure` /
+  `tsc: not found` for a tree whose frontend was fine — two failures, one
+  cause, and the second one a lie. The frontend half of the gate does not
+  depend on the Python half, so every frontend step now carries
+  `if: ${{ !cancelled() }}`: a gate command skipped because an unrelated step
+  failed is a gate command that did not run.
 - **A static pin on a list and a test of what the list is used for are two
   different claims.** Deleting `SEXTANT_PROXY_SECRET` from the preflight's key
   list fails the scan; deleting the *check* while leaving the name in the list

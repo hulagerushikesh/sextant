@@ -2459,17 +2459,27 @@ class TestStatusSaysWhatIsBilling:
 # more than a comment.
 
 _STAT_STUB = """#!/usr/bin/env bash
-# GNU `stat -c`, which the box has and macOS does not. The preflight asks for
-# two formats and nothing else; anything beyond them should fail loudly here
-# rather than be quietly answered wrong.
+# GNU `stat -c`, which the box and CI have and macOS does not. The preflight
+# asks for two formats and nothing else; anything beyond them fails loudly
+# here rather than being quietly answered wrong.
+#
+# The first version of this delegated to `/usr/bin/stat -f '%OLp'` -- BSD
+# syntax. On Linux `-f` means *file system* status and `%OLp` is read as a
+# filename, so the stub answered a whole tmpfs report, the preflight printed
+# it as the permission bits, and every check that reads a `stat` failed. Item
+# 13 was BSD-only `tar` flags making the trip harness Mac-only; this is the
+# same defect inside a stub whose entire job is to stand in for the GNU tool.
+# python3 is on both platforms and has no flags to get wrong.
 fmt=""
 while [ $# -gt 0 ]; do
   case "$1" in -c) fmt="$2"; shift 2 ;; *) break ;; esac
 done
+bits='import os,sys; print(format(os.stat(sys.argv[1]).st_mode & 0o7777, "o"))'
+uid='import os,sys; print(os.stat(sys.argv[1]).st_uid)'
 case "$fmt" in
-  '%a') /usr/bin/stat -f '%OLp' "$1" ;;
-  '%u') /usr/bin/stat -f '%u'   "$1" ;;
-  *)    echo "stat stub: unhandled format '$fmt'" >&2; exit 95 ;;
+  '%a') python3 -c "$bits" "$1" ;;
+  '%u') python3 -c "$uid"  "$1" ;;
+  *)    echo "STUB FAULT: stat was asked for format '$fmt'" >&2; exit 95 ;;
 esac
 """
 
@@ -2479,7 +2489,7 @@ _GETENT_STUB = """#!/usr/bin/env bash
 # prints. FAKE_DNS_A=none models a name that resolves to nothing, which is the
 # state a subdomain is in before it is created -- the failure the DNS check is
 # there for.
-[ "$1" = hosts ] || { echo "getent stub: unhandled database '$1'" >&2; exit 95; }
+[ "$1" = hosts ] || { echo "STUB FAULT: getent was asked for '$1'" >&2; exit 95; }
 case "${FAKE_DNS_A-203.0.113.7}" in
   none) exit 2 ;;
   *)    echo "${FAKE_DNS_A-203.0.113.7} $2" ;;
@@ -2589,7 +2599,14 @@ def _run_preflight(tmp_path, env_text: str, **extra_env: str):
         env=env,
         timeout=120,
     )
-    return done.returncode, done.stdout + done.stderr
+    out = done.stdout + done.stderr
+    # A broken stub makes every check FAIL, so every test that asserts a
+    # non-zero exit passes -- and on CI, before the `stat` stub was fixed,
+    # fourteen of the seventeen below did exactly that. Only the three that
+    # assert a *pass* noticed. A stub fault can never be the reason a test is
+    # green, so it stops the test here instead.
+    assert "STUB FAULT" not in out, f"the harness failed, not the script:\n{out}"
+    return done.returncode, out
 
 
 class TestThePreflightChecksWhatTheDeployActuallyNeeds:
