@@ -1653,3 +1653,89 @@ would have died.
 That the box is now faster to start. The fix is verified at the seam and in the
 resolver, not on the VM — the next trip is where `/health` answering before the
 start period expires would show it. Worth watching rather than claiming.
+
+## 20 · The report with a gap — ₹0
+
+Unplanned. `CLAUDE.md` names one command as the answer to "what is billing":
+`deploy/deploy.sh HOST status`. Item 16 fixed `start`, item 5 fixed the park.
+Nothing had ever read `status`.
+
+Measured against every state the compute API documents an instance can be in:
+
+| state | what `status` said | bills? |
+| --- | --- | --- |
+| `RUNNING` | `billing: VM ~₹5.6/hour + disks + IP` | yes |
+| `TERMINATED` | `billing: disks + reserved IP only (VM meter off)` | no |
+| `STOPPING` | *nothing* | **yes** |
+| `SUSPENDING` | *nothing* | **yes** |
+| `SUSPENDED` | *nothing* | **yes** (preserved memory) |
+| `STAGING` | *nothing* | **yes** |
+| `REPAIRING` | *nothing* | **yes** |
+| `PROVISIONING` | *nothing* | **yes** |
+
+All of them exit 0. The billing line was a `case` with two arms and no default,
+so six states printed the instance line and stopped.
+
+`STOPPING` is the one that matters. It is what a person sees when a stop has
+been issued and has not finished — the moment right after a trip, which is
+exactly when somebody checks — and silence there is indistinguishable from the
+parked case. **A `case` with no default is a list of the states somebody
+thought of.**
+
+### The worse half: a failed read looked like a parked box
+
+`vm_status` is a `gcloud describe`. When it fails — wrong project, expired
+credentials, an API error — the `read` gets an empty line, and `status` printed
+
+```
+agenticrag (, us-central1-a):
+```
+
+and exited **0**. The ₹703 incident was a box nobody checked. This is the check
+answering nothing and reporting success, which is worse, because it looks like
+an answer. It exits 1 now, on stderr, naming the `describe` to run by hand and
+saying to assume the meter is on until it answers.
+
+### Third clause: the stub could not produce what the command prints
+
+`deploy.sh` asks for `value(status,machineType.basename(),natIP)` — three
+tab-separated fields. `trip.sh` asks for `value(status)` — one. The stub
+ignored `--format` and answered one field to both, so the machine type and the
+address in `status`'s own output line were produced by nothing, and the
+`(, us-central1-a)` visible in every test's output *was* the stub's gap being
+printed.
+
+It honours the format now, and emits nothing at all for a blank state, which is
+what the real thing does. **Third time in this harness**, after the curl stub's
+`-o`/`-w` in item 8 and the ssh stub's `cd ""` in item 17.
+
+### Plants
+
+| plant | fails |
+| --- | --- |
+| the default arm removed (`bash -n` still passes) | `…assumed_to_be_billing` + `…keeps_a_default` |
+| `STOPPING` loses its named arm | `…states_the_script_knows` only |
+| an unreadable state exits 0 again | `…not_a_parked_box` |
+| the stub forgets the extra fields | `…machine_type_and_the_address` |
+
+Two things worth recording about these.
+
+The first attempt at plant 1 **did not apply** — a quoting error meant the
+file was unchanged and all seven tests passed. Seven green tests against an
+unplanted plant is the item-14 lesson arriving again: a plant must be verified
+to have landed before its result means anything. The second attempt also
+over-applied, breaking the script so six tests failed on syntax rather than on
+the defect. `bash -n` is in the loop now.
+
+Plant 2 is the interesting one: removing `STOPPING`'s named arm does **not**
+break the behaviour test, because the default arm correctly catches it and says
+to assume the meter is on. Only the drift test notices. That is the right
+outcome — precision was lost, safety was not — and it is why both tests exist.
+
+### Considered and left
+
+`start` does not detect "already running" when `describe` fails, so it will
+issue a start against a box that may already be up. Left alone: starting is
+what was asked for, the cost line is printed and `--yes` is required before
+anything happens, and the real `gcloud start` is idempotent. Noted rather than
+silently judged out of scope.
