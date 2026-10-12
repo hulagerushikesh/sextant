@@ -61,26 +61,40 @@ jobs:
       # frontend failed only for whoever typed the gate by hand and passed
       # every push. Node 22 because production builds on node:22-alpine; this
       # machine is on 20.12, which Vite 7 warns about and CI should not share.
+      # The frontend half of the gate does not depend on the Python half, and a
+      # gate command skipped because an unrelated step failed is a gate command
+      # that did not run (item 12). So every step from here down carries the
+      # same condition: `!cancelled()` rather than `always()`, which would also
+      # burn minutes on a run somebody stopped on purpose.
+      #
+      # `if: always()` used to sit on the build alone, to keep the lint and the
+      # type check independent. It reached further than that: a failing `Unit
+      # tests` skipped `Frontend install`, the build ran anyway without
+      # node_modules, and CI reported `Frontend build -> failure` with
+      # `tsc: not found` on a tree whose frontend was fine. A condition that
+      # reaches past a step's own prerequisite reports on something it never
+      # had.
       - uses: actions/setup-node@v7
+        if: ${{ !cancelled() }}
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
       - name: Frontend install
+        if: ${{ !cancelled() }}
         working-directory: frontend
         run: npm ci
 
       # Configured and committed at the UI port, run by nothing until now: the
-      # lint result for this tree was unknown rather than green. `if: always()`
-      # on the build keeps the two claims independent, so a lint failure does
-      # not hide a type error.
+      # lint result for this tree was unknown rather than green.
       - name: Frontend lint
+        if: ${{ !cancelled() }}
         working-directory: frontend
         run: npm run lint
 
       - name: Frontend build
-        if: always()
+        if: ${{ !cancelled() }}
         working-directory: frontend
         run: npm run build
 
