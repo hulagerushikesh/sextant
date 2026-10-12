@@ -66,10 +66,42 @@ case "$CMD" in
   status)
     vm_target
     read -r state type ip <<<"$(vm_status)"
-    echo "$INSTANCE ($type, $ZONE): $state${ip:+  ip $ip}"
+    # An empty state is not a state. `describe` leaves one behind whenever it
+    # fails -- wrong project, expired credentials, an API error -- and this
+    # used to print the instance line with a blank after the colon and exit 0.
+    # The command whose job is to say what is billing has to be louder when it
+    # does not know than when it does; the Rs703 failure was a box nobody
+    # checked, and a check that answers nothing is worse than no check because
+    # it looks like an answer.
+    if [ -z "$state" ]; then
+      echo "$INSTANCE ($ZONE): could not read the instance state" >&2
+      echo "   gcloud describe returned nothing. Until this answers, assume the" >&2
+      echo "   VM meter is ON and check the console:" >&2
+      echo "   gcloud compute instances describe $INSTANCE --zone=$ZONE --project=$PROJECT" >&2
+      exit 1
+    fi
+    echo "$INSTANCE (${type:-machine type unknown}, $ZONE): $state${ip:+  ip $ip}"
+    # Every state the compute API documents, and a default. The arms below used
+    # to be RUNNING and TERMINATED only, so six states -- all of which bill --
+    # printed the line above and nothing after it. A `case` with no default is
+    # a list of the states somebody thought of, and silence here reads exactly
+    # like the parked case.
     case "$state" in
-      RUNNING)    echo "   billing: VM $VM_COST_PER_HOUR/hour + disks + IP" ;;
-      TERMINATED) echo "   billing: disks + reserved IP only (VM meter off)" ;;
+      RUNNING|REPAIRING)
+        echo "   billing: VM $VM_COST_PER_HOUR/hour + disks + IP" ;;
+      PROVISIONING|STAGING)
+        echo "   billing: starting up -- the VM meter is on from here" ;;
+      STOPPING|SUSPENDING)
+        echo "   billing: still on at $VM_COST_PER_HOUR/hour until this finishes" ;;
+      SUSPENDED)
+        echo "   billing: preserved memory + disks (no vCPU, not free)" ;;
+      TERMINATED)
+        echo "   billing: disks + reserved IP only (VM meter off)" ;;
+      *)
+        # Wrong in the safe direction, like the grounded-search price in
+        # pricing.py: a state name this script has never seen must not read as
+        # parked.
+        echo "   billing: UNKNOWN state '$state' -- assume the VM meter is on" ;;
     esac
     ;;
   stop)
