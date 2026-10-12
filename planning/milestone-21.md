@@ -1855,3 +1855,51 @@ so there is nowhere after it to print one. Left for a separate item rather than
 restructured here: the fix is small but it is about `down`, not about the
 preflight, and item 20's finding came precisely from asking which commands
 nothing had measured.
+
+### What CI found that the local gate could not
+
+The local gate was 729 passed, mypy clean, ruff clean, frontend built. CI
+failed, and both failures were real.
+
+**The `stat` stub was written with BSD flags.** It delegated to
+`/usr/bin/stat -f '%OLp'`. On Linux `-f` means *file system* status and `%OLp`
+is read as a filename, so the stub answered an entire tmpfs report and the
+preflight printed it where the permission bits go:
+
+```
+FAIL   .env is chmod   File: ".env"
+    ID: 65dc5fc28167b933 Namelen: 255     Type: tmpfs
+Block Size: 4096       Fundamental block size: 4096
+...
+, want 600
+```
+
+Item 13 was BSD-only `tar` flags meaning the offline trip harness only ever
+ran on a Mac. This is the same defect **inside the stub whose entire job is to
+stand in for the GNU tool** — written, in the same commit, as part of making a
+Linux-only script runnable. It is now `python3`, which is on both platforms and
+has no flags to get wrong, and its output was checked against the platform's
+own `stat` (`600 / 502` either way).
+
+**Fourteen of the seventeen tests were green for the wrong reason.** With the
+stub broken every check FAILed, so every test that asserts a non-zero exit
+passed. Only the three asserting a *pass* noticed — which is the whole of the
+margin that caught this. The stubs now print `STUB FAULT` and exit 95 on
+anything they cannot represent, and `_run_preflight` asserts that string is
+absent before it returns anything. Verified by re-breaking the stub: 13 of 13
+fail instead of 3.
+
+**CI's second failure was a lie about the frontend.** `if: always()` sat on
+`Frontend build` to keep it independent of the lint, per its own comment. It
+reached further than that: the failing `Unit tests` step skipped
+`Frontend install`, the build ran anyway without `node_modules`, and CI
+reported `Frontend build -> failure` with `tsc: not found` for a tree whose
+frontend was fine. Two failures, one cause, and the second pointing at the
+wrong half of the repository.
+
+The frontend half of the gate does not depend on the Python half, and a gate
+command skipped because an unrelated step failed is a gate command that did
+not run (item 12). Every step from `setup-node` down now carries
+`if: ${{ !cancelled() }}` — not `always()`, which would also burn minutes on a
+run somebody stopped on purpose. **A step's `if:` must not reach past its own
+prerequisite.**
