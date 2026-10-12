@@ -60,6 +60,31 @@ because each one was learned the expensive way.
   meter is on" (wrong in the safe direction, like the grounded-search price),
   and an unreadable state exits 1 with the `describe` to run by hand.
   **A `case` with no default is a list of the states somebody thought of.**
+- **A check nobody can run is a check nobody has read.** `deploy.sh HOST
+  preflight` is the only thing between a misconfigured box and a twenty-minute
+  torch build, and until 2026-10-12 nothing had ever *executed* it: it needs
+  GNU `stat -c`, `getent hosts`, `docker` and a real `/data/chroma`, none of
+  which exist on this laptop. Run for the first time, it reported thirteen
+  checks and none of them was about `SEXTANT_PROXY_SECRET` — which
+  `env.example` calls REQUIRED, `deploy/README.md` lists as one of two hard
+  stops, this file calls a deploy prerequisite and `trip.sh` has refused to
+  build without since 2026-10-06. Empty, Caddy still forwards
+  `X-Sextant-User`, the app raises `ForgedIdentity`, and the box answers
+  **403 to everything** — after `up` has built. Nor was any of them about gate
+  slots 2 and 3: the `.env` reader's key list named `BASIC_AUTH_USER` and
+  `BASIC_AUTH_HASH` and stopped, so the bcrypt check this script's own comment
+  puts first looked at one slot of the Caddyfile's three, and a slot filled on
+  one side makes Caddy refuse to *start*. The script now takes a `DATA_DIR`
+  override for the gate alone and is run start to finish against fixture
+  `.env` files, the key list is held to `deploy/Caddyfile` and
+  `docker-compose.prod.yml`, and every slot is checked. **A list of variables
+  that mirrors another file by hand falls behind it silently** — second time
+  after `_FORWARDED_ENV`, one directory over.
+- **A static pin on a list and a test of what the list is used for are two
+  different claims.** Deleting `SEXTANT_PROXY_SECRET` from the preflight's key
+  list fails the scan; deleting the *check* while leaving the name in the list
+  fails nothing the scan can see, and only the behavioural tests catch it.
+  Keep both, and when only one is affordable, know which half is uncovered.
 - **A stub that answers one field to a `--format` asking for three makes every
   assertion about the other two a comment.** The gcloud stub ignored
   `--format`, so `status`'s machine type and address came from nothing and the

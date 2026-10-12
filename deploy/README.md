@@ -278,11 +278,22 @@ Then, from the laptop, check the box before building anything on it:
 deploy/deploy.sh USER@IP preflight
 ```
 
-It verifies the `.env` (perms, every key present, the hash is intact bcrypt,
-`PUBLIC_URL` is exactly `https://$SITE_ADDRESS`), that DNS already resolves to
-this VM, that `/data/chroma` is mounted and writable, and that Docker + compose
-are present. Every line it checks is a failure that would otherwise appear
-only *after* the twenty-minute torch build.
+It verifies the `.env` (perms, every key present, `PUBLIC_URL` is exactly
+`https://$SITE_ADDRESS`), that **each of the three `basic_auth` slots** is
+either unused or complete with an intact bcrypt hash, that
+**`SEXTANT_PROXY_SECRET` is set** — without it Caddy still forwards the
+authenticated name and the app answers 403 to every request — that DNS already
+resolves to this VM, that `/data/chroma` is mounted and writable, and that
+Docker + compose are present. Every line it checks is a failure that would
+otherwise appear only *after* the twenty-minute torch build.
+
+Until 2026-10-12 the last two were not among them: the `.env` reader stopped at
+`BASIC_AUTH_HASH`, so the secret and slots 2 and 3 were never read and no check
+about them could exist. The list is now held to `deploy/Caddyfile` and
+`docker-compose.prod.yml` by the gate, so it grows with those files. Nothing
+had ever *run* this script either — it needs GNU `stat -c`, `getent` and a real
+`/data/chroma` — which is why it now takes a `DATA_DIR` override and is
+executed start to finish in the test suite against fixture `.env` files.
 
 ---
 
