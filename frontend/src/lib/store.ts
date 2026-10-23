@@ -1,7 +1,10 @@
 /**
- * Saved conversations and the spend counter, in localStorage. Ported from
- * conversations.js + usage.js; same keys, so the redesign reads the threads
- * the current UI already saved.
+ * Saved conversations and the spend counter, in localStorage.
+ *
+ * The keys are the ones the UI this replaced wrote, which is why the browsers
+ * of anyone who used it still find their threads. That reason outlived the
+ * files the old header credited it to: `conversations.js` and `usage.js` are
+ * gone, and `storage.ts` is where the key names and the migration live now.
  */
 import type { Conversation, Message, Source, Usage } from './types'
 import { storageKey } from './storage'
@@ -33,22 +36,61 @@ export function loadAll(): Conversation[] {
   }
 }
 
-export function saveAll(conversations: Conversation[]): Conversation[] {
+export interface SaveResult {
+  /** What is in storage now. The caller renders this, not what it passed in. */
+  saved: Conversation[]
+  /** True when every attempt threw and nothing was written at all. */
+  failed: boolean
+  /**
+   * One sentence for the person, or null when the save was clean. Decided
+   * here with the outcome, so no caller re-derives it by comparing lengths.
+   */
+  note: string | null
+}
+
+/** The source list without passage text: the big half of a conversation. */
+const lighten = (list: Conversation[]) =>
+  list.map((c) => ({ ...c, sources: c.sources.map(({ text: _t, ...rest }) => rest) }))
+
+export function saveAll(conversations: Conversation[]): SaveResult {
   const ordered = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_CONVERSATIONS)
-  const attempts = [
-    ordered,
-    ordered.slice(0, 10),
-    ordered.map((c) => ({ ...c, sources: c.sources.map(({ text: _t, ...rest }) => rest) })),
+  // Strictly shrinking, which the first version was not: it tried everything,
+  // then ten, then *everything again* with the passage text dropped -- a rung
+  // that can be larger than the one below it, so the cheapest combination
+  // (ten, no text) was never tried at all. A ladder whose last rung is not
+  // the smallest is not a ladder.
+  const attempts: { list: Conversation[]; note: string | null }[] = [
+    { list: ordered, note: null },
+    {
+      list: lighten(ordered),
+      note: 'Storage is nearly full, so the quoted passages were dropped from saved conversations. The answers and the source list are intact.',
+    },
+    {
+      list: lighten(ordered).slice(0, 10),
+      note: 'Storage is full. Only the 10 most recent conversations are being kept, without their quoted passages.',
+    },
+    {
+      list: lighten(ordered).slice(0, 3),
+      note: 'Storage is full. Only the 3 most recent conversations are being kept, without their quoted passages.',
+    },
   ]
   for (const attempt of attempts) {
     try {
-      localStorage.setItem(CONV_KEY, JSON.stringify({ version: 1, conversations: attempt }))
-      return attempt
+      localStorage.setItem(CONV_KEY, JSON.stringify({ version: 1, conversations: attempt.list }))
+      return { saved: attempt.list, failed: false, note: attempt.note }
     } catch {
       continue
     }
   }
-  return ordered
+  // Nothing was written. This used to return the full list, so the sidebar
+  // showed thirty conversations as kept and the next page load had none of
+  // them -- a save reporting a success it did not achieve, and the one place
+  // in the app where that costs the person something they cannot get back.
+  return {
+    saved: ordered,
+    failed: true,
+    note: 'This browser is not saving conversations — storage is full or blocked. Anything here is gone when the tab closes.',
+  }
 }
 
 export const blank = (): Conversation => ({

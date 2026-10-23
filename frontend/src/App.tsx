@@ -78,6 +78,12 @@ export default function App() {
   const { resolved: theme, toggle: toggleTheme } = useTheme()
   const [view, setView] = useState<View>('chat')
   const [saved, setSaved] = useState<Conversation[]>(() => loadAll())
+  // Mirrors `saved`, written synchronously by `apply` below, so a save can be
+  // computed and reported outside a state updater. `setSaved` is called from
+  // nowhere else, which is what makes the ref authoritative rather than one
+  // render behind.
+  const savedRef = useRef(saved)
+  const [storageNote, setStorageNote] = useState<string | null>(null)
   const [activeId, setActiveId] = useState(() => loadAll()[0]?.id || blank().id)
   const [modelReady, setModelReady] = useState<boolean | null>(null)
   const [health, setHealth] = useState<HealthLine | null>(null)
@@ -128,9 +134,24 @@ export default function App() {
     // oxlint-disable-next-line react/exhaustive-deps -- mount-only by intent
   }, [])
 
+  /**
+   * Write the list and show what actually got written.
+   *
+   * `saveAll` can keep less than it was given, or nothing at all, and used to
+   * hand back the full list either way. Rendering its result rather than the
+   * input is the whole point: the sidebar then shows what survives a reload.
+   */
+  const apply = useCallback((next: Conversation[]) => {
+    const result = saveAll(next)
+    savedRef.current = result.saved
+    setSaved(result.saved)
+    setStorageNote(result.note)
+    if (result.failed) toast.error(result.note!)
+  }, [])
+
   const persist = useCallback((m: Message[], s: Source[]) => {
-    setSaved((prev) => saveAll(upsert(prev, activeId, { messages: m, sources: s })))
-  }, [activeId])
+    apply(upsert(savedRef.current, activeId, { messages: m, sources: s }))
+  }, [apply, activeId])
 
   const resolve = useCallback((n: number) => sources.find((s) => s.n === n), [sources])
 
@@ -194,7 +215,7 @@ export default function App() {
   }
   const startNew = () => open(blank())
   const discard = (id: string) => {
-    setSaved((prev) => saveAll(remove(prev, id)))
+    apply(remove(savedRef.current, id))
     if (id === activeId) startNew()
     toast('Conversation deleted')
   }
@@ -306,7 +327,7 @@ export default function App() {
 
   return (
     <SidebarProvider className="h-full">
-      <AppSidebar view={view} onView={setView} conversations={saved} activeId={activeId} onOpen={open} onNew={startNew} onDelete={discard} health={health} />
+      <AppSidebar view={view} onView={setView} conversations={saved} activeId={activeId} onOpen={open} onNew={startNew} onDelete={discard} health={health} storageNote={storageNote} />
       <SidebarInset className="h-svh min-h-0 overflow-hidden">
         <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
           <SidebarTrigger className="-ml-1" />

@@ -162,6 +162,29 @@ because each one was learned the expensive way.
   (`TestCiRunsTheGateWithTheSameArguments`) went red the moment the gate
   changed and stayed red until CI was taught the command, which is item 12
   working as built.
+- **A function that can keep less than it was given must return what it kept.**
+  `saveAll` tried three writes and, when all three threw, returned **the full
+  list** -- the same value a clean save returns. `App` did
+  `setSaved(saveAll(...))`, so the sidebar showed thirty conversations as kept
+  and the next page load had none of them: `deploy.sh start` printing
+  `>> up at <ip>` regardless, in the one place where the claim is somebody's
+  data. A rung up was quieter and nearly as bad -- a successful ten-item write
+  dropped twenty threads and said nothing. It returns `{saved, failed, note}`
+  now, and the note sits beside the list rather than in a toast that is gone
+  in four seconds.
+- **A fallback ladder has to shrink.** The rungs were: everything, then ten,
+  then *everything again* with the passage text stripped -- so rung three can
+  be bigger than rung two, and the cheapest combination (ten, no text) was
+  never reached. A quota only that would have fit lost the lot. Strictly
+  shrinking now, with a test that measures each attempt's serialised length.
+- **"Must agree with X" is only an instruction if X exists.** Four frontend
+  headers cited `client.js` "in the main repo" and `export.js` / `storage.js`
+  / `conversations.js` in "the current UI" -- every one of them deleted with
+  the UI this code replaced, and "the current UI" is now this code.
+  `storage.ts`'s *the two must agree* was the sole assurance on the one-shot
+  `agenticrag.*` -> `sextant.*` migration of a person's saved conversations.
+  **And a docstring that names its own test is a claim too** -- `export.ts`
+  now names `export.test.ts`, so that file exists.
 - **The command that sounds like the end of the bill was the one that could
   not speak.** `deploy.sh HOST down` was `exec ssh -t ... compose down`, and
   `exec` replaces this shell -- so the arm whose name reads the most like "I

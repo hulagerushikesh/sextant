@@ -8,8 +8,13 @@
  * though nothing was deleted. Each key is moved on first read and the old
  * name removed, so the migration runs once per browser and never again.
  *
- * Ported from the current UI's `storage.js`; the two must agree, because a
- * browser that has used both reads and writes the same keys either way.
+ * There was a `storage.js` beside the UI this replaced, and the header here
+ * told the reader the two "must agree" -- an instruction to go and diff
+ * against a file that no longer exists. What has to hold is stated directly
+ * instead, and `storage.test.ts` holds it: the legacy value moves across
+ * once, the old name is gone afterwards, a value already under the new name
+ * is never overwritten, and an unavailable localStorage costs nothing but
+ * the migration.
  */
 
 const PREFIX = 'sextant.'
