@@ -5,6 +5,50 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-24 — the save that reports success (₹0)
+
+Item 25 gave the frontend a test runner. The first thing to point it at was
+the two files standing between a person's saved conversations and losing
+them, neither of which had ever been executed.
+
+**`saveAll` returned the full list after every write failed.** Storage full
+or blocked, all three attempts throw, and the function hands back exactly
+what it hands back on a clean save. `App` did `setSaved(saveAll(...))`, so
+the sidebar showed thirty conversations as kept and the next page load had
+none of them — `deploy.sh start` printing `>> up at <ip>` regardless, in the
+one place where the thing being claimed is somebody's data. One rung up was
+quieter and nearly as bad: a successful ten-item write dropped twenty threads
+and said nothing. It returns `{ saved, failed, note }` now; `App` renders
+`saved` rather than its own input, and the note sits in the sidebar beside
+the list it is about rather than in a toast that is gone in four seconds.
+
+**The fallback ladder did not shrink.** Everything, then the ten most recent,
+then *everything again* without the quoted passages — so rung three can be
+larger than rung two, and the cheapest combination, ten without passages, was
+never attempted. A quota that only that would have fit lost the lot. Strictly
+shrinking now, and a test measures the serialised length of every attempt and
+asserts each is smaller than the last.
+
+**Four headers pointed at files that are not there.** `api.ts` cited
+`frontend/src/api/client.js` "in the main repo"; `export.ts`, `storage.ts`
+and `store.ts` cited `export.js`, `storage.js`, `conversations.js` and
+`usage.js` in "the current UI" — all deleted with the UI this one replaced,
+and "the current UI" is now this code. The worst was `storage.ts`'s *"the two
+must agree"*: an instruction to diff a data migration against a file nobody
+can open, and the only assurance that migration had.
+
+**So the migration got tested.** `storageKey()` carries saved conversations,
+the spend ledger and the first-run flag across the rename, once per browser.
+`clientId()` is the namespace that stopped two people behind one shared
+password overwriting each other's uploads in 0.8.2 — its own docstring says a
+fresh id per load would mean a duplicate document on every re-upload, and
+nothing checked which happened. Both covered now, including the branch where
+`localStorage` throws, which must not take the page down.
+
+47 frontend tests, up from 22; 6 of the new `store` tests fail against the
+original. `export.test.ts` exists because `export.ts`'s new header names it,
+and a docstring that names its own test is a claim too.
+
 ## 2026-10-24 — the flag that reaches nobody (₹0)
 
 Item 24 was the last Python entry point worth the question, so it went to the

@@ -2401,3 +2401,88 @@ predates the item. CI is on node 22 and runs it.
   silent by construction — the compiler enforces the type, and the type is the
   thing that is wrong.
 - **An untested tree is where the untested bugs are.** The count was 767 to 0.
+
+## 26 · The save that reports success — ₹0
+
+Shipped 2026-10-24, on the runner item 25 added. Four clauses, three of them
+in `store.ts` and `storage.ts` — the two files that stand between a person's
+saved conversations and losing them, and the two that had never been executed.
+
+### `saveAll` reported a success it had not achieved
+
+```ts
+for (const attempt of attempts) {
+  try { localStorage.setItem(CONV_KEY, ...); return attempt } catch { continue }
+}
+return ordered          // every attempt threw
+```
+
+When storage is full or blocked, all three writes throw and the function
+returns **the full list** — the same value it returns on a clean save. `App`
+did `setSaved(saveAll(...))`, so the sidebar showed thirty conversations as
+kept, and the next page load had none of them. That is item 22's `deploy.sh
+start` printing `>> up at <ip>` regardless, and item 23's banner, in the one
+place where the thing being claimed is a person's data.
+
+It is worse one rung up. When the ten-item attempt succeeded, twenty
+conversations were dropped and the function returned the ten with no word
+said — data loss delivered as a successful save.
+
+`saveAll` now returns `{ saved, failed, note }`: what is actually in storage,
+whether nothing could be written, and the sentence for the person. One
+function decides and words it, so no caller re-derives "did it degrade?" by
+comparing lengths. `App` renders `saved` rather than what it passed in, and
+the note sits in the sidebar beside the list it is about — a toast is gone in
+four seconds and the list is still on screen.
+
+### A ladder whose last rung was not the smallest
+
+The attempts were: everything, then the ten most recent, then **everything
+again** with the passage text stripped. Rung three can be larger than rung
+two, so the ladder did not shrink, and the cheapest combination — ten, no
+text — was never tried at all. A quota that only that would have fit lost the
+lot. The rungs are now strictly shrinking: all with text, all without, ten
+without, three without, and a test measures the serialised length of every
+attempt and asserts each is smaller than the last.
+
+### Four headers pointing at files that are not there
+
+```
+api.ts      "A TypeScript port of frontend/src/api/client.js in the main repo"
+export.ts   "Ported from the current UI's export.js; the output is byte-for-byte the same"
+storage.ts  "Ported from the current UI's storage.js; the two must agree"
+store.ts    "Ported from conversations.js + usage.js"
+```
+
+`frontend/src/api/` does not exist, there is no "main repo" distinct from this
+one, and "the current UI" **is** this code — the redesign replaced the thing
+those headers were written beside. The worst of them is `storage.ts`'s: *the
+two must agree* is an instruction to the next reader to go and diff against a
+file they cannot open, and it was the only assurance that file had.
+
+Each now says what actually has to hold, and `export.ts` names the test that
+holds it instead of a file nobody can open — which is itself a claim, so
+`export.test.ts` exists.
+
+### The migration nobody had ever run
+
+`storageKey()` carries a person's saved conversations, spend ledger and
+first-run flag from the `agenticrag.*` keys to `sextant.*`, once per browser.
+`clientId()` is the per-browser namespace that stopped two people behind one
+shared password overwriting each other's uploads in 0.8.2 — and its own
+docstring says a fresh id per page load would mean a duplicate document on
+every re-upload. Neither had a test. Both do now, including the branch where
+`localStorage` throws, which is the one that must not take the page down.
+
+### Rules
+
+- **A function that can keep less than it was given must return what it
+  kept.** Handing the input back is how a UI shows thirty conversations that
+  a reload does not have.
+- **A fallback ladder has to shrink.** A rung that can be larger than the one
+  above it means the cheapest option is never reached, and the ladder reads as
+  thorough while being strictly worse than two rungs would be.
+- **"Must agree with X" is only an instruction if X exists.** Four headers
+  cited files deleted with the UI they belonged to; one of them was the sole
+  assurance on a data migration.
+- **A docstring that names its own test is a claim too.** Write the test.
