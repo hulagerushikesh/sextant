@@ -2031,3 +2031,128 @@ to call is a shape pinned on nothing.
 `logs` is also an `exec ssh`, and correctly so: it is a tail the operator
 Ctrl-Cs, it makes no claim about having stopped anything, and an epilogue
 after an interrupted tail would be noise.
+
+## 23 · The script that starts nothing and says it did — ₹0
+
+Item 22 left `deploy.sh` measured for every command but `logs`. The question
+that found items 20, 21 and 22 — *which claim has nothing ever checked?* —
+pointed next at the only shell script in the repository that is not under
+`deploy/`: `start_all_services.sh`, which `README.md` presents as **the** way
+to run this project.
+
+Nothing had ever executed it. Not the suite, not CI.
+
+### First clause — the banner is unconditional
+
+```bash
+"$PY" -m uvicorn mcp_server.main:app --host 0.0.0.0 --port 8000 &
+SERVER_PID=$!
+(cd frontend && npm run dev) &
+FRONTEND_PID=$!
+...
+cat <<INFO
+  Frontend    http://localhost:3000
+  Agent API   http://localhost:8000
+  ...
+  Ctrl+C to stop.
+INFO
+wait
+```
+
+Run with both children failing on their first line:
+
+```
+Starting agent server on :8000 ...
+Starting frontend on :3000 ...
+
+  Frontend    http://localhost:3000
+  Agent API   http://localhost:8000
+  API docs    http://localhost:8000/docs
+  Tool list   http://localhost:8000/tools
+
+  Ctrl+C to stop.
+
+ModuleNotFoundError: No module named 'uvicorn'
+npm ERR! Missing script: dev
+rc=0
+```
+
+Four URLs, an invitation to press Ctrl+C, and **exit 0**, with the two real
+reasons printed *after* the banner where they read as noise. `deploy.sh start`
+printing `>> up at <ip>` regardless (item 16) and `trip.sh` ending
+`agenticrag is RUNNING` with exit 0 (item 5), in the script that is somebody's
+first contact with the project.
+
+It waits on `/health` now — the question the app ships an endpoint to answer —
+names which half failed, stops the other rather than leaving it half-running,
+and exits 1.
+
+### Second clause — `--host 0.0.0.0`
+
+There is no authentication in front of this process. The gate is Caddy's
+`basic_auth`, and Caddy exists only on the box. Confirmed from the app's own
+startup log:
+
+```
+identity: no SEXTANT_PROXY_SECRET set, so X-Sextant-User is refused and
+uploads are namespaced by X-Sextant-Client (or 'shared')
+```
+
+Every caller is `shared`. Since 0.8.5 `shared` owns the unnamespaced,
+CLI-ingested corpus **and may write it**. So a wide bind meant anyone who
+could reach the port could read the corpus through `/query` — spending the
+Gemini key against a ₹500/month prepay — and replace a document through
+`/ingest`. CORS does not help; it is not a browser that would do this.
+
+`HOST` defaults to `127.0.0.1`. A wider bind is a decision and says what it
+means. The loopback case prints nothing: a warning on the documented default
+is one people learn to skip.
+
+### What the fix got wrong, found by running the fix
+
+| Defect | How it showed |
+| --- | --- |
+| the frontend liveness check was one `kill -0` immediately after the API came up — with a stubbed `curl` that is milliseconds, so a frontend exiting 400ms later was still alive when asked | the frontend-dead probe printed the banner and exited 0 — the defect being fixed, reintroduced by the fix |
+| `cleanup` killed `$FRONTEND_PID`, the `( cd frontend && npm run dev )` **subshell**; npm and Vite under it survived | `pgrep` after a run found the grandchild still alive |
+
+A check whose answer depends on how fast the step before it finished is not a
+check: there is a settle loop now. And `set -m` plus `kill -- -$PID` kills the
+job's process group, not just the shell that forked it.
+
+### The harness, and a bystander it nearly killed
+
+Four stubs: a live interpreter, a dead one, a live npm, a dead one, plus a
+slow-dead npm written specifically for the race above. The `curl` stub's first
+version answered 200 unconditionally, so `ready=1` for a server that had
+already exited and the dead-server test reached the *frontend* branch instead
+— the harness deciding the outcome, item 21's lesson one more time. The live
+interpreter touches a marker file now and `curl` answers only if it exists, so
+the stub can fail; the happy-path test proves it can still succeed, which is
+what pins it on both sides.
+
+The orphan check first grepped for `sleep 30`, and its cleanup `pkill`ed the
+same pattern — which would have matched, and killed, any unrelated `sleep 30`
+belonging to whoever was running the tests. The stubs rename themselves with
+`exec -a` to a sentinel that belongs to this suite.
+
+### Plants
+
+| # | Plant | Fails |
+| --- | --- | --- |
+| 1 | the original script, whole | 8 of 10 |
+| 2 | `HOST` default back to `0.0.0.0` | the static scan and the quiet-on-loopback test |
+| 3 | the `/health` wait removed | dead-server and never-answers |
+| 4 | the settle removed | both frontend-death tests |
+| 5 | `cleanup` kills the pid, not the group | the orphan fixture, in teardown |
+| 6 | the `curl` stub made unable to fail | the dead-server test |
+
+Plant 2 needed the scan to strip comments first: the script explains the old
+`--host 0.0.0.0` in prose, and a scan counting the explanation as the code
+fails on the fix. The preflight's variable scan learned the same thing.
+
+### Considered and left
+
+The frontend is never probed over HTTP. Vite moves off 3000 when 3000 is busy
+and its own output is the only authority on which port it took, so the script
+checks that it is alive and says so, rather than printing a URL it cannot
+stand behind.
