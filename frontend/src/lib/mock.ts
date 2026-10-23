@@ -24,6 +24,7 @@ export const mockHealth: Health = {
   // the bar tracks the asker's own figure, with the box's beside it.
   budget: {
     enabled: true, budget_usd: 2.0, spent_usd: 0.4312, remaining_usd: 1.5688,
+    resets_in_seconds: 23_400, durable: true, share: 0.5,
     owner_budget_usd: 1.0, owner_spent_usd: 0.3104, owner_remaining_usd: 0.6896,
   },
   mcp_error: null,

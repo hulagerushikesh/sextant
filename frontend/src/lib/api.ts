@@ -117,13 +117,28 @@ export async function fetchStats(): Promise<Stats | null> {
   }
 }
 
-export async function checkHealth(): Promise<Health | null> {
-  if (MOCK) return new Promise((r) => setTimeout(() => r(mockHealth), 300))
+/**
+ * The outcome of one health check, with the two failures kept apart.
+ *
+ * This used to be `Health | null`, and `null` meant both "the fetch threw"
+ * and "the server answered 4xx/5xx". Those are different facts and the UI
+ * printed the first one's words for both: a box answering 503 was reported as
+ * unreachable, which sends whoever reads it to the network instead of to the
+ * server's own logs.
+ */
+export type HealthProbe =
+  | { reached: true; health: Health }
+  /** `status` is null when nothing answered at all. */
+  | { reached: false; status: number | null }
+
+export async function checkHealth(): Promise<HealthProbe> {
+  if (MOCK) return new Promise((r) => setTimeout(() => r({ reached: true, health: mockHealth }), 300))
   try {
     const response = await fetch(`${SERVER_URL}/health`, { headers: sent() })
-    return response.ok ? response.json() : null
+    if (!response.ok) return { reached: false, status: response.status }
+    return { reached: true, health: await response.json() }
   } catch {
-    return null
+    return { reached: false, status: null }
   }
 }
 

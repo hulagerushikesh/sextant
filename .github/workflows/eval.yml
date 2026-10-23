@@ -98,6 +98,15 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+      # The frontend had no test runner at all until 2026-10-24, which is why
+      # `budget.durable` could be shipped by the server, declared by nothing,
+      # read by nobody and noticed by no one for sixteen days. `tsc -b` above
+      # type-checks these files; this runs them.
+      - name: Frontend test
+        if: ${{ !cancelled() }}
+        working-directory: frontend
+        run: npm test
+
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v7

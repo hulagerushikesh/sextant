@@ -123,6 +123,45 @@ because each one was learned the expensive way.
   the clause above, not by looking. **And a static scan must normalise before
   it matches**: the docstring check passed on the very docstring it was written
   to catch, because the claim was wrapped as `temporary\ndirectory`.
+- **A flag the server computes and the UI never reads is a flag that does not
+  exist.** `/health` has carried `budget.durable` since item 15, added so that
+  *a figure nobody can date is not mistaken for the day's*. It goes false when
+  the spend ledger cannot be written -- `/data/chroma` not writable by
+  `APP_UID`, the failure `trip.sh` step 5 tells you to watch -- and then
+  `spent_usd` restarts with the process while Google's meter keeps counting.
+  Nothing in `frontend/` contained the word. `SpendCard` printed the number
+  under **Daily cap**, appended `resets 00:00 UTC`, and put `$1.5700 left`
+  beside it: three claims about the day, from a figure the server had already
+  disclaimed. **And hedge every figure that comes off the number you hedged** --
+  `remaining_usd` is the cap minus a spend that is too low, so it is an upper
+  bound, and a careful caption beside an unqualified amount is more convincing
+  than either lie alone. One `dayFigure()` returns the caption, the `at most `
+  prefix and the reason.
+- **A message that names a cause must have been told which cause.** `App`
+  collapsed `/health` to a tone and the sidebar printed `Degraded -- no model
+  key` for **every** degraded box. `model_configured` and `mcp_connected` are
+  reported separately on purpose, so a box with a good key and a dead MCP
+  subprocess was sent to look at the wrong half of the system -- while
+  `mcp_error`, the server's own sentence about the real fault, sat unread in
+  the payload and in the type. `healthLine()` returns tone, label and detail
+  together; the footer renders what it is handed. **Twice in one item:**
+  `checkHealth` returned `null` for a fetch that threw *and* for a 4xx/5xx, so
+  `Server unreachable` was printed about a box that had just answered 503 --
+  caught reviewing the fix above, which would have shipped it intact.
+- **"Mirrors X" is a claim, and a type that makes it needs a test.**
+  `frontend/src/lib/types.ts` says it mirrors `mcp_server/main.py` and had
+  dropped `durable`, `resets_in_seconds` and `share`. That omission is the
+  *mechanism* of the two bullets above: TypeScript will not let a component
+  read a field the interface does not declare, so the honest flag was
+  unreachable by construction. `tests/test_frontend_contract.py` asks the live
+  endpoint what it sends and the file what it declares.
+- **An untested tree is where the untested bugs are.** The count was 767 Python
+  tests to zero frontend tests, with no frontend runner at all -- CI linted and
+  built it and never executed a line. vitest + jsdom + `@testing-library/react`
+  now, `npm test` in the gate and `Frontend test` in CI. The gate pin
+  (`TestCiRunsTheGateWithTheSameArguments`) went red the moment the gate
+  changed and stayed red until CI was taught the command, which is item 12
+  working as built.
 - **The command that sounds like the end of the bill was the one that could
   not speak.** `deploy.sh HOST down` was `exec ssh -t ... compose down`, and
   `exec` replaces this shell -- so the arm whose name reads the most like "I
@@ -258,7 +297,7 @@ lifetime rather than per day.
 ## Gate before a commit that touches code
 
 ```bash
-./.venv/bin/pytest tests/ -q && ./.venv/bin/mypy mcp_server tools eval tests && ./.venv/bin/ruff check . && (cd frontend && npm run build)
+./.venv/bin/pytest tests/ -q && ./.venv/bin/mypy mcp_server tools eval tests && ./.venv/bin/ruff check . && (cd frontend && npm run build && npm test)
 ```
 
 ## CI

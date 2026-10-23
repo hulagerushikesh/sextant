@@ -1,6 +1,7 @@
 import { RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { count, money, type Lifetime } from '@/lib/store'
+import { dayFigure } from '@/lib/spend'
 import type { Budget } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
@@ -10,6 +11,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
  * Two figures kept apart on purpose: what this thread cost (comparable between
  * prompts) and what all of testing has cost (the number that matters to a
  * bill). Web searches are called out because they are priced per request.
+ *
+ * The third figure is the box's daily cap, and whether it can be called the
+ * day's at all comes from `dayFigure` -- see lib/spend.ts, which is where the
+ * `durable` flag finally gets read.
  */
 export function SpendCard({ conversation, lifetime, budget, onReset }: { conversation: Lifetime; lifetime: Lifetime; budget: Budget | null; onReset: () => void }) {
   const capped = !!budget?.enabled
@@ -24,6 +29,10 @@ export function SpendCard({ conversation, lifetime, budget, onReset }: { convers
   const ratio = share ? Math.max(dayRatio, share.owner_spent_usd! / share.owner_budget_usd!) : dayRatio
   const left = share ? share.owner_remaining_usd! : budget?.remaining_usd ?? 0
   const level = ratio >= 1 ? 'over' : ratio >= 0.8 ? 'near' : 'ok'
+  // Every figure below is derived from `spent_usd`, so when that is only this
+  // process's spend, so is the headroom and so is "resets 00:00 UTC". One
+  // call, so the caption cannot be hedged while the amount beside it is not.
+  const figure = capped ? dayFigure(budget!) : null
   const since = lifetime.since ? new Date(lifetime.since).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : null
 
   return (
@@ -33,7 +42,7 @@ export function SpendCard({ conversation, lifetime, budget, onReset }: { convers
           <div className="mb-1.5 flex items-baseline justify-between">
             <span className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">{share ? 'Your daily share' : 'Daily cap'}</span>
             <span className={cn('font-mono text-[11px] tabular', level === 'over' ? 'text-destructive' : level === 'near' ? 'text-warning' : 'text-muted-foreground')}>
-              {level === 'over' ? 'answering paused' : `${money(left)} left`}
+              {level === 'over' ? 'answering paused' : `${figure!.remainingPrefix}${money(left)} left`}
             </span>
           </div>
           <Progress
@@ -43,8 +52,11 @@ export function SpendCard({ conversation, lifetime, budget, onReset }: { convers
           <p className="mt-1.5 font-mono text-[11px] text-muted-foreground tabular">
             {share
               ? `${money(share.owner_spent_usd!)} of ${money(share.owner_budget_usd!)} · box ${money(budget!.spent_usd)} of ${money(budget!.budget_usd)}`
-              : `${money(budget!.spent_usd)} of ${money(budget!.budget_usd)}`} · resets 00:00 UTC
+              : `${money(budget!.spent_usd)} of ${money(budget!.budget_usd)}`} · {figure!.caption}
           </p>
+          {figure!.note && (
+            <p className="mt-1 text-[11px] leading-snug text-warning">{figure!.note}</p>
+          )}
         </div>
       )}
 

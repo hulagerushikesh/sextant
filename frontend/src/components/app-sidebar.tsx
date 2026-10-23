@@ -1,6 +1,7 @@
 import { FlaskConical, MessageSquare, Plus, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { money, totals } from '@/lib/store'
+import type { HealthLine } from '@/lib/health'
 import type { Conversation } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import {
@@ -19,7 +20,12 @@ interface Props {
   onOpen: (c: Conversation) => void
   onNew: () => void
   onDelete: (id: string) => void
-  health: 'ok' | 'degraded' | 'down' | null
+  /**
+   * The line to show, already decided. Null while the first check is in
+   * flight. A tone alone used to come down here and the footer guessed the
+   * cause from it -- see lib/health.ts.
+   */
+  health: HealthLine | null
 }
 
 export function AppSidebar({ view, onView, conversations, activeId, onOpen, onNew, onDelete, health }: Props) {
@@ -92,8 +98,11 @@ export function AppSidebar({ view, onView, conversations, activeId, onOpen, onNe
 
       <SidebarFooter className="px-3 pb-3">
         <div className="flex items-center gap-2 px-1 text-[11px] text-muted-foreground">
-          <span className={cn('size-1.5 rounded-full', health === 'ok' ? 'bg-success' : health === 'degraded' ? 'bg-warning' : health === 'down' ? 'bg-destructive' : 'bg-muted-foreground/40')} />
-          {health === 'ok' ? 'Server healthy' : health === 'degraded' ? 'Degraded — no model key' : health === 'down' ? 'Server unreachable' : 'Checking…'}
+          <span className={cn('size-1.5 shrink-0 rounded-full', health?.tone === 'ok' ? 'bg-success' : health?.tone === 'degraded' ? 'bg-warning' : health?.tone === 'down' ? 'bg-destructive' : 'bg-muted-foreground/40')} />
+          {/* `title` carries the server's own text for the fault. It is often a
+              stack trace's last line, too long for the footer and the only
+              thing that says which fault it actually was. */}
+          <span className="leading-snug" title={health?.detail}>{health ? health.label : 'Checking…'}</span>
         </div>
       </SidebarFooter>
       <SidebarRail />

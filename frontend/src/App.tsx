@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { checkHealth, fetchStats, MOCK, streamQuery } from '@/lib/api'
 import { blank, loadAll, MOD, money, readLifetime, record, remove, resetLifetime, saveAll, seedFrom, totals, upsert } from '@/lib/store'
 import { storageKey } from '@/lib/storage'
+import { healthLine, type HealthLine } from '@/lib/health'
 import { download, fileName, toMarkdown } from '@/lib/export'
 import type { Budget, Conversation, DoneFrame, Message, Source, TraceStep } from '@/lib/types'
 
@@ -79,7 +80,7 @@ export default function App() {
   const [saved, setSaved] = useState<Conversation[]>(() => loadAll())
   const [activeId, setActiveId] = useState(() => loadAll()[0]?.id || blank().id)
   const [modelReady, setModelReady] = useState<boolean | null>(null)
-  const [health, setHealth] = useState<'ok' | 'degraded' | 'down' | null>(null)
+  const [health, setHealth] = useState<HealthLine | null>(null)
   const [budget, setBudget] = useState<Budget | null>(null)
   const [lifetime, setLifetime] = useState(() => readLifetime())
   const [corpus, refreshCorpus] = useCorpus()
@@ -102,9 +103,10 @@ export default function App() {
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }, [messages.length])
 
   useEffect(() => {
-    checkHealth().then((h) => {
+    checkHealth().then((probe) => {
+      const h = probe.reached ? probe.health : null
       setModelReady(h ? h.model_configured : false)
-      setHealth(!h ? 'down' : h.model_configured && h.mcp_connected ? 'ok' : 'degraded')
+      setHealth(healthLine(probe))
       setBudget(h?.budget ?? null)
       setSupported(h?.supported_uploads || [])
     })
@@ -174,7 +176,7 @@ export default function App() {
       setMessages((prev) => { const next = [...prev, answer]; persist(next, sourcesRef.current); return next })
       setLive(null)
       abortRef.current = null
-      if (done?.usage) checkHealth().then((h) => setBudget(h?.budget ?? null))
+      if (done?.usage) checkHealth().then((p) => setBudget(p.reached ? p.health.budget : null))
     }
   }, [messages, sources, persist])
 
