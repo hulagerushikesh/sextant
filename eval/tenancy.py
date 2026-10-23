@@ -44,8 +44,13 @@ Reproduce:
 
     ./.venv/bin/python -m eval.tenancy --store ./chroma_db --out /tmp/t.json
 
-The store is opened read-only; the subset collection is written to a temporary
-directory and deleted. `SEXTANT_MAX_PER_DOCUMENT=0` turns the per-document cap
+The store is opened read-only *except* for the subset collection, which is
+written into it under the name `tenancy-subset` and deleted afterwards. It
+goes there because `subset()` builds a `KnowledgeBase` with a collection name
+and no directory, and that class takes its path from CHROMA_DIR, which `main`
+has just pointed at `--store`. Copying a 1,660-chunk store to avoid that costs
+a gigabyte; knowing it is what the note is for. A run killed partway leaves
+the collection behind. `SEXTANT_MAX_PER_DOCUMENT=0` turns the per-document cap
 off, which changes what an over-fetch budget can even reach.
 """
 
@@ -54,9 +59,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import shutil
 import sys
-import tempfile
 from pathlib import Path
 from typing import Any, cast
 
@@ -249,22 +252,40 @@ def print_table(payload: dict[str, Any]) -> None:
         print(line)
 
 
-def verdict(payload: dict[str, Any]) -> str:
+def rule_verdict(payload: dict[str, Any]) -> tuple[bool, str]:
+    """The pre-registered rule's decision, and the line that reports it.
+
+    One function returning both, because the caller needs the decision and
+    must not recover it by matching on the sentence. That would be deciding
+    twice, and the second decision would be a string match on prose this file
+    is free to reword -- the same reason `deploy.sh` has one `billing_line`
+    that two commands call rather than two copies of one table.
+    """
     metric = f"recall@{K_PRIMARY}"
     ceiling = payload["b"][metric]
     candidate = payload["a"][str(RULE_OVER_FETCH)][metric]
-    gap = ceiling - candidate
-    return (
+    # Rounded to the precision the metrics themselves already carry (`pooled`
+    # rounds to 4), and compared there. "within 0.02" includes 0.02, and the
+    # raw subtraction does not: 0.9 - 0.88 is 0.020000000000000018, so a
+    # result exactly at the pre-registered tolerance was rejected while the
+    # line printed "gap +0.0200 (tolerance 0.02)" right beside the word.
+    gap = round(ceiling - candidate, 4)
+    accepted = gap <= RULE_TOLERANCE
+    line = (
         f"rule: at {payload['tenant_share']:.1%} share and {RULE_OVER_FETCH}x k, "
         f"A {metric} {candidate:.4f} vs B {ceiling:.4f}, gap {gap:+.4f} "
         f"(tolerance {RULE_TOLERANCE}) -> A is "
-        + ("ACCEPTED" if gap <= RULE_TOLERANCE else "REJECTED")
+        + ("ACCEPTED" if accepted else "REJECTED")
     )
+    return accepted, line
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        prog="sextant-eval-tenancy",
+        # The name you can actually type: this harness needs a hand-built
+        # mixed store, so it is run as a module and never registered as a
+        # console script. `--help` and every argparse error print this.
+        prog="python -m eval.tenancy",
         description="Measure filtered-one-collection against collection-per-owner.",
     )
     parser.add_argument(
@@ -275,21 +296,27 @@ def main() -> None:
     parser.add_argument("--out", type=Path)
     args = parser.parse_args()
 
-    # The subset collection is written beside the source, then deleted. A copy
-    # of the whole store would be cleaner and costs a gigabyte.
+    # The subset collection is written into the source store, then deleted. A
+    # copy of the whole store would be cleaner and costs a gigabyte. There was
+    # a scratch tmpdir here that nothing was ever written to -- it was created
+    # and removed empty on every run, and it was the only thing making the
+    # module docstring's "temporary directory" read as true.
     settings.setenv("CHROMA_DIR", str(args.store))
-    scratch = Path(tempfile.mkdtemp(prefix="sextant-tenancy-"))
-    try:
-        payload = asyncio.run(run(args.store, args.mode, args.golden))
-        print_table(payload)
-        line = verdict(payload)
-        payload["verdict"] = line
-        print(f"\n{line}")
-        if args.out:
-            args.out.write_text(json.dumps(payload, indent=2) + "\n")
-            print(f"wrote {args.out}")
-    finally:
-        shutil.rmtree(scratch, ignore_errors=True)
+    payload = asyncio.run(run(args.store, args.mode, args.golden))
+    print_table(payload)
+    accepted, line = rule_verdict(payload)
+    payload["verdict"] = line
+    payload["accepted"] = accepted
+    print(f"\n{line}")
+    if args.out:
+        args.out.write_text(json.dumps(payload, indent=2) + "\n")
+        print(f"wrote {args.out}")
+
+    # This harness exists to answer one question, and it answers it with a
+    # word. A command that prints REJECTED and exits 0 has not answered it to
+    # anything but a person who happened to be reading -- which is milestone
+    # 21 item 14, in the one eval harness item 14 did not reach.
+    sys.exit(0 if accepted else 1)
 
 
 if __name__ == "__main__":
