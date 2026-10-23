@@ -440,10 +440,17 @@ box is not 1001, put `APP_UID=<uid>` in `.env` before the first build.
 
 ```bash
 deploy/deploy.sh HOST          # ship changes, rebuild, restart
-deploy/deploy.sh HOST down     # stop the containers
+deploy/deploy.sh HOST down     # stop the containers -- NOT the VM
 ```
 
 The box `.env` and `/data` are never touched by a redeploy.
+
+`down` stops serving; `stop` below stops paying. They are different
+commands on purpose — a `down` that parked the box would take the next
+deploy's restart away from whoever typed it — so `down` reads the instance
+state afterwards and says what is still on the meter. A running
+e2-standard-2 behind stopped containers costs the same ~₹135/day as one
+serving traffic.
 
 ## Parking the VM (cost)
 

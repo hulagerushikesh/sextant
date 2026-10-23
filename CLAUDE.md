@@ -60,6 +60,28 @@ because each one was learned the expensive way.
   meter is on" (wrong in the safe direction, like the grounded-search price),
   and an unreadable state exits 1 with the `describe` to run by hand.
   **A `case` with no default is a list of the states somebody thought of.**
+- **The command that sounds like the end of the bill was the one that could
+  not speak.** `deploy.sh HOST down` was `exec ssh -t ... compose down`, and
+  `exec` replaces this shell -- so the arm whose name reads the most like "I
+  am finished paying for this" was *structurally* incapable of printing
+  anything after the containers went away. Against a RUNNING box it removed
+  two containers, exited 0, and said nothing about the e2-standard-2 still
+  charging ~Rs5.6/hour behind them. The 2026-09-28 Rs703 failure with the
+  believing one level up: the box was not forgotten, the script reported it
+  shut down. `down` now keeps compose's exit status by hand and reads the
+  instance state afterwards. It still does not park the box -- `down` stops
+  serving, `stop` stops paying, and a `down` that parked would take the next
+  deploy's restart away from whoever typed it. **An epilogue must never
+  overrule the command it reports on**, so `vm_target` returns where it used
+  to `exit 2` and an unreadable state is loud but exits 0.
+- **The second place that needs an answer calls the first one, it does not
+  copy it.** `status` already held an arm per instance state; the epilogue
+  needed the same eight. A hand-written second table is `_FORWARDED_ENV` and
+  the preflight key list a third time -- right on the day it is written and
+  silently behind afterwards. `billing_line` is one function with two callers,
+  pinned both ways: a count that fails if a copy is pasted back, and a
+  per-state run of `down` compared against what `status` prints for the same
+  state, because a state dropped from one caller's reach fails no count.
 - **A check nobody can run is a check nobody has read.** `deploy.sh HOST
   preflight` is the only thing between a misconfigured box and a twenty-minute
   torch build, and until 2026-10-12 nothing had ever *executed* it: it needs
