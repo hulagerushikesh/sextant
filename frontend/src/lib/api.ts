@@ -1,7 +1,10 @@
 /**
- * Agent-server client. A TypeScript port of frontend/src/api/client.js in the
- * main repo — same endpoints, same SSE frames, same contract. Nothing here
- * changes what the server has to do.
+ * Agent-server client: the endpoints, the SSE frames, the contract. Nothing
+ * here changes what the server has to do.
+ *
+ * It began as a port of a `client.js` that lived beside the UI this replaced.
+ * That file is gone, and so is the repo split the old header named, so there
+ * is nothing left to be a port *of*. `mcp_server/main.py` is the contract.
  */
 import { mockCompare, mockHealth, mockStats, mockStream, mockSweep } from './mock'
 import { clientId } from './storage'

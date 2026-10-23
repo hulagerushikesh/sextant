@@ -11,8 +11,11 @@
  * one was. That is the same shape the answer had on screen, and it keeps the
  * file honest about which passage each claim rests on.
  *
- * Ported from the current UI's `export.js`; the output is byte-for-byte the
- * same, because a file people already keep should not change shape under them.
+ * The old `export.js` this came from is gone, and with it the thing the
+ * previous header promised to be byte-for-byte identical to. What is worth
+ * keeping from that promise is the reason behind it -- people keep these
+ * files, so the shape should not drift without a reason -- and the pin on it
+ * is now `export.test.ts`, not a file nobody can open.
  */
 
 import type { Conversation, Message, Source } from './types'
