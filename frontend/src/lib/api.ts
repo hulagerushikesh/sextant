@@ -14,6 +14,17 @@ export const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:8
 export const MOCK = import.meta.env.VITE_MOCK === '1'
 
 /**
+ * What mock mode actually means, in one sentence, in one place.
+ *
+ * `.env.development` says it already: "a UI that silently shows invented
+ * answers is worse than one that says the server is unreachable." Every mock
+ * branch below and the notice in the header read this, so the screen and the
+ * toasts cannot disagree about how much of what you are looking at is real.
+ */
+export const MOCK_NOTICE =
+  'Mock mode: every answer, figure and source on this screen is invented. No server is being queried.'
+
+/**
  * Headers every request carries, not just the ones that obviously need to.
  *
  * `X-Sextant-Client` names the namespace this browser's uploads are stored
@@ -97,7 +108,13 @@ export async function streamQuery(query: string, h: StreamHandlers): Promise<voi
 export async function uploadFiles(files: File[]): Promise<{ success: boolean; message?: string; error?: string }> {
   if (MOCK) {
     await new Promise((r) => setTimeout(r, 1400))
-    return { success: true, message: `Indexed ${files.length} file${files.length === 1 ? '' : 's'} — ${files.length * 37} chunks.` }
+    // Not `Indexed N files -- N chunks.` A success toast for an upload that
+    // never happened is the one mock response a person acts on: they close the
+    // tab believing the document is in the corpus.
+    return {
+      success: true,
+      message: `Mock: pretended to index ${files.length} file${files.length === 1 ? '' : 's'}. Nothing was stored.`,
+    }
   }
   const form = new FormData()
   for (const f of files) form.append('files', f, f.name)
