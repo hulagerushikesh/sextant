@@ -1854,7 +1854,7 @@ which keeps running at ~₹5.6/hour. The usage header is honest ("stop the stack
 so there is nowhere after it to print one. Left for a separate item rather than
 restructured here: the fix is small but it is about `down`, not about the
 preflight, and item 20's finding came precisely from asking which commands
-nothing had measured.
+nothing had measured. Shipped 2026-10-23 as § 22 below.
 
 ### What CI found that the local gate could not
 
@@ -1903,3 +1903,124 @@ not run (item 12). Every step from `setup-node` down now carries
 `if: ${{ !cancelled() }}` — not `always()`, which would also burn minutes on a
 run somebody stopped on purpose. **A step's `if:` must not reach past its own
 prerequisite.**
+
+## 22 · The command that could not speak — ₹0
+
+Queued at the end of item 21 and left there deliberately: the finding was
+about `down`, not about the preflight, and folding it in would have hidden
+it inside a commit about something else.
+
+### The arm
+
+```bash
+down)
+  exec ssh -t "$REMOTE" "cd $APP_DIR && $COMPOSE down"
+  ;;
+```
+
+`exec` replaces this shell with ssh. Nothing can run after it — not a
+warning, not a reminder, not a question. So the one command in this script
+whose name reads like *I am finished paying for this* was **structurally
+incapable of saying anything** once the containers were gone.
+
+Run against a RUNNING box, before the fix:
+
+```
+Container agenticrag-api-1  Removed
+Container agenticrag-caddy-1  Removed
+rc=0
+```
+
+The e2-standard-2 behind those two lines goes on charging ~₹5.6/hour —
+₹135/day, the same as one serving traffic. The usage header was honest
+("containers only") and the README said "stop the containers", but the
+place a person actually looks is the output of the command they just ran,
+and there the number was absent.
+
+This is the 2026-09-28 ₹703 failure with the believing moved one level up.
+That box was left running while waiting on a human. This one is left
+running by a script that reported it shut down.
+
+### Where it sits among the other two
+
+| Command | Stops serving | Stops paying | Says which |
+| --- | --- | --- | --- |
+| `down` | yes | **no** | now |
+| `stop` | (already) | yes | yes, since item 20 |
+| `trip.sh` | yes | yes, in an `EXIT` trap | yes, verified since item 5 |
+
+`down` deliberately still does not park the box. `down` stops serving and
+`stop` stops paying; a `down` that parked would take the next deploy's
+restart away from whoever typed it, and `trip.sh` already exists for the
+case where the box should go away at the end. The fix is to the sentence,
+not to the verb.
+
+### The fix
+
+| Was | Is | Why |
+| --- | --- | --- |
+| `exec ssh ...` | `ssh ... \|\| rc=$?`, then the epilogue, then `exit "$rc"` | `exec` preserved the exit status for free, which is its only merit here; that is now done by hand |
+| nothing after the containers | `meter_epilogue` reads the instance state and names what is still billing | the number belongs where the person is looking |
+| `vm_target` `exit 2` on an unresolvable host | `return 2`, callers `\|\| exit 2` | **an epilogue must never overrule the command it reports on** — a `down` that worked must not become exit 2 because gcloud is absent |
+| `status` held the eight-state billing table | `billing_line` holds it; `status` and both epilogue arms call it | a second hand-written table of the same states is `_FORWARDED_ENV` and the preflight key list a third time |
+
+Three outcomes, the same shape as `ssh_door`:
+
+```
+>> containers stopped, but the VM is NOT: agenticrag is RUNNING.
+   billing: VM ~INR 5.6 (~USD 0.067)/hour + disks + IP
+>>   park it:  deploy/deploy.sh <host> stop
+
+>> containers stopped, and the VM is TERMINATED.
+   billing: disks + reserved IP only (VM meter off)
+
+>> containers stopped. This does NOT stop the VM, and its state
+>>   could not be read -- assume it is billing ~INR 5.6 per hour.
+>>   check:  deploy/deploy.sh <host> status
+>>   park:   deploy/deploy.sh <host> stop
+```
+
+The third is a machine with no gcloud, no credentials, or a plain ssh
+alias. It is loud, it is wrong in the safe direction, and it exits 0.
+
+### The harness
+
+`_SSH_STUB` gained a `*"prod.yml down"*` arm that prints what compose
+prints and takes its exit status from `FAKE_DOWN_RC` — a stub that could
+only succeed would make "the exit status survives the epilogue" an
+assertion that cannot fail. `_run_deploy` gained `host=` and
+`resolvable=False`, which removes `VM_INSTANCE`/`VM_ZONE`/`VM_PROJECT` so a
+test can present the case the script cannot answer, and `parents=True` on
+the bin directory so one test can run the script twice under one
+`tmp_path`.
+
+### Plants
+
+| # | Plant | Fails |
+| --- | --- | --- |
+| 1 | `exec ssh` restored — the original defect | 12 of 15 |
+| 2 | the unreadable-state arm emptied | the loud-and-still-zero test, on the message |
+| 3 | `vm_target` back to `exit 2` | the same test, on `code == 0` |
+| 4 | a billing line copied back into the epilogue | the count, and the 5 states that then disagree |
+| 5 | `\|\| true` instead of `\|\| rc=$?` | the exit-status test |
+| 6 | `status` stops calling the shared table and inlines a line | the new `test_status_still_calls_it`, and 5 states |
+
+Plant 4 is the one worth keeping: the static count and the per-state
+comparison are two different claims. Pasting a copy raises the count; a
+copy that happens to agree on `RUNNING` passes the behavioural test for
+`RUNNING` and fails it for the five states it got wrong.
+
+### What the existing pins caught
+
+Item 20's `TestStatusSaysWhatIsBilling` read the arms out of the `status)`
+block by text. Moving them into `billing_line` failed two of its tests on the
+first full run — the pin working exactly as intended: the decision is still
+being read, now at its one address. It gained a second half at the same time,
+`test_status_still_calls_it`, because a shape pinned on a function nothing has
+to call is a shape pinned on nothing.
+
+### Considered and left
+
+`logs` is also an `exec ssh`, and correctly so: it is a tail the operator
+Ctrl-Cs, it makes no claim about having stopped anything, and an epilogue
+after an interrupted tail would be noise.

@@ -5,6 +5,48 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-23 — the command that could not speak (₹0)
+
+`deploy/deploy.sh HOST down` was one line: `exec ssh -t "$REMOTE" "cd $APP_DIR
+&& $COMPOSE down"`. `exec` replaces this shell with ssh, so nothing can run
+after it — which made the one command in the script whose name reads like *I
+am finished paying for this* structurally incapable of saying anything once
+the containers were gone.
+
+Against a RUNNING box it printed two `Removed` lines and exited 0. Behind
+them an e2-standard-2 goes on charging ~₹5.6/hour — ₹135/day, the same as one
+serving traffic. The usage header was honest ("containers only") and the
+README said "stop the containers", but the place a person looks is the output
+of the command they just ran, and there the number was absent. The
+2026-09-28 ₹703 failure with the believing one level up: that box was
+forgotten, this one is *reported shut down*.
+
+`down` deliberately still does not park the box — `down` stops serving,
+`stop` stops paying, and a `down` that parked would take the next deploy's
+restart away from whoever typed it. The fix is to the sentence, not the verb:
+compose's exit status is kept by hand (`exec` gave it for free, its only
+merit here), the instance state is read afterwards, and the three outcomes
+are *running and billing* / *parked* / *could not tell, assume the meter is
+on*. `vm_target` returns where it used to `exit 2`, because **an epilogue
+must never overrule the command it reports on** — a `down` that worked must
+not become exit 2 on a machine with no gcloud.
+
+Second clause, and the reason this is not six lines: `status` already held an
+arm per instance state from item 20, and the epilogue needs the same eight. A
+hand-written second table would be `_FORWARDED_ENV` and the preflight key
+list a third time, so `billing_line` is one function with two callers, pinned
+both ways — a count that fails if a copy is pasted back, and a run of `down`
+for each of the eight states compared against what `status` prints for the
+same state, because a state dropped from one caller's reach fails no count.
+
+Six plants, each failing on its own assertion; restoring `exec` fails 12 of
+the 15 new tests. Item 20's own pins read the arms out of the `status)` block
+by text and failed on the move — the pin working — and gained a second half,
+because a shape pinned on a function nothing has to call is pinned on nothing.
+745 tests. `deploy.sh` is now exercised by the gate for
+`start`, `stop`, `status`, `preflight` and `down` — every command but `logs`,
+which is an interactive tail that claims nothing.
+
 ## 2026-10-12 — the check nobody had run (₹0)
 
 `deploy/deploy.sh HOST preflight` is the only thing between a misconfigured box
