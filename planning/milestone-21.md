@@ -2282,3 +2282,122 @@ item 23's `0.0.0.0` scan matching a comment, in the opposite direction.
   was the only evidence for a docstring claim that was false.
 - **A static scan must normalise before it matches.** A line break is not a
   difference in meaning, and a scan that thinks it is passes silently.
+
+## 25 · The flag that reaches nobody — ₹0
+
+Shipped 2026-10-24. Unplanned, from the same question as 20–24, pointed at the
+one tree it had not been pointed at: **the frontend**. 767 Python tests and,
+until this item, **not one test of the code a person actually reads the
+numbers off**.
+
+Five clauses.
+
+### The flag the server computes and nobody reads
+
+`/health` has carried `budget.durable` since item 15, which added it so that
+"a figure nobody can date is not mistaken for the day's". It is false when the
+spend ledger cannot be read or written — a full disk, or `/data/chroma` not
+writable by `APP_UID`, which is the exact failure `trip.sh` step 5 tells the
+operator to watch for. When it is false the tally restarts with the process
+while Google's meter keeps counting, so `spent_usd` is this process's spend
+and not the day's.
+
+`SpendCard` printed that number under **Daily cap**, followed by
+`· resets 00:00 UTC`, with `$1.5700 left` beside it. Three claims, all of them
+the day's, from a figure the server had already said was not. The flag reached
+`/health`, reached the browser, and stopped there: nothing in `frontend/`
+mentions the word.
+
+The headroom matters as much as the caption. `remaining_usd` is the cap minus
+a spend figure that is too low, so it is an upper bound — hedging the caption
+and leaving the amount unqualified would have been half a fix. `dayFigure()`
+returns the caption, the prefix for the amount and the explanation together,
+so there is one place that can be wrong about it, the same shape as item 24's
+`rule_verdict` and item 22's `billing_line`.
+
+### One diagnosis for two faults
+
+`App` collapsed the health payload to `'ok' | 'degraded' | 'down'` and the
+sidebar printed, for every `degraded`:
+
+```
+Degraded — no model key
+```
+
+Two different faults land in that state. The server reports them separately on
+purpose — retrieval works without a key and answering does not — and a box
+whose key is fine and whose MCP subprocess failed to start was told its key was
+missing. `mcp_error`, the server's own sentence about the real fault, is in the
+payload, is declared in the type, and was shown to no one.
+
+`healthLine()` now returns the tone, the label and the detail together, and the
+sidebar renders what it is given. The prop's type changed with it, so the
+footer can no longer re-derive a cause from a tone.
+
+### "Unreachable" about a server that answered
+
+Found while reviewing the fix above, which would otherwise have shipped
+breaking its own rule. `checkHealth` returned `Health | null`, and `null`
+meant both *the fetch threw* and *the server answered 4xx/5xx*. The footer
+printed `Server unreachable` for both, so a box returning 503 sent whoever
+read it to the network instead of to the server's own log.
+
+`checkHealth` now returns a `HealthProbe` that keeps the two apart, and the
+refused case prints the status it was refused with.
+
+### A type that said it mirrored the server and did not
+
+`frontend/src/lib/types.ts` opens with *"Shapes the agent server sends. Mirrors
+mcp_server/main.py + agent.py."* Nothing checked that, and it had drifted:
+`durable`, `resets_in_seconds` and `share` are all sent and none was declared.
+A field the type omits is a field no component can read without the compiler
+objecting — which is *why* clause one survived sixteen days.
+
+`tests/test_frontend_contract.py` asks the running endpoint what it sends and
+the file what it declares. `timestamp` is exempted by name, in a comment, so
+the exemption is a decision somebody can see rather than a silent subtraction.
+
+### Nothing could have caught any of it
+
+The frontend had **no test runner**. `npm run lint` and `npm run build` ran in
+CI; nothing executed a line of it. Added vitest + jsdom +
+`@testing-library/react`, a `test` script, `Frontend test` in CI, and `npm
+test` in the gate — which `TestCiRunsTheGateWithTheSameArguments` immediately
+failed on until CI was taught the new command, working exactly as item 12
+intended.
+
+22 frontend tests. **7 fail against the original**, all of them the ones that
+read the rendered screen; the 15 in `health.test.ts` and `spend.test.ts` test
+modules this item introduces, so they are new coverage rather than regression
+proof, and are counted as such. 2 of the 3 Python contract tests fail against
+the original `types.ts`.
+
+### What was deliberately not done
+
+`VITE_MOCK=1` builds a UI that answers from `mock.ts` with no mark on screen
+saying so. That is a real instance of this item's shape, and it is a build-flag
+decision rather than a defect: nobody has ever shipped that build. Noted, not
+fixed.
+
+`npm run lint` cannot run on this laptop and never could: oxlint's native
+binding declares `engines.node: ^20.19.0 || >=22.12.0`, this machine is on
+20.12.2, and npm silently skips an optional dependency whose engine does not
+match. The lockfile entry is byte-identical to the one on `main`, so this
+predates the item. CI is on node 22 and runs it.
+
+### Rules
+
+- **A flag the server computes and the UI never reads is a flag that does not
+  exist.** `durable` was correct, tested, deployed, and invisible for sixteen
+  days.
+- **Hedge every figure that comes off the number you hedged.** A careful
+  caption beside an unqualified amount is a more convincing lie than either
+  alone.
+- **A message that names a cause must have been told which cause.** One label
+  for two faults sends the reader to the wrong half of the system. Twice in
+  one item: the degraded label, and then `null` for both *nothing answered*
+  and *answered 503*, which the first fix would have shipped intact.
+- **"Mirrors X" is a claim; a type that makes it needs a test.** The drift is
+  silent by construction — the compiler enforces the type, and the type is the
+  thing that is wrong.
+- **An untested tree is where the untested bugs are.** The count was 767 to 0.
