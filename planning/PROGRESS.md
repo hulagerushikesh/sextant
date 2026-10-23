@@ -5,6 +5,61 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-24 — the flag that reaches nobody (₹0)
+
+Item 24 was the last Python entry point worth the question, so it went to the
+tree nobody had asked it of: the frontend. 767 Python tests, **zero frontend
+tests, no test runner at all.** Five things were wrong, and one of them is why
+the others lasted.
+
+**`/health` ships `budget.durable` and the UI never read it.** Item 15 added
+that flag so "a figure nobody can date is not mistaken for the day's". It goes
+false when the spend ledger cannot be read or written — a full disk, or
+`/data/chroma` not writable by `APP_UID`, which is precisely the failure
+`trip.sh` step 5 tells the operator to watch. The tally then restarts with the
+process while Google's meter keeps counting. `SpendCard` printed that number
+under **Daily cap**, appended `· resets 00:00 UTC`, and put `$1.5700 left`
+beside it — three statements about the day, from a figure the server had
+already said was not the day's. The headroom is the same number subtracted
+from the cap, so it is an upper bound and nothing more; one `dayFigure()` now
+returns the caption, the `at most ` that goes in front of the amount, and the
+sentence explaining why, so the card cannot hedge one and not the other. Same
+shape as item 24's `rule_verdict` and item 22's `billing_line`.
+
+**The sidebar diagnosed one fault for two.** `App` collapsed the payload to a
+tone and the footer printed `Degraded — no model key` for every `degraded`
+box. The server reports `model_configured` and `mcp_connected` separately on
+purpose; a box with a good key and a dead MCP subprocess was told its key was
+missing, and `mcp_error` — the server's own words for the actual fault, in the
+payload, declared in the type — was shown to nobody. `healthLine()` returns
+tone, label and detail together and the footer renders what it is handed.
+
+**And "Server unreachable" was printed about a server that answered.** Found
+while reviewing the fix above: `checkHealth` returned `null` for a fetch that
+threw *and* for a 4xx/5xx, so a box replying 503 sent the reader to the
+network rather than to the server's own log. `HealthProbe` keeps the two
+apart and the refused case names its status.
+
+**The type said it mirrored the server.** `types.ts` opens *"Shapes the agent
+server sends. Mirrors mcp_server/main.py"*, and omitted `durable`,
+`resets_in_seconds` and `share`. That omission is the mechanism of the first
+clause: TypeScript will not let a component read a field the interface does
+not declare, so the honest flag was unreachable by construction.
+`tests/test_frontend_contract.py` asks the live endpoint what it sends and the
+file what it declares, with `timestamp` exempted by name in a comment.
+
+**And nothing could have caught any of it.** Added vitest, jsdom and
+`@testing-library/react`, a `test` script, a `Frontend test` step in CI, and
+`npm test` in the gate. `TestCiRunsTheGateWithTheSameArguments` went red the
+moment the gate changed and stayed red until CI was taught the command —
+item 12 working exactly as it was built to.
+
+22 frontend tests, 7 of them failing against the original; 3 Python contract
+tests, 2 failing against the original. 770 Python tests in all. Left alone on
+purpose: `VITE_MOCK=1` builds a UI that answers from fixtures with nothing on
+screen saying so — the same shape, but a build-flag decision rather than a
+defect, and that build has never been shipped.
+
 ## 2026-10-23 — the verdict with no consequence (₹0)
 
 Item 23 closed the last unchecked shell script, so the question moved to the
