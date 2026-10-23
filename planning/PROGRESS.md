@@ -5,6 +5,59 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-23 — the verdict with no consequence (₹0)
+
+Item 23 closed the last unchecked shell script, so the question moved to the
+Python entry points. Seven modules define a `main()`; exactly one,
+`eval/harness.py`, is ever invoked by a test. Of the other six, one decides an
+architecture question: `eval/tenancy.py`, which settled milestone 20 item 2 —
+one filtered collection, or one per owner — and is the harness you re-run when
+the store changes and the answer might flip. Nothing had ever executed it.
+Four of its claims were false.
+
+**It printed `A is REJECTED` and exited 0.** `main()` computed the verdict,
+printed it, and returned. That is item 14 — *the gate on retrieval quality
+could not fail* — in the one eval harness item 14 did not reach. There was no
+flag to add here: the verdict is the entire output of the command, computed on
+every run. It decides the exit code now, and the decision and the sentence
+come back from one function, so no caller recovers the decision by matching
+`"ACCEPTED"` in prose the file is free to reword.
+
+**`prog="sextant-eval-tenancy"` names a command that does not exist.** It is
+not in `[project.scripts]` and never was, so every usage line and every
+argparse error handed the operator a `command not found`. It is
+`python -m eval.tenancy` now — what `learning/multi-corpus.md` always said —
+and a test pins every `prog=` in the tree to a registered script or a real
+module. Five others; this was the only wrong one.
+
+**The docstring promised a temporary directory.** The subset collection is
+written *into* the caller's store: `subset()` passes a collection name and no
+directory, and the class resolves `CHROMA_DIR`, which `main()` set to
+`--store` four lines earlier. A run killed partway leaves it behind in a store
+the reader was told would not be touched. What made the claim read as true was
+a `scratch = mkdtemp(...)` that nothing was ever written to — created and
+removed empty on every run, with `shutil` and `tempfile` imported for it
+alone. Both gone.
+
+**Fourth clause, found by the test for the first.** The rule reads *within
+0.02*; `gap <= RULE_TOLERANCE` rejected a result exactly at it, because
+`0.9 - 0.88` is `0.020000000000000018`. The line printed
+`gap +0.0200 (tolerance 0.02) -> A is REJECTED` — numbers and verdict
+contradicting each other in one sentence. Rounded to the 4 places `pooled()`
+already rounds its metrics to.
+
+`sextant-judge` also always exits 0 and was deliberately left alone: it has no
+pre-registered rule, and inventing thresholds for faithfulness and abstention
+is a design decision, not a defect fix.
+
+One harness fault in this item's own tests: the docstring scan passed on the
+very docstring it was written to catch, because the claim was wrapped as
+`temporary\ndirectory`. Normalised before matching — item 23's comment-scan
+fault in the opposite direction.
+
+11 new tests (`tests/test_tenancy_harness.py`), the first ever to execute this
+module.
+
 ## 2026-10-23 — the script that starts nothing and says it did (₹0)
 
 Item 22 left `deploy.sh` measured for every command but `logs`, so the

@@ -91,6 +91,38 @@ because each one was learned the expensive way.
   the group. **An orphan is only visible if something looks for it**, so the
   suite greps for its own stubs -- under a unique sentinel name, because the
   first version matched `sleep 30` and would have killed a bystander's.
+- **A verdict with no consequence is not a verdict.** Seven modules define a
+  `main()`; only `eval/harness.py` was ever invoked by a test. `eval/tenancy.py`
+  -- the harness that settled "one filtered collection or one per owner" and
+  the one you re-run when the store changes -- computed `A is ACCEPTED` or
+  `A is REJECTED`, printed it, and **returned**, so the shell saw exit 0 either
+  way. That is item 14 (*the gate on retrieval quality could not fail*) in the
+  one eval harness item 14 did not reach. The decision and the sentence now
+  come back from one function: a caller that recovered the decision by matching
+  `"ACCEPTED"` in the printed line would be deciding twice, and the second
+  decision would be a string match on prose the file is free to reword -- the
+  same reason `deploy.sh` has one `billing_line`.
+- **The name a program prints must be a name you can type.** `prog=` is what
+  every usage line and every argparse error hands the operator, and
+  `eval/tenancy.py` said `sextant-eval-tenancy`, which is not in
+  `[project.scripts]` and never was. It is `python -m eval.tenancy` now, which
+  is what the docs always said, and every `prog=` in the tree is pinned to a
+  registered script or an existing module.
+- **An unused variable can be load-bearing for a lie.** The module docstring
+  said the subset collection goes "to a temporary directory"; it is written
+  *into* the caller's store, because `subset()` passes a collection name and no
+  directory and the class resolves `CHROMA_DIR`, which `main()` just set to
+  `--store`. What made the claim read as true was a `scratch = mkdtemp(...)`
+  that nothing was ever written to -- created and deleted empty every run, with
+  `shutil` and `tempfile` imported for it alone.
+- **`<=` on floats is not "within".** The pre-registered rule is *within 0.02*
+  and `gap <= 0.02` rejected a result exactly at it: `0.9 - 0.88` is
+  `0.020000000000000018`, so the line printed `gap +0.0200 (tolerance 0.02)`
+  and then `REJECTED`, contradicting itself in one sentence. Rounded to the 4
+  places `pooled()` already rounds to. Found by the boundary test written for
+  the clause above, not by looking. **And a static scan must normalise before
+  it matches**: the docstring check passed on the very docstring it was written
+  to catch, because the claim was wrapped as `temporary\ndirectory`.
 - **The command that sounds like the end of the bill was the one that could
   not speak.** `deploy.sh HOST down` was `exec ssh -t ... compose down`, and
   `exec` replaces this shell -- so the arm whose name reads the most like "I
