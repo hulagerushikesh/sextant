@@ -26,9 +26,15 @@ interface Props {
    * cause from it -- see lib/health.ts.
    */
   health: HealthLine | null
+  /**
+   * What `saveAll` had to do to fit, or null when it fit. It sits with the
+   * list because that is what it is about -- a toast is gone in four seconds
+   * and the list it describes is still on screen.
+   */
+  storageNote: string | null
 }
 
-export function AppSidebar({ view, onView, conversations, activeId, onOpen, onNew, onDelete, health }: Props) {
+export function AppSidebar({ view, onView, conversations, activeId, onOpen, onNew, onDelete, health, storageNote }: Props) {
   const threads = conversations.filter((c) => c.messages.length)
   return (
     <Sidebar collapsible="offcanvas" className="border-r">
@@ -91,6 +97,9 @@ export function AppSidebar({ view, onView, conversations, activeId, onOpen, onNe
               </SidebarMenu>
             ) : (
               <p className="px-2 py-1 text-[12px] leading-snug text-muted-foreground">Conversations you have are kept in this browser.</p>
+            )}
+            {storageNote && (
+              <p className="px-2 py-1 text-[12px] leading-snug text-warning">{storageNote}</p>
             )}
           </SidebarGroupContent>
         </SidebarGroup>

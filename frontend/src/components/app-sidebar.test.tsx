@@ -35,13 +35,14 @@ const health = (over: Partial<Health>): Health => ({
   ...over,
 })
 
-const show = (line: HealthLine | null) =>
+const show = (line: HealthLine | null, note: string | null = null) =>
   render(
     <TooltipProvider>
       <SidebarProvider>
         <AppSidebar
           view="chat" onView={() => {}} conversations={[]} activeId="c1"
           onOpen={() => {}} onNew={() => {}} onDelete={() => {}} health={line}
+          storageNote={note}
         />
       </SidebarProvider>
     </TooltipProvider>,
@@ -67,5 +68,19 @@ describe('the footer names the fault it was told about', () => {
   it('says it is still checking before the first answer comes back', () => {
     show(null)
     expect(screen.getByText('Checking…')).toBeTruthy()
+  })
+})
+
+describe('what the list says about whether it is being kept', () => {
+  it('says nothing when the save was clean', () => {
+    show(null)
+    expect(screen.queryByText(/storage is/i)).toBeNull()
+  })
+
+  it('shows what the save had to drop, beside the list it is about', () => {
+    // A toast is gone in four seconds and the list it describes is still on
+    // screen. `saveAll` used to say nothing at all.
+    show(null, 'Storage is full. Only the 10 most recent conversations are being kept, without their quoted passages.')
+    expect(screen.getByText(/only the 10 most recent/i)).toBeTruthy()
   })
 })
