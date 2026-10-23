@@ -5,6 +5,46 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-24 — the warning that hides on a phone (₹0)
+
+This one began as a correction. Items 25 and 26 both wrote down that the
+`VITE_MOCK=1` build had "no mark on screen saying so", and both wrote it
+without opening the file. There is a badge. Going to look at it is what found
+the actual defect, which is narrower and worse:
+
+```tsx
+{MOCK && <Badge className="ml-1 hidden ... sm:inline-flex">mock</Badge>}
+```
+
+**`hidden sm:inline-flex` is absent below 640px.** A phone on a mock build
+gets the invented answers, the invented spend against the daily cap, the
+invented recall curves and a toast saying a document was indexed — with no
+mark at all, on the screen with the least room to work it out from context.
+`frontend/.env.development` states the principle in its own comment: *a UI
+that silently shows invented answers is worse than one that says the server
+is unreachable* — and the element implementing that principle was the one
+thing the layout gave up for width. A survey of every breakpoint-hidden
+element outside `components/ui/` turned up exactly three: the word
+"Commands" beside its icon, the `⌘K` hint, and this. Two conveniences and
+the only warning in the app.
+
+It is `MockNotice` now — never breakpoint-hidden, warning-coloured rather
+than muted, `shrink-0` so the conversation title truncates first. **And
+`mock` is a label, not a warning**: a ten-pixel mono badge tells whoever
+built this what it means and tells nobody else anything, so the sentence
+itself is now reachable on hover and to a screen reader, from one
+`MOCK_NOTICE` constant the mock branches share.
+
+**The toast that said a document was stored.** Of everything mock mode
+fabricates, `Indexed 2 files — 74 chunks` is the one a person *acts* on:
+they believe the document is in the corpus and close the tab. It reads
+`Mock: pretended to index 2 files. Nothing was stored.` now.
+
+52 frontend tests, 3 of the new 5 failing against the original. The false
+"unmarked" claim is corrected in the milestone, this log, the queue row and
+memory — in place, with the correction visible, because a repository that
+documents other people's unchecked claims should show its own.
+
 ## 2026-10-24 — the save that reports success (₹0)
 
 Item 25 gave the frontend a test runner. The first thing to point it at was
@@ -100,9 +140,10 @@ item 12 working exactly as it was built to.
 
 22 frontend tests, 7 of them failing against the original; 3 Python contract
 tests, 2 failing against the original. 770 Python tests in all. Left alone on
-purpose: `VITE_MOCK=1` builds a UI that answers from fixtures with nothing on
-screen saying so — the same shape, but a build-flag decision rather than a
-defect, and that build has never been shipped.
+purpose: `VITE_MOCK=1` builds a UI that answers from fixtures — a build-flag
+decision rather than a defect. (This sentence originally added "with nothing
+on screen saying so", which was false: a `mock` badge was rendered. It was
+`hidden sm:inline-flex`. Item 27, below.)
 
 ## 2026-10-23 — the verdict with no consequence (₹0)
 

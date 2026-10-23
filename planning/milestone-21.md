@@ -2374,10 +2374,14 @@ the original `types.ts`.
 
 ### What was deliberately not done
 
-`VITE_MOCK=1` builds a UI that answers from `mock.ts` with no mark on screen
-saying so. That is a real instance of this item's shape, and it is a build-flag
-decision rather than a defect: nobody has ever shipped that build. Noted, not
-fixed.
+`VITE_MOCK=1` builds a UI that answers from `mock.ts`. Deferred here as a
+build-flag decision rather than a defect.
+
+> **Corrected by item 27.** This paragraph originally said the mock build had
+> "no mark on screen saying so". That was false and asserted without looking:
+> `App.tsx` did render a `mock` badge. What is true is narrower and worse --
+> the badge was `hidden sm:inline-flex`, so the one mark saying every figure
+> on screen is invented was absent below 640px. Item 27 has it.
 
 `npm run lint` cannot run on this laptop and never could: oxlint's native
 binding declares `engines.node: ^20.19.0 || >=22.12.0`, this machine is on
@@ -2486,3 +2490,80 @@ every re-upload. Neither had a test. Both do now, including the branch where
   cited files deleted with the UI they belonged to; one of them was the sole
   assurance on a data migration.
 - **A docstring that names its own test is a claim too.** Write the test.
+
+## 27 · The warning that hides on a phone — ₹0
+
+Shipped 2026-10-24. Found by checking a claim items 25 and 26 had both made
+without looking — and the claim was wrong, which is how the real defect
+surfaced.
+
+### The only warning in the app was the only element hidden at a breakpoint
+
+```tsx
+{MOCK && <Badge className="ml-1 hidden h-5 ... text-muted-foreground sm:inline-flex">mock</Badge>}
+```
+
+`hidden sm:inline-flex` is absent below 640px. A phone running a
+`VITE_MOCK=1` build got the invented answers, the invented spend against the
+daily cap, the invented recall curves and a toast saying a document had been
+indexed — with no mark at all, on the screen with the least room to work it
+out from context.
+
+`frontend/.env.development` states the principle in its own comment: *"a UI
+that silently shows invented answers is worse than one that says the server
+is unreachable."* The element implementing that principle was the one thing
+the layout gave up for space. Every other `hidden sm:` in the app is a
+convenience — the word "Commands" beside its icon, the `⌘K` hint — and those
+are correctly gated. The survey found exactly one load-bearing element among
+them, and it was the warning.
+
+It is `MockNotice` now: never breakpoint-hidden, warning-coloured rather than
+muted, `shrink-0` so the conversation title beside it truncates first. The
+notice is the thing that may not be given up for space.
+
+### "mock" is a label, not a warning
+
+A ten-pixel mono badge reading `mock` tells somebody who built this what it
+means and tells nobody else anything. The sentence is now the notice —
+`MOCK_NOTICE`, one constant in `api.ts`, reachable on hover and to a screen
+reader: *"every answer, figure and source on this screen is invented. No
+server is being queried."*
+
+### The toast that said a document was stored
+
+```ts
+if (MOCK) return { success: true, message: `Indexed ${n} files — ${n * 37} chunks.` }
+```
+
+Of everything mock mode fabricates, this is the one a person *acts* on: they
+read "Indexed 2 files — 74 chunks", believe the document is in the corpus,
+and close the tab. It reads `Mock: pretended to index 2 files. Nothing was
+stored.` now, from the same constant's posture.
+
+### The claim this item started as
+
+Items 25 and 26 both recorded that the mock build had "no mark on screen
+saying so" / was an "unmarked fake UI". Neither was true — the badge existed
+— and neither had been checked before being written into the milestone, the
+progress log, the queue row and memory. All four are corrected in place
+rather than quietly edited, because a repository that documents other
+people's unchecked claims should show its own.
+
+The irony is the finding: the false claim was *almost* right, and looking at
+the thing it described turned a deferred non-defect into a real one.
+
+### Rules
+
+- **A warning may not be responsive.** Everything else in a header can be
+  given up for width. The one element saying the screen is lying cannot, and
+  `hidden sm:` on it is the defect in its purest form: correct, present,
+  invisible to the reader who most needs it.
+- **A label is not a warning.** `mock` names a mode; it does not say that
+  every figure beside it is invented. If the only mark has to be small, the
+  sentence goes in `title` and in `sr-only`, not nowhere.
+- **The fabricated response a person acts on is the one that must say so.**
+  A fake chart is looked at; a fake "Indexed 2 files" is believed and acted
+  on.
+- **Check the claim before you write it down, including in a "not done"
+  note.** Two items asserted "unmarked" without opening the file. The
+  correction is the item.
