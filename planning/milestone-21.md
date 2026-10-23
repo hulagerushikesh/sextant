@@ -2156,3 +2156,129 @@ The frontend is never probed over HTTP. Vite moves off 3000 when 3000 is busy
 and its own output is the only authority on which port it took, so the script
 checks that it is alive and says so, rather than printing a URL it cannot
 stand behind.
+
+## 24 · The verdict with no consequence — ₹0
+
+Item 23 closed the last unchecked shell script. The same question — *which
+claim has nothing ever checked?* — pointed next at the Python entry points.
+Seven modules define a `main()`; exactly one of them, `eval/harness.py`, is
+ever invoked by a test. Of the other six, one decides an architecture
+question: `eval/tenancy.py`, which settled milestone 20 item 2 (one filtered
+collection, or one per owner) and is the harness you re-run when the store
+changes and the answer might flip.
+
+Nothing had ever executed it. Four of its claims were false.
+
+### First clause — it prints REJECTED and exits 0
+
+```python
+        payload = asyncio.run(run(args.store, args.mode, args.golden))
+        print_table(payload)
+        line = verdict(payload)          # "... -> A is ACCEPTED" | "... REJECTED"
+        payload["verdict"] = line
+        print(f"\n{line}")
+```
+
+`main()` then returns. Driven over a result far below the ceiling:
+
+```
+rule: at 3.1% share and 10x k, A recall@5 0.1000 vs B 0.9000, gap +0.8000
+(tolerance 0.02) -> A is REJECTED
+
+>> main() returned normally -- shell sees exit 0
+```
+
+This is item 14 — *the gate on retrieval quality could not fail* — in the one
+eval harness item 14 did not reach. Item 14 gave `sextant-eval` a `--check`
+that exits on regression. Here there is no flag to add: the verdict is
+computed on every run and is the entire output of the command. It now decides
+the exit code.
+
+The decision and the sentence come back from **one** function, not two. A
+caller that needed the decision and recovered it by matching `"ACCEPTED"` in
+the printed line would be deciding twice, and the second decision would be a
+string match on prose this file is free to reword — the same reason item 22
+gave `deploy.sh` one `billing_line` that two commands call.
+
+### Second clause — the name it tells you to type does not exist
+
+```
+$ ./.venv/bin/python -m eval.tenancy
+usage: sextant-eval-tenancy [-h] --store STORE [--mode MODE] ...
+sextant-eval-tenancy: error: the following arguments are required: --store
+
+$ command -v sextant-eval-tenancy
+NO -- command not found
+```
+
+`prog="sextant-eval-tenancy"` names a console script that is not in
+`[project.scripts]` and never was. Every usage line and every argparse error
+hands the operator a command that does not exist. The five other `prog=`
+strings in the tree are all registered; this was the only one. `prog` is now
+`python -m eval.tenancy`, which is what `learning/multi-corpus.md` has always
+told people to run, and a test pins every `prog=` in the tree to either a
+registered script or a module that exists.
+
+### Third clause — the docstring promises a temporary directory
+
+> The store is opened read-only; the subset collection is written to a
+> temporary directory and deleted.
+
+It is written **into the caller's store**. `subset()` builds a
+`KnowledgeBase(collection_name=SUBSET_COLLECTION)` with no directory, and
+that class resolves its path from `CHROMA_DIR` — which `main()` set to
+`--store` four lines earlier. A run killed partway leaves the collection
+behind in a store the reader was told would not be touched.
+`learning/multi-corpus.md` had it right all along ("written beside it and
+deleted. Run it against a copy if that matters"); the module docstring did
+not.
+
+What made the false claim look true was a `scratch = mkdtemp(...)` in
+`main()` that **nothing was ever written to** — created and removed empty on
+every run, with `shutil` and `tempfile` imported for it alone. It is gone,
+and the docstring now describes the code.
+
+### Fourth clause — found by the test for the first one
+
+The pre-registered rule reads *"within 0.02"*, and `gap <= RULE_TOLERANCE`
+does not implement it:
+
+```
+rule: at 3.1% share and 10x k, A recall@5 0.8800 vs B 0.9000, gap +0.0200
+(tolerance 0.02) -> A is REJECTED
+raw gap: 0.020000000000000018
+```
+
+A result exactly at the pre-registered tolerance was rejected, while the line
+printed `gap +0.0200 (tolerance 0.02)` immediately beside the word — the
+numbers and the verdict contradicting each other in one sentence. The gap is
+now rounded to 4 places, the precision `pooled()` already rounds its metrics
+to, and compared there. This was not on the list when the item started; the
+boundary test written for the first clause failed and the reason was real.
+
+### What was deliberately not done
+
+`sextant-judge` also always exits 0. It is left alone: it has no
+pre-registered rule to gate on, and inventing thresholds for faithfulness and
+abstention is a design decision, not a defect fix. `eval.yml` records it as a
+human pre-release step, which is a person reading numbers — a coherent
+posture, unlike a command that computes a verdict and discards it.
+
+### Harness faults in this item's own tests
+
+The docstring scan matched nothing and passed on the very docstring it was
+written to catch: the claim was wrapped as `temporary\ndirectory`, so the
+substring was never present. Normalised before scanning — the same fault as
+item 23's `0.0.0.0` scan matching a comment, in the opposite direction.
+
+### Rules
+
+- **A verdict with no consequence is not a verdict.** A command that computes
+  a decision must spend it on the exit code, or it has only told whoever was
+  reading.
+- **The name a program prints must be a name you can type.** `prog=` is the
+  one string every usage line and every error message hands the operator.
+- **An unused variable can be load-bearing for a lie.** The empty `mkdtemp`
+  was the only evidence for a docstring claim that was false.
+- **A static scan must normalise before it matches.** A line break is not a
+  difference in meaning, and a scan that thinks it is passes silently.
