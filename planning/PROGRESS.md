@@ -39,11 +39,11 @@ both ways — a count that fails if a copy is pasted back, and a run of `down`
 for each of the eight states compared against what `status` prints for the
 same state, because a state dropped from one caller's reach fails no count.
 
-Six plants, each failing on its own assertion; restoring `exec` fails 12 of
+Seven plants, each failing on its own assertion; restoring `exec` fails 12 of
 the 15 new tests. Item 20's own pins read the arms out of the `status)` block
 by text and failed on the move — the pin working — and gained a second half,
 because a shape pinned on a function nothing has to call is pinned on nothing.
-745 tests. `deploy.sh` is now exercised by the gate for
+746 tests. `deploy.sh` is now exercised by the gate for
 `start`, `stop`, `status`, `preflight` and `down` — every command but `logs`,
 which is an interactive tail that claims nothing.
 
