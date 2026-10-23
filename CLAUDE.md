@@ -60,6 +60,37 @@ because each one was learned the expensive way.
   meter is on" (wrong in the safe direction, like the grounded-search price),
   and an unreadable state exits 1 with the `describe` to run by hand.
   **A `case` with no default is a list of the states somebody thought of.**
+- **The one entry point the README hands a newcomer had never been run.**
+  `./start_all_services.sh` backgrounded two servers with `&` and then printed
+  four URLs and "Ctrl+C to stop" unconditionally. Both children could die on
+  their first line -- no uvicorn, no `dev` script -- and it printed the banner,
+  scrolled their errors above it where they read as noise, and **exited 0**.
+  `deploy.sh start` saying ">> up at <ip>" regardless, and `trip.sh` ending
+  "agenticrag is RUNNING" with exit 0, in the script that is somebody's first
+  contact with this project. It waits on `/health` now, names which half failed,
+  stops the other, and exits 1. **A banner is a claim; a backgrounded process is
+  not evidence for it.**
+- **A dev server with no gate does not belong on every interface.** The same
+  script bound `--host 0.0.0.0`. The only authentication this project has is
+  Caddy's `basic_auth`, which runs on the box -- locally, with no
+  `SEXTANT_PROXY_SECRET`, every caller resolves to `shared`, and `shared` owns
+  the CLI-ingested corpus and may write it. So anyone who could reach the port
+  could read the corpus through `/query`, spending the Gemini key against a
+  prepaid cap, and replace a document through `/ingest`. `HOST` defaults to
+  `127.0.0.1`; a wider bind is opt-in and says what it means. The loopback case
+  prints nothing, because a warning on the documented default is one people
+  learn to skip.
+- **A check whose answer depends on how fast the step before it finished is not
+  a check.** Both of these were found in the *fix*, by running it. The frontend
+  liveness test was a single `kill -0` the instant the API came up; with a
+  stubbed `curl` that is milliseconds, so a frontend exiting in 400ms was still
+  alive when asked and the banner printed anyway -- the defect being fixed,
+  reintroduced by the fix. It settles first now. And `cleanup` killed
+  `$FRONTEND_PID`, which is the `( cd frontend && npm run dev )` *subshell*, so
+  npm and Vite under it survived every stop: `set -m` and `kill -- -$PID` kill
+  the group. **An orphan is only visible if something looks for it**, so the
+  suite greps for its own stubs -- under a unique sentinel name, because the
+  first version matched `sleep 30` and would have killed a bystander's.
 - **The command that sounds like the end of the bill was the one that could
   not speak.** `deploy.sh HOST down` was `exec ssh -t ... compose down`, and
   `exec` replaces this shell -- so the arm whose name reads the most like "I
