@@ -682,6 +682,19 @@ class TestDownSaysWhatIsStillBilling:
         assert "assume it is billing" in out
         assert "deploy.sh plainbox status" in out
 
+    def test_a_describe_that_answers_nothing_is_the_same_loud_case(self, tmp_path):
+        """Item 20's worse half, reached from here: gcloud is present and the
+        `describe` fails -- wrong project, expired credentials, an API error --
+        so the state comes back empty. `status` exits 1 on that; the epilogue
+        must not, because the `down` it is reporting on succeeded. Separately
+        pinned from the unresolvable host: that one never reaches `read` at
+        all, and `read` on an empty answer is where `set -euo pipefail` would
+        abort the script before the warning was printed.
+        """
+        code, out, _ = _run_deploy(tmp_path, args=("down",), vm_state="")
+        assert code == 0, out
+        assert "assume it is billing" in out
+
     def test_the_lifecycle_commands_still_refuse_an_unresolvable_host(self, tmp_path):
         """The same `return` must not make `status` answer about nothing."""
         code, out, _ = _run_deploy(

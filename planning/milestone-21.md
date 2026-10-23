@@ -1983,6 +1983,12 @@ Three outcomes, the same shape as `ssh_door`:
 The third is a machine with no gcloud, no credentials, or a plain ssh
 alias. It is loud, it is wrong in the safe direction, and it exits 0.
 
+It is reached two ways, pinned separately. An unresolvable host never gets as
+far as reading a state. A `describe` that *fails* — wrong project, expired
+credentials — returns an empty one, which is item 20's worse half reached from
+here, and is also where `set -euo pipefail` would abort the script before the
+warning printed if the read were written any other way.
+
 ### The harness
 
 `_SSH_STUB` gained a `*"prod.yml down"*` arm that prints what compose
@@ -2004,6 +2010,7 @@ the bin directory so one test can run the script twice under one
 | 4 | a billing line copied back into the epilogue | the count, and the 5 states that then disagree |
 | 5 | `\|\| true` instead of `\|\| rc=$?` | the exit-status test |
 | 6 | `status` stops calling the shared table and inlines a line | the new `test_status_still_calls_it`, and 5 states |
+| 7 | the epilogue made to abort on a blank state (`set -e`) | the describe-answers-nothing test |
 
 Plant 4 is the one worth keeping: the static count and the per-state
 comparison are two different claims. Pasting a copy raises the count; a
