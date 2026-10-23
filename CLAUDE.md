@@ -185,6 +185,25 @@ because each one was learned the expensive way.
   `agenticrag.*` -> `sextant.*` migration of a person's saved conversations.
   **And a docstring that names its own test is a claim too** -- `export.ts`
   now names `export.test.ts`, so that file exists.
+- **A warning may not be responsive.** The one mark saying a `VITE_MOCK=1`
+  build is showing invented answers was `<Badge className="hidden ...
+  sm:inline-flex">mock</Badge>` -- absent below 640px, on the screen with the
+  least room to work it out from context, while the invented spend against
+  the daily cap and a toast saying a document was indexed showed normally.
+  Everything else in a header can be given up for width; the element saying
+  the screen is lying cannot. A survey of every breakpoint-hidden element
+  outside `components/ui/` found three: the word "Commands", the `MOD K` hint,
+  and this. **And a label is not a warning** -- `mock` names a mode to whoever
+  built it and says nothing to anyone else, so the sentence lives in
+  `MOCK_NOTICE` and reaches `title` and `sr-only`. **And the fabricated
+  response a person acts on is the one that must say so**: a fake chart is
+  looked at, `Indexed 2 files -- 74 chunks` is believed.
+- **Check the claim before you write it down, including in a "not done"
+  note.** Items 25 and 26 both recorded the mock build as "unmarked", neither
+  had opened the file, and the badge existed. Going to look is what found the
+  real defect. All four places carrying the false claim are corrected in
+  place, visibly, because a repository that documents other people's
+  unchecked claims should show its own.
 - **The command that sounds like the end of the bill was the one that could
   not speak.** `deploy.sh HOST down` was `exec ssh -t ... compose down`, and
   `exec` replaces this shell -- so the arm whose name reads the most like "I
