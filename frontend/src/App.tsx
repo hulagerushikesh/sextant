@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { Command as CommandIcon, Copy, Moon, PanelRight, Sun } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { checkHealth, fetchStats, MOCK, streamQuery } from '@/lib/api'
+import { checkHealth, fetchStats, streamQuery } from '@/lib/api'
 import { blank, loadAll, MOD, money, readLifetime, record, remove, resetLifetime, saveAll, seedFrom, totals, upsert } from '@/lib/store'
 import { storageKey } from '@/lib/storage'
 import { healthLine, type HealthLine } from '@/lib/health'
@@ -24,12 +24,12 @@ import { Answer } from '@/components/answer'
 import { AppSidebar, type View } from '@/components/app-sidebar'
 import type { CommandSpec } from '@/components/command-palette'
 import { Composer } from '@/components/composer'
+import { MockNotice } from '@/components/mock-notice'
 import { CorpusCard, type CorpusState } from '@/components/corpus-card'
 import { Opening } from '@/components/opening'
 import { SourceList } from '@/components/source-list'
 import { SpendCard } from '@/components/spend-card'
 import { Trace } from '@/components/trace'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -333,7 +333,7 @@ export default function App() {
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-1 !h-4" />
           <span className="min-w-0 truncate text-[13px] font-medium">{view === 'lab' ? 'Index Lab' : (saved.find((c) => c.id === activeId)?.messages.length ? saved.find((c) => c.id === activeId)!.title : 'New conversation')}</span>
-          {MOCK && <Badge variant="outline" className="ml-1 hidden h-5 font-mono text-[10px] text-muted-foreground sm:inline-flex">mock</Badge>}
+          <MockNotice />
           <div className="ml-auto flex shrink-0 items-center gap-1">
             <Tooltip>
               <TooltipTrigger asChild>
