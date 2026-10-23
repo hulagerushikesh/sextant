@@ -194,6 +194,13 @@ case "$cmd" in
                                  *) printf 'agenticrag-caddy-1\\t%s\\n' \
                                       "${FAKE_CADDY_STATUS-Up 7 minutes}" ;;
                                esac ;;
+  # `down`. The point of the arm is that the containers really do go away and
+  # the script still has something to say afterwards, so it prints what compose
+  # prints and takes its exit status from a knob -- a stub that could only
+  # succeed would make "the exit status survives the epilogue" unfalsifiable.
+  *"prod.yml down"*)           echo "Container agenticrag-api-1  Removed"
+                               echo "Container agenticrag-caddy-1  Removed"
+                               exit "${FAKE_DOWN_RC:-0}" ;;
   *"logs api"*)                echo "${FAKE_LOG_LINE-no stale names}" ;;
   *"/stats"*)                  echo "$FAKE_STATS" ;;
   *"/health"*)                 echo "$FAKE_HEALTH" ;;
@@ -445,14 +452,28 @@ def _run_trip(
     return done.returncode, done.stdout + done.stderr
 
 
-def _run_deploy(tmp_path, args=("start", "--yes"), vm_state="TERMINATED", **extra_env):
+# The config-ssh alias shape: `<instance>.<zone>.<project>`, which is where
+# deploy.sh reads the gcloud target from when the environment does not say.
+_HOST = "agenticrag.us-central1-a.test-project"
+
+
+def _run_deploy(
+    tmp_path,
+    args=("start", "--yes"),
+    vm_state="TERMINATED",
+    host=_HOST,
+    resolvable=True,
+    **extra_env,
+):
     """Run `deploy/deploy.sh` offline, the way `_run_trip` runs the trip.
 
     `deploy.sh start` is the other command in this repository that turns the
     meter on, and until now nothing had ever run it except a person.
     """
     bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
+    # parents=True so a test that runs this twice can hand each call its own
+    # root under the one tmp_path, the way `_run_preflight` does.
+    bin_dir.mkdir(parents=True)
     for name, body in (("ssh", _SSH_STUB), ("gcloud", _GCLOUD_STUB), ("curl", _CURL_STUB)):
         f = bin_dir / name
         f.write_text(body)
@@ -477,13 +498,19 @@ def _run_deploy(tmp_path, args=("start", "--yes"), vm_state="TERMINATED", **extr
         "VM_INSTANCE": "agenticrag",
         "VM_ZONE": "us-central1-a",
         "VM_PROJECT": "test-project",
+        # `resolvable=False` removes those three again, so a test can present
+        # the case this script cannot answer at all: a plain ssh alias, or a
+        # machine with no gcloud on it.
         # Two minutes of real waiting is not a unit test.
         "VM_SSH_TRIES": "1",
         "VM_SSH_SLEEP": "0",
         **extra_env,
     }
+    if not resolvable:
+        for name in ("VM_INSTANCE", "VM_ZONE", "VM_PROJECT"):
+            env.pop(name, None)
     done = subprocess.run(
-        ["bash", str(DEPLOY / "deploy.sh"), "agenticrag.us-central1-a.test-project", *args],
+        ["bash", str(DEPLOY / "deploy.sh"), host, *args],
         capture_output=True,
         text=True,
         env=env,
@@ -593,6 +620,119 @@ class TestStopChecksThePark:
         assert code == 0
         assert "already stopped" in out
         assert "instances stop" not in calls
+
+
+class TestDownSaysWhatIsStillBilling:
+    """`down` stops the containers; the VM goes on charging ~Rs5.6/hour.
+
+    Until 2026-10-23 the arm was `exec ssh -t ... compose down`, and `exec`
+    replaces this shell -- so the command whose name sounds the most like "I
+    am finished paying for this" was *structurally* incapable of saying
+    anything after the containers went away. Run against a RUNNING box it
+    printed two "Removed" lines and exited 0. That is the 2026-09-28 Rs703
+    failure with the believing one level up: the box was not forgotten, it was
+    reported shut down by the script.
+    """
+
+    def test_a_running_vm_is_named_as_still_billing(self, tmp_path):
+        code, out, _ = _run_deploy(tmp_path, args=("down",), vm_state="RUNNING")
+        assert code == 0, out
+        assert "RUNNING" in out
+        assert "billing" in out
+        assert f"deploy.sh {_HOST} stop" in out
+
+    def test_down_does_not_park_the_box_by_itself(self, tmp_path):
+        """Saying it and doing it are different commands, deliberately.
+
+        `down` means *stop serving*; `stop` means *stop paying*. A `down` that
+        silently parked the box would take a deploy's restart away from
+        whoever typed it, so the epilogue reports and the operator decides.
+        """
+        _, out, calls = _run_deploy(tmp_path, args=("down",), vm_state="RUNNING")
+        assert "instances stop" not in calls, out
+
+    def test_a_parked_vm_is_not_warned_about(self, tmp_path):
+        code, out, _ = _run_deploy(tmp_path, args=("down",), vm_state="TERMINATED")
+        assert code == 0, out
+        assert "VM meter off" in out
+        assert "park it" not in out
+
+    def test_the_compose_exit_status_survives_the_epilogue(self, tmp_path):
+        """`exec` preserved it for free; doing this by hand must not lose it."""
+        code, out, _ = _run_deploy(
+            tmp_path, args=("down",), vm_state="RUNNING", FAKE_DOWN_RC="1"
+        )
+        assert code == 1, out
+        assert "compose down exited 1" in out
+        assert "RUNNING" in out, "the epilogue must still run on a failed down"
+
+    def test_an_unreadable_state_is_loud_and_still_exits_zero(self, tmp_path):
+        """No gcloud, or a plain ssh alias: the question cannot be answered.
+
+        `vm_target` used to `exit 2` on that, which would turn a `down` that
+        worked into a failure -- an epilogue must never overrule the command
+        it is reporting on. It returns now, and the unanswered case says the
+        expensive thing rather than nothing.
+        """
+        code, out, _ = _run_deploy(
+            tmp_path, args=("down",), vm_state="RUNNING", host="plainbox", resolvable=False
+        )
+        assert code == 0, out
+        assert "does NOT stop the VM" in out
+        assert "assume it is billing" in out
+        assert "deploy.sh plainbox status" in out
+
+    def test_the_lifecycle_commands_still_refuse_an_unresolvable_host(self, tmp_path):
+        """The same `return` must not make `status` answer about nothing."""
+        code, out, _ = _run_deploy(
+            tmp_path, args=("status",), host="plainbox", resolvable=False
+        )
+        assert code == 2, out
+        assert "cannot tell instance/zone/project" in out
+
+
+class TestOneBillingTableAnswersBothCommands:
+    """`status` already had an arm per instance state. `down`'s epilogue needs
+    the same answer, and a second hand-written table of the same eight states
+    is the `_FORWARDED_ENV` and preflight-key-list shape a third time: it
+    agrees on the day it is written and falls behind silently after.
+    """
+
+    _STATES = (
+        "RUNNING",
+        "REPAIRING",
+        "PROVISIONING",
+        "STAGING",
+        "STOPPING",
+        "SUSPENDING",
+        "SUSPENDED",
+        "TERMINATED",
+    )
+
+    def test_there_is_one_definition(self):
+        body = (DEPLOY / "deploy.sh").read_text()
+        assert body.count("billing_line() {") == 1
+        # Two callers, one function. Counting the calls rather than the
+        # string "billing:" is the pin: a copy pasted back into either arm
+        # would raise the count of `echo "   billing:` lines, which only the
+        # definition is allowed to hold.
+        assert body.count('billing_line "') == 3, "status, and both epilogue arms"
+        assert body.count('echo "   billing:') == 6, "one per state group, in one place"
+
+    @pytest.mark.parametrize("state", _STATES)
+    def test_down_reports_what_status_reports(self, tmp_path, state):
+        """The behavioural half. The count above fails if someone writes a
+        second table; this fails if they write one that disagrees -- and a
+        state removed from `down`'s reach fails neither count nor grep.
+        """
+        _, status_out, _ = _run_deploy(
+            tmp_path / "s", args=("status",), vm_state=state
+        )
+        _, down_out, _ = _run_deploy(tmp_path / "d", args=("down",), vm_state=state)
+        line = next(
+            ln.strip() for ln in status_out.splitlines() if ln.strip().startswith("billing:")
+        )
+        assert line in down_out, f"{state}: status says {line!r}, down does not"
 
 
 class TestTheDoorCheckHasOneCopy:
@@ -2390,23 +2530,36 @@ class TestStatusSaysWhatIsBilling:
         assert "billing" in out, out
         assert "meter off" not in out, out
 
-    def _status_block(self) -> str:
-        """The `status)` arm of deploy.sh, as text.
+    def _billing_block(self) -> str:
+        """`billing_line`, as text.
 
         Read rather than executed because what is being pinned is the *shape*
         of the decision -- that there is a default at all -- and no run can
         show the absence of one.
+
+        This used to read the `status)` arm, where the arms lived until
+        2026-10-23. They moved into a function when `down`'s epilogue needed
+        the same eight answers, and these two tests failed on the move, which
+        is the pin working: the decision is still being read, at its one
+        address. `test_status_still_calls_it` below is the other half --
+        without it this pins a function nothing has to use.
         """
+        text = (DEPLOY / "deploy.sh").read_text()
+        start = text.index("\nbilling_line() {")
+        end = text.index("\n}\n", start)
+        return text[start:end]
+
+    def test_status_still_calls_it(self):
         text = (DEPLOY / "deploy.sh").read_text()
         start = text.index("\n  status)")
         end = text.index("\n  stop)", start)
-        return text[start:end]
+        assert 'billing_line "$state"' in text[start:end], "status prints no verdict"
 
     def test_the_billing_case_keeps_a_default(self):
         """The arms are a list of the states somebody thought of; the default
         is the part that holds when the next one is invented. Removing it puts
         this straight back to printing nothing for a box that bills."""
-        block = self._status_block()
+        block = self._billing_block()
         assert "*)" in block, "the billing case has no default arm"
         tail = block[block.index("*)") :]
         assert "UNKNOWN" in tail and "meter is on" in tail, tail[:200]
@@ -2415,7 +2568,7 @@ class TestStatusSaysWhatIsBilling:
         """Anti-drift, and anti-vacuity: the run-every-state test above would
         keep passing on the default arm alone, reporting UNKNOWN for states the
         script used to name. Each one has to still be named."""
-        block = self._status_block()
+        block = self._billing_block()
         missing = [s for s in (*self.BILLING_STATES, self.PARKED_STATE) if s not in block]
         assert not missing, f"named by the test, not by the script: {missing}"
 

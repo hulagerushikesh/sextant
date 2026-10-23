@@ -13,7 +13,7 @@
 #   deploy/deploy.sh vm-host            # preflight + ship + build + up
 #   deploy/deploy.sh vm-host preflight  # just check the box is ready
 #   deploy/deploy.sh vm-host logs       # tail the stack
-#   deploy/deploy.sh vm-host down       # stop the stack (containers only)
+#   deploy/deploy.sh vm-host down       # stop the containers (the VM keeps billing)
 #   deploy/deploy.sh vm-host status     # is the VM up? what does it cost?
 #   deploy/deploy.sh vm-host stop       # park the VM (disks + images kept)
 #   deploy/deploy.sh vm-host start      # unpark it -- asks first, it costs
@@ -51,7 +51,11 @@ vm_target() {
   if [ -z "$INSTANCE" ] || [ -z "$ZONE" ] || [ -z "$PROJECT" ]; then
     echo "cannot tell instance/zone/project from '$REMOTE';" \
          "set VM_INSTANCE, VM_ZONE and VM_PROJECT" >&2
-    exit 2
+    # `return`, not `exit`: `down` asks this the same question the lifecycle
+    # commands do, but it asks it *after* doing its work, and a command that
+    # succeeded must not be turned into a failure by the epilogue that reports
+    # on it.
+    return 2
   fi
   GC=(gcloud compute instances --project="$PROJECT")
   GC_COMPUTE=(gcloud compute --project="$PROJECT")
@@ -62,9 +66,77 @@ vm_status() {
     --format='value(status,machineType.basename(),networkInterfaces[0].accessConfigs[0].natIP)'
 }
 
+# billing_line STATE -- what that state costs, indented under the caller.
+#
+# Every state the compute API documents, and a default. These arms used to be
+# RUNNING and TERMINATED only, so six states -- all of which bill -- printed
+# the instance line and nothing after it. A `case` with no default is a list
+# of the states somebody thought of, and silence here reads exactly like the
+# parked case.
+#
+# One copy, because `down`'s epilogue needs the same answer and a second table
+# of the same eight states would fall behind this one silently -- which is how
+# the preflight came to read seven of the Caddyfile's twelve names.
+billing_line() {
+  case "$1" in
+    RUNNING|REPAIRING)
+      echo "   billing: VM $VM_COST_PER_HOUR/hour + disks + IP" ;;
+    PROVISIONING|STAGING)
+      echo "   billing: starting up -- the VM meter is on from here" ;;
+    STOPPING|SUSPENDING)
+      echo "   billing: still on at $VM_COST_PER_HOUR/hour until this finishes" ;;
+    SUSPENDED)
+      echo "   billing: preserved memory + disks (no vCPU, not free)" ;;
+    TERMINATED)
+      echo "   billing: disks + reserved IP only (VM meter off)" ;;
+    *)
+      # Wrong in the safe direction, like the grounded-search price in
+      # pricing.py: a state name this script has never seen must not read as
+      # parked.
+      echo "   billing: UNKNOWN state '$1' -- assume the VM meter is on" ;;
+  esac
+}
+
+# What is still on the meter once the containers are gone.
+#
+# `down` is the only command here that stops something without stopping the
+# box, so it is the only one where "finished" and "not billing" are different
+# sentences -- and it is the command whose name sounds the most like both. A
+# person who runs it and sees two containers removed has no way to learn from
+# this script that an e2-standard-2 is still charging ~Rs5.6/hour behind them.
+# That is the 2026-09-28 Rs703 shape with the believing done one level up.
+#
+# Never fatal, and never changes the caller's exit status: this reports on a
+# command that has already decided its own result. An unreadable state says
+# the meter is on, which is the direction `status` and pricing.py both round in.
+meter_epilogue() {
+  local state=''
+  if vm_target 2>/dev/null; then
+    read -r state _ _ <<<"$(vm_status 2>/dev/null || true)"
+  fi
+  case "$state" in
+    TERMINATED|STOPPED)
+      echo ">> containers stopped, and the VM is $state."
+      billing_line "$state" ;;
+    '')
+      # No gcloud, no credentials, or a host this script cannot resolve to an
+      # instance. The containers are down either way and the box almost
+      # certainly is not, so say the expensive thing rather than nothing.
+      echo ">> containers stopped. This does NOT stop the VM, and its state" >&2
+      echo ">>   could not be read -- assume it is billing" \
+           "$VM_COST_PER_HOUR per hour." >&2
+      echo ">>   check:  deploy/deploy.sh $REMOTE status" >&2
+      echo ">>   park:   deploy/deploy.sh $REMOTE stop" >&2 ;;
+    *)
+      echo ">> containers stopped, but the VM is NOT: $INSTANCE is $state."
+      billing_line "$state"
+      echo ">>   park it:  deploy/deploy.sh $REMOTE stop" ;;
+  esac
+}
+
 case "$CMD" in
   status)
-    vm_target
+    vm_target || exit 2
     read -r state type ip <<<"$(vm_status)"
     # An empty state is not a state. `describe` leaves one behind whenever it
     # fails -- wrong project, expired credentials, an API error -- and this
@@ -81,31 +153,10 @@ case "$CMD" in
       exit 1
     fi
     echo "$INSTANCE (${type:-machine type unknown}, $ZONE): $state${ip:+  ip $ip}"
-    # Every state the compute API documents, and a default. The arms below used
-    # to be RUNNING and TERMINATED only, so six states -- all of which bill --
-    # printed the line above and nothing after it. A `case` with no default is
-    # a list of the states somebody thought of, and silence here reads exactly
-    # like the parked case.
-    case "$state" in
-      RUNNING|REPAIRING)
-        echo "   billing: VM $VM_COST_PER_HOUR/hour + disks + IP" ;;
-      PROVISIONING|STAGING)
-        echo "   billing: starting up -- the VM meter is on from here" ;;
-      STOPPING|SUSPENDING)
-        echo "   billing: still on at $VM_COST_PER_HOUR/hour until this finishes" ;;
-      SUSPENDED)
-        echo "   billing: preserved memory + disks (no vCPU, not free)" ;;
-      TERMINATED)
-        echo "   billing: disks + reserved IP only (VM meter off)" ;;
-      *)
-        # Wrong in the safe direction, like the grounded-search price in
-        # pricing.py: a state name this script has never seen must not read as
-        # parked.
-        echo "   billing: UNKNOWN state '$state' -- assume the VM meter is on" ;;
-    esac
+    billing_line "$state"
     ;;
   stop)
-    vm_target
+    vm_target || exit 2
     read -r state _ _ <<<"$(vm_status)"
     if [ "$state" = "TERMINATED" ]; then echo "$INSTANCE already stopped"; exit 0; fi
     echo ">> stopping $INSTANCE (containers restart on their own at next start) ..."
@@ -141,7 +192,7 @@ case "$CMD" in
     fi
     ;;
   start)
-    vm_target
+    vm_target || exit 2
     read -r state _ _ <<<"$(vm_status)"
     if [ "$state" = "RUNNING" ]; then echo "$INSTANCE already running"; exit 0; fi
     # The static IP was released on 2026-09-17 (it billed ~₹640/month while the
@@ -204,7 +255,16 @@ case "$CMD" in
     exec ssh -t "$REMOTE" "cd $APP_DIR && $COMPOSE logs -f --tail=200"
     ;;
   down)
-    exec ssh -t "$REMOTE" "cd $APP_DIR && $COMPOSE down"
+    # Not `exec`. Until 2026-10-23 this line replaced the shell with ssh, so
+    # the command that sounds the most like "I am done paying for this" was
+    # structurally incapable of saying anything after the containers went
+    # away. `exec` preserved the exit status, which is the only reason to use
+    # it here, so the status is preserved by hand instead.
+    rc=0
+    ssh -t "$REMOTE" "cd $APP_DIR && $COMPOSE down" || rc=$?
+    [ "$rc" = 0 ] || echo ">> compose down exited $rc" >&2
+    meter_epilogue
+    exit "$rc"
     ;;
   preflight|up)
     # Check the box BEFORE spending twenty minutes building torch. Every one of
