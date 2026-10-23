@@ -303,6 +303,20 @@ cp .env.example .env
 | API docs | http://localhost:8000/docs |
 | Discovered tools | http://localhost:8000/tools |
 
+It waits for `/health` before printing that table, and exits non-zero —
+having stopped whichever half did start — if either one does not come up.
+Three knobs, because the defaults are right for the project and wrong for
+somebody: `PY` (interpreter), `PORT` (if :8000 is taken, `PORT=8100
+./start_all_services.sh`, and point the UI at it with `VITE_SERVER_URL` in
+`frontend/.env.local`), and `HOST`.
+
+`HOST` is `127.0.0.1` and should stay there. Nothing authenticates this
+process: the gate is Caddy's `basic_auth` and Caddy only runs on the
+deployed box, so without `SEXTANT_PROXY_SECRET` every caller is `shared` —
+which owns the indexed corpus and can overwrite it. Binding wider hands
+anyone who can reach the port your documents through `/query`, on your
+Gemini key.
+
 The knowledge-base server is not started here — the agent server launches it as a
 stdio subprocess and owns its lifetime.
 

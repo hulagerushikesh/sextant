@@ -5,6 +5,48 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-23 — the script that starts nothing and says it did (₹0)
+
+Item 22 left `deploy.sh` measured for every command but `logs`, so the
+question that found the last three — *which claim has nothing ever checked?* —
+pointed at the only shell script outside `deploy/`: `start_all_services.sh`,
+which `README.md` presents as **the** way to run this project. Nothing had
+ever executed it.
+
+Run with both children failing on their first line, it printed four URLs,
+"Ctrl+C to stop", and exited **0**, with the two real reasons scrolled above
+the banner where they read as noise. That is `deploy.sh start` printing
+`>> up at <ip>` regardless and `trip.sh` ending `agenticrag is RUNNING` with
+exit 0 — in the script that is somebody's first contact with the project. It
+waits on `/health` now, names which half failed, stops the other rather than
+leaving it half-running, and exits 1.
+
+Second clause: `--host 0.0.0.0`. Nothing authenticates this process — the gate
+is Caddy's `basic_auth` and Caddy runs only on the box, so locally every
+caller resolves to `shared`, which owns the CLI-ingested corpus and, since
+0.8.5, may write it. A wide bind let anyone who could reach the port read the
+corpus through `/query`, on the Gemini key against a prepaid cap, and replace
+a document through `/ingest`. `HOST` is `127.0.0.1`; wider is opt-in and says
+what it means; loopback prints nothing, because a warning on the documented
+default is one people learn to skip.
+
+**Two defects in the fix, both found by running the fix.** The frontend
+liveness check was a single `kill -0` the instant the API came up — with a
+stubbed curl that is milliseconds, so a frontend exiting 400ms later was still
+alive when asked and the banner printed: the defect being fixed, reintroduced
+by the fix. And `cleanup` killed `$FRONTEND_PID`, the subshell, leaving npm
+and Vite under it running after every stop. A settle loop, and `set -m` with
+`kill -- -$PID`, respectively.
+
+The harness learned item 21's lesson again: the `curl` stub answered 200
+unconditionally, so a dead server read as ready and the dead-server test
+reached the wrong branch. It answers off a marker the live interpreter
+touches. Its orphan check first grepped `sleep 30` and `pkill`ed the same
+pattern — which would have killed a bystander's unrelated sleep; the stubs
+carry an `exec -a` sentinel of their own now.
+
+Six plants; the original script fails 8 of the 10 new tests. 756 tests.
+
 ## 2026-10-23 — the command that could not speak (₹0)
 
 `deploy/deploy.sh HOST down` was one line: `exec ssh -t "$REMOTE" "cd $APP_DIR
