@@ -1919,6 +1919,7 @@ class TestCiRunsTheGateWithTheSameArguments:
         "mypy mcp_server tools eval tests",
         "ruff check .",
         "npm run build",
+        "npm test",
     ]
 
     def _gate_commands(self):
@@ -1944,7 +1945,7 @@ class TestCiRunsTheGateWithTheSameArguments:
         assert found, "no CI workflow at all"
         return "\n".join(p.read_text() for p in found)
 
-    def test_the_gate_is_still_the_four_commands_this_pin_was_written_for(self):
+    def test_the_gate_is_still_the_commands_this_pin_was_written_for(self):
         """If the gate changes, the list above has to change with it, or the
         test below is checking something it was not written for."""
         assert self._gate_commands() == self.EXPECTED_COMMANDS

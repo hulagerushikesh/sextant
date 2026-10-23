@@ -62,6 +62,16 @@ export interface Budget {
   budget_usd: number
   spent_usd: number
   remaining_usd: number
+  resets_in_seconds: number
+  /**
+   * Whether `spent_usd` is the day's spend or only this process's. False when
+   * the ledger cannot be read or written, which makes the figure restart with
+   * the server while Google's meter keeps counting. Read it before presenting
+   * the number as the day's -- see lib/spend.ts.
+   */
+  durable: boolean
+  /** The fraction of the box's cap one owner may spend. Absent when there is no share. */
+  share?: number
   /**
    * Present only when the box caps what one authenticated user may spend in a
    * day (SEXTANT_DAILY_BUDGET_SHARE). When it is set, this is the figure that
