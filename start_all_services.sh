@@ -3,7 +3,7 @@
 #
 # The knowledge-base MCP server is NOT started here: the agent server launches it
 # as a stdio subprocess and owns its lifetime. To drive it standalone instead, use
-#   mcp dev tools/vector_db/server.py
+#   mcp dev sextant/vector_db/server.py
 #
 # Knobs, because the defaults are right for the project and wrong for somebody:
 #   PY=./.venv/bin/python   interpreter
@@ -44,7 +44,7 @@ case "$HOST" in
 esac
 
 echo "Starting agent server on $HOST:$PORT ..."
-"$PY" -m uvicorn mcp_server.main:app --host "$HOST" --port "$PORT" &
+"$PY" -m uvicorn sextant.mcp_server.main:app --host "$HOST" --port "$PORT" &
 SERVER_PID=$!
 
 echo "Starting frontend on :3000 ..."
