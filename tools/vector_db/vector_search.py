@@ -46,7 +46,7 @@ from tools.vector_db.embeddings import (
     EmbeddingsUnavailable,
     get_embedder,
 )
-from tools.vector_db.loaders import LoadedDocument, Locator, load_path
+from tools.vector_db.loaders import LoadedDocument, Locator, load_path, unreadable_line
 from tools.vector_db.retrieval import (
     BM25Index,
     CrossEncoderReranker,
@@ -668,6 +668,11 @@ class KnowledgeBase:
                     source=doc.get("source") or "unknown",
                     category=doc.get("category") or "general",
                     locators=_locators(doc, len(content)),
+                    # Carried through from the loader so the one place that
+                    # reports loss is `_store`, whichever door the document
+                    # came in by: `/upload` parses and hands over a dict,
+                    # `sextant-ingest` hands over a LoadedDocument.
+                    unreadable_pages=[int(p) for p in doc.get("unreadable_pages") or []],
                 )
             )
         return self._store(loaded)
@@ -830,14 +835,24 @@ class KnowledgeBase:
             return self._ingest_failure(f"Error adding documents: {e}")
 
         self._invalidate_index()
+        # A document can be stored and incomplete at the same time, and until
+        # 2026-10-24 only the first half was ever said. `uploads.to_document`
+        # already refuses a file that parses to *nothing*, "rather than stored
+        # as an empty document that silently matches nothing" -- the same
+        # sentence applies to the file that lost three pages of a hundred, and
+        # that one was stored silently. Reported as part of the result, so
+        # every caller that prints a chunk count has the loss in the same dict.
+        lost = {d.doc_id: list(d.unreadable_pages) for d in documents if d.unreadable_pages}
+        message = f"Stored {len(documents)} document(s) as {len(ids)} chunk(s)"
+        if lost:
+            message = f"{message}. {unreadable_line(lost)}"
         return {
             "success": True,
-            "message": (
-                f"Stored {len(documents)} document(s) as {len(ids)} chunk(s)"
-            ),
+            "message": message,
             "documents_added": len(documents),
             "chunks_added": len(ids),
             "collection_size": self.collection.count(),
+            "unreadable_pages": lost,
         }
 
     def _ingest_failure(self, message: str) -> dict[str, Any]:

@@ -302,3 +302,62 @@ class TestDenseBackend:
         assert flat_kb._ensure_ann_index() is built
         flat_kb._invalidate_index()
         assert flat_kb._ann_index is None
+
+
+class TestTheStoreReportsWhatIsNotInIt:
+    """One place decides whether anything went missing and says so.
+
+    `_store` builds the sentence, so `/upload` (which arrives as a dict) and
+    `sextant-ingest` (which arrives as a LoadedDocument) cannot disagree, and
+    neither re-derives "was anything lost?" from a chunk count it has no way
+    to check. Same shape as `rule_verdict` in eval/tenancy.py.
+    """
+
+    @pytest.fixture
+    async def own_kb(self, store_dir, request):
+        name = f"lossy-{request.node.name[:40]}"
+        knowledge_base = KnowledgeBase(collection_name=name)
+        yield knowledge_base
+        knowledge_base.client.delete_collection(name)
+
+    async def test_a_clean_ingest_reports_no_loss(self, own_kb):
+        result = await own_kb.add_documents(
+            [{"id": "d1", "content": "Kalman filters predict then update.", "title": "d1"}]
+        )
+        assert result["success"] is True
+        assert result["unreadable_pages"] == {}
+        assert "not in the corpus" not in result["message"]
+
+    async def test_the_loss_arrives_through_the_dict_door(self, own_kb):
+        # This is the `/upload` path: `to_document` parses the PDF and hands
+        # over a plain dict, which used to drop the fact on the floor at
+        # `_add_documents_sync`.
+        result = await own_kb.add_documents(
+            [
+                {
+                    "id": "paper",
+                    "title": "paper",
+                    "content": "Page one survived.",
+                    "unreadable_pages": [7, 41],
+                }
+            ]
+        )
+        assert result["unreadable_pages"] == {"paper": [7, 41]}
+        assert "7, 41" in result["message"]
+        assert "not in the corpus" in result["message"]
+
+    async def test_the_document_is_still_stored_and_searchable(self, own_kb):
+        # The original behaviour is right and stays: a partly readable file is
+        # worth having. It may not be presented as a whole one.
+        await own_kb.add_documents(
+            [
+                {
+                    "id": "paper",
+                    "title": "paper",
+                    "content": "The Hungarian algorithm assigns detections to tracks.",
+                    "unreadable_pages": [2],
+                }
+            ]
+        )
+        hits = await own_kb.search("Hungarian algorithm", limit=3, min_score=0.0)
+        assert any("Hungarian" in hit["content"] for hit in hits["results"])

@@ -206,3 +206,44 @@ class TestTrustedOwner:
         assert "trusting" in describe()
         monkeypatch.delenv(settings.env_name(PROXY_SECRET))
         assert "refused" in describe()
+
+
+class TestAPartlyReadableFileSaysSo:
+    """`to_document` refuses a file that parses to nothing, "rather than
+    stored as an empty document that silently matches nothing". Its own
+    docstring. The file that loses three pages of a hundred is the same
+    sentence one notch down and was stored in silence, so the agent answers
+    "the corpus does not mention that" about a page you uploaded.
+    """
+
+    @staticmethod
+    def _pdf(unreadable: list[int]) -> bytes:
+        import pymupdf
+
+        with pymupdf.open() as doc:
+            doc.new_page().insert_text((72, 72), "Readable prose on page one.", fontsize=10)
+            for _ in unreadable:
+                doc.new_page().insert_text((72, 72), "Will be broken.", fontsize=10)
+            return bytes(doc.tobytes())
+
+    def test_the_pages_travel_with_the_document(self, monkeypatch):
+        from tools.vector_db import loaders
+
+        real = loaders._page_lines
+        seen = {"n": 0}
+
+        def flaky(page):
+            seen["n"] += 1
+            if seen["n"] == 2:
+                raise RuntimeError("simulated: malformed content stream")
+            return real(page)
+
+        monkeypatch.setattr(loaders, "_page_lines", flaky)
+        document = to_document("paper.pdf", self._pdf([2]))
+        assert document["unreadable_pages"] == [2]
+
+    def test_a_whole_file_carries_an_empty_list_rather_than_nothing(self):
+        # Present and empty, not absent: a consumer that does
+        # `doc.get("unreadable_pages") or []` is fine either way, but one that
+        # reports "unknown" for a missing key should never have to.
+        assert to_document("notes.md", MARKDOWN)["unreadable_pages"] == []

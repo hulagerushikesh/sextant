@@ -608,6 +608,11 @@ async def upload_files(
             success=False, message="", documents_added=0, collection_size=0, error=str(e)
         )
 
+    # `kb_ingest`'s message already carries the page loss, because `_store`
+    # builds it there -- one place decides whether anything went missing and
+    # says so, rather than this endpoint re-deriving it from a count it cannot
+    # see. Skipped *files* are this endpoint's own business and are appended
+    # after it.
     message = result.get("message", "")
     if skipped:
         message = f"{message} Skipped: {' '.join(skipped)}".strip()

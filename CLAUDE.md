@@ -204,6 +204,27 @@ because each one was learned the expensive way.
   real defect. All four places carrying the false claim are corrected in
   place, visibly, because a repository that documents other people's
   unchecked claims should show its own.
+- **A detected loss that only reaches a log has not been reported.**
+  `loaders._pdf_pages` catches a page whose extraction raises, logs
+  `Page %d of %s could not be extracted`, and appends `""`. The comment above
+  it is right -- one malformed page must not lose the other ninety-nine --
+  but `_load_pdf` then does `if not text: continue`, so **a failed page and a
+  blank page reduce to the same value**: no locator, no text, no record. The
+  document is stored and the uploader is told `Indexed 1 file -- 240 chunks`.
+  Three pages of a hundred are not in the corpus, every later search misses
+  them, and the agent says "the corpus does not mention that" about a page in
+  the PDF they uploaded. Item 25's `durable` one layer down, and worse: a
+  wrong spend figure is at least read. `LoadedDocument.unreadable_pages` now
+  carries the numbers, **both** PDF backends fill it (the pypdf fallback runs
+  only where the MuPDF wheel is missing -- the one environment nobody is
+  watching), and `_store` is the single place that decides and the single
+  place that words it, through `unreadable_line()`.
+- **Enforce a principle at every degree, not only at the easy boundary.**
+  `uploads.to_document`'s own docstring says a file that parses to nothing
+  "should be reported rather than stored as an empty document that silently
+  matches nothing" -- and that is checked at *total* loss, because total loss
+  is one `if`. Partial loss is the same sentence and the likelier case, and
+  it was not checked at all.
 - **The command that sounds like the end of the bill was the one that could
   not speak.** `deploy.sh HOST down` was `exec ssh -t ... compose down`, and
   `exec` replaces this shell -- so the arm whose name reads the most like "I

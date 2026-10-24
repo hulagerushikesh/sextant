@@ -118,3 +118,44 @@ class TestIngesting:
         out = capsys.readouterr().out
         # Said once, not once per document.
         assert out.count("overviews off") == 1
+
+
+class TestTheLossPrintedBesideTheChunkCount:
+    """`ok  paper.pdf: 240 chunks` reads as "all of it".
+
+    Pages the loader could not extract are not in that number and are not in
+    the corpus, and the only trace used to be a log line on a box nobody
+    reads. The sentence now sits under the line that would otherwise be the
+    whole report.
+    """
+
+    @pytest.fixture
+    def lossy_kb(self, monkeypatch, tmp_path: Path):
+        class LossyKB(FakeKB):
+            async def add_file(self, path: str, category: str) -> dict[str, Any]:
+                await super().add_file(path, category)
+                return {
+                    "success": True,
+                    "chunks_added": 240,
+                    "unreadable_pages": {Path(path).stem: [7, 41]},
+                }
+
+        kb = LossyKB()
+        monkeypatch.setattr(ingest_cli, "KnowledgeBase", lambda: kb)
+        path = tmp_path / "paper.md"
+        path.write_text("# x\ntext")
+        return [path]
+
+    async def test_the_pages_are_named_under_the_ok_line(self, lossy_kb, capsys):
+        await _ingest(lossy_kb, category="test")
+        out = capsys.readouterr().out
+        assert "240 chunks" in out
+        assert "7, 41" in out
+        assert "not in the corpus" in out
+
+    async def test_a_clean_run_says_nothing_about_pages(self, kb_and_files, capsys):
+        _, files = kb_and_files
+        await _ingest(files, category="test")
+        out = capsys.readouterr().out
+        assert "chunks" in out
+        assert "not in the corpus" not in out

@@ -34,6 +34,7 @@ from tools.vector_db.loaders import (
     TEXT_SUFFIXES,
     UnsupportedDocument,
     load_path,
+    unreadable_line,
 )
 
 logger = logging.getLogger(__name__)
@@ -71,6 +72,13 @@ def to_document(
     case, and it should be reported rather than stored as an empty document that
     silently matches nothing.
 
+    A file that parses to *part* of itself is the same sentence one notch down,
+    and it was not enforced at all: three bad pages of a hundred were logged and
+    then stored as a complete document, so every later search missed them and
+    the agent answered "the corpus does not mention that" about something in the
+    file you uploaded. `unreadable_pages` carries the numbers to whoever is
+    going to print a chunk count.
+
     `owner` namespaces the id. It is not a permission -- see `identity.py` for
     what it is and what it deliberately is not.
     """
@@ -102,6 +110,8 @@ def to_document(
         len(loaded.text),
         len(loaded.locators),
     )
+    if loaded.unreadable_pages:
+        logger.warning("%s: %s", name, unreadable_line({name: loaded.unreadable_pages}))
     return {
         # Stable *per owner*, so re-uploading a corrected file replaces it
         # rather than storing a second copy under a new id -- while two people
@@ -118,4 +128,7 @@ def to_document(
             {"kind": loc.kind, "label": loc.label, "start": loc.start, "end": loc.end}
             for loc in loaded.locators
         ],
+        # Read by `_add_documents_sync` and reported by `_store`. Unknown keys
+        # are ignored there, so this is additive for every other caller.
+        "unreadable_pages": list(loaded.unreadable_pages),
     }

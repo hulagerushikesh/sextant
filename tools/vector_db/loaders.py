@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -55,6 +56,12 @@ class LoadedDocument:
     source: str
     category: str = "general"
     locators: list[Locator] = field(default_factory=list)
+    # 1-based page numbers whose text extraction raised. Empty for every
+    # format that cannot lose part of itself. A page here is *not* in `text`,
+    # so it is not chunked, not embedded, and not findable -- and a blank page
+    # looks exactly the same from here, which is why the loader records the
+    # numbers rather than letting a caller infer loss from a gap.
+    unreadable_pages: list[int] = field(default_factory=list)
 
     def locate(self, offset: int) -> dict[str, Any]:
         """Which page and section the given character offset falls in."""
@@ -78,6 +85,30 @@ class LoadedDocument:
         ]
 
 
+def unreadable_line(lost: Mapping[str, Sequence[int]]) -> str:
+    """One sentence naming every page that is not in the corpus.
+
+    The decision and its words from one function, because the store, the
+    upload endpoint and the ingest CLI all have to say the same thing and
+    none of them should be re-deriving "was anything lost?" from a count --
+    the same reason `eval/tenancy.py` has one `rule_verdict` and `deploy.sh`
+    one `billing_line`.
+
+    Empty mapping gives the empty string, so a caller can append it
+    unconditionally and say nothing when there is nothing to say.
+    """
+    if not lost:
+        return ""
+    total = sum(len(pages) for pages in lost.values())
+    where = "; ".join(
+        f"{doc} p. {', '.join(str(n) for n in pages)}" for doc, pages in lost.items()
+    )
+    return (
+        f"{total} page{'' if total == 1 else 's'} could not be read and "
+        f"{'is' if total == 1 else 'are'} not in the corpus: {where}."
+    )
+
+
 def load_path(path: str | Path, category: str = "general") -> LoadedDocument:
     """Read one file into a citable document."""
     path = Path(path).expanduser().resolve()
@@ -98,7 +129,7 @@ def load_path(path: str | Path, category: str = "general") -> LoadedDocument:
 
 
 def _load_pdf(path: Path, category: str) -> LoadedDocument:
-    pages, title = _pdf_pages(path)
+    pages, title, unreadable = _pdf_pages(path)
     parts: list[str] = []
     locators: list[Locator] = []
     offset = 0
@@ -124,10 +155,11 @@ def _load_pdf(path: Path, category: str) -> LoadedDocument:
         source=path.name,
         category=category,
         locators=locators,
+        unreadable_pages=unreadable,
     )
 
 
-def _pdf_pages(path: Path) -> tuple[list[str], str | None]:
+def _pdf_pages(path: Path) -> tuple[list[str], str | None, list[int]]:
     """Each page's text, and the document title if the file records one.
 
     PyMuPDF first. pypdf infers the spaces between words from glyph spacing
@@ -144,16 +176,22 @@ def _pdf_pages(path: Path) -> tuple[list[str], str | None]:
         return _pdf_pages_pypdf(path)
 
     pages: list[str] = []
+    unreadable: list[int] = []
     with pymupdf.open(str(path)) as document:
         for number, page in enumerate(document, start=1):
             try:
                 pages.append(_page_lines(page))
             except Exception as e:
-                # One malformed page should not lose the other ninety-nine.
+                # One malformed page should not lose the other ninety-nine --
+                # but it is also not allowed to disappear. The warning used to
+                # be the whole of it, and a warning goes to a log on a box
+                # nobody reads, while the person who uploaded the file is told
+                # how many chunks were stored and nothing else.
                 logger.warning("Page %d of %s could not be extracted: %s", number, path.name, e)
+                unreadable.append(number)
                 pages.append("")
         title = (document.metadata or {}).get("title")
-    return pages, title
+    return pages, title, unreadable
 
 
 # Spans on one baseline closer than this are the same word (a math glyph run
@@ -248,7 +286,7 @@ def _script_distance(row: tuple[float, list[Any]], span: Any) -> tuple[bool, flo
     return (dy > _SCRIPT_REACH_PT, dx + dy)
 
 
-def _pdf_pages_pypdf(path: Path) -> tuple[list[str], str | None]:
+def _pdf_pages_pypdf(path: Path) -> tuple[list[str], str | None, list[int]]:
     try:
         from pypdf import PdfReader
     except ImportError as e:  # pragma: no cover - dependency is declared
@@ -258,14 +296,16 @@ def _pdf_pages_pypdf(path: Path) -> tuple[list[str], str | None]:
 
     reader = PdfReader(str(path))
     pages: list[str] = []
+    unreadable: list[int] = []
     for number, page in enumerate(reader.pages, start=1):
         try:
             pages.append(page.extract_text() or "")
         except Exception as e:
             logger.warning("Page %d of %s could not be extracted: %s", number, path.name, e)
+            unreadable.append(number)
             pages.append("")
     title = reader.metadata.title if reader.metadata else None
-    return pages, title
+    return pages, title, unreadable
 
 
 def _load_markdown(path: Path, category: str) -> LoadedDocument:
