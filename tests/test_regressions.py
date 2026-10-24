@@ -131,16 +131,33 @@ class TestTheStoreOverrideReachesTheServer:
 
     def test_the_launch_parameters_carry_the_override(self, monkeypatch):
         from mcp_server.mcp_host import kb_server
+        from tools import settings
 
         self._quiet(monkeypatch)
         monkeypatch.setenv(PERSIST_DIR_ENV, "/tmp/somewhere")
-        assert kb_server().env == {PERSIST_DIR_ENV: "/tmp/somewhere"}
+        assert kb_server().env == {
+            settings.SEALED: "1",
+            PERSIST_DIR_ENV: "/tmp/somewhere",
+        }
 
-    def test_no_override_means_no_forced_environment(self, monkeypatch):
+    def test_no_override_still_forces_the_seal(self, monkeypatch):
+        """This read `env is None` until 2026-10-24, and the name said why:
+        with nothing to forward there was nothing to force.
+
+        There is now, and it is the one thing that must never be dropped.
+        `tools.settings` loads `.env` at import and the child reaches it
+        through `vector_search`, so an unsealed child reads the repository's
+        file itself and `_NOT_FORWARDED` -- `GEMINI_API_KEY` included -- stops
+        meaning anything. The empty forwarding set is the *common* case, so
+        the `or None` arm was exactly where the seal would have gone missing.
+        See `TestTheChildCannotGoBehindTheAllowlist`, which launches the
+        child rather than reading this dictionary.
+        """
         from mcp_server.mcp_host import kb_server
+        from tools import settings
 
         self._quiet(monkeypatch)
-        assert kb_server().env is None
+        assert kb_server().env == {settings.SEALED: "1"}
 
     def test_every_retrieval_knob_crosses_the_process_boundary(self, monkeypatch):
         """A knob the KB reads but the host does not forward is a silent no-op
@@ -163,7 +180,9 @@ class TestTheStoreOverrideReachesTheServer:
             expected[name] = value
 
         assert len(expected) == 7, "seven knobs; update this count deliberately"
-        assert kb_server().env == expected
+        # The seal is not a knob: it is how the child is told that this
+        # dictionary is the whole of its environment.
+        assert kb_server().env == {settings.SEALED: "1", **expected}
 
 
 class TestLongDocumentsAreReachable:

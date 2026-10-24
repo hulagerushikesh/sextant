@@ -38,6 +38,25 @@ careful: a module cannot call `settings.getenv` without importing this
 module, so there is no longer an order in which a setting can be read before
 the file that sets it. `load_dotenv` does not override a name that is
 already in the environment, so compose, CI and a shell export all still win.
+
+## Why a sealed process does not load it
+
+Because one process here does not choose its own environment. The
+knowledge-base server runs as a subprocess of the agent, and MCP's stdio
+client hands a child only `get_default_environment() | params.env` -- so
+`mcp_host._FORWARDED_ENV` *is* that child's environment, and the names in
+`_NOT_FORWARDED` are a deliberate refusal with a written reason, one of them
+`GEMINI_API_KEY`: "a key that does not cross cannot leak from here."
+
+Loading `.env` in every importer made that false. Measured from a checkout:
+the child starts with five names and none of them is the key, imports
+`tools.vector_db.server`, reaches this module through `vector_search`, reads
+the repository's `.env`, and has the key. The parent withheld it and the
+child fetched it itself.
+
+So the parent seals: `kb_server` sets `SEXTANT_ENV_SEALED`, and a sealed
+process takes its environment as given and reads no file. An allowlist that
+the listed process can go behind is not an allowlist.
 """
 
 from __future__ import annotations
@@ -54,7 +73,14 @@ LEGACY_PREFIX = "AGENTICRAG_"
 # installed elsewhere, where `load_dotenv` on a missing path is a no-op.
 DOTENV_PATH = Path(__file__).resolve().parents[1] / ".env"
 
-load_dotenv(DOTENV_PATH)
+# Set by a parent that has already decided this process's entire environment,
+# which today is `mcp_host.kb_server`. Read straight off `os.environ` because
+# `getenv` below is the thing being configured, and read before the load so a
+# `.env` cannot unseal itself.
+SEALED = PREFIX + "ENV_SEALED"
+
+if not os.environ.get(SEALED):
+    load_dotenv(DOTENV_PATH)
 
 
 def env_name(key: str) -> str:
