@@ -2841,3 +2841,127 @@ reason.
 - **A scan that cannot tell a read from a write has to exempt files by
   name**, and an exemption by name is a hole shaped like whatever is behind
   it.
+
+## Item 31 — the key that crossed anyway
+
+Unplanned, and a defect item 30 created eight hours earlier. ₹0.
+
+### What was wrong
+
+The knowledge-base server runs as a subprocess of the agent, and MCP's stdio
+client does not hand a child its parent's environment: it builds
+`get_default_environment() | params.env`, and on POSIX that default is six
+names — `HOME`, `LOGNAME`, `PATH`, `SHELL`, `TERM`, `USER`. So
+`mcp_host._FORWARDED_ENV` is not a convenience. It is the entire list of
+things the child knows about the box it runs on, and its companion
+`_NOT_FORWARDED` is a table of deliberate refusals, each with a written
+reason so that — in that file's own words — *an entry is a claim somebody can
+check rather than an omission nobody can see*. One of the four entries:
+
+> `GEMINI_API_KEY`: nothing the subprocess can be asked to do generates text.
+> **A key that does not cross cannot leak from here.**
+
+Item 30 moved `load_dotenv` into `tools/settings.py` so that no module could
+read a setting before the file that sets it. The child imports
+`tools.vector_db.server`, which imports `vector_search`, which imports
+`tools.settings` — so from a checkout the child read the repository's `.env`
+itself, and every name in that file arrived in a process its parent had
+curated down to six.
+
+Measured, launching the child exactly as `kb_server()` specifies:
+
+| | names in the child's environment | `GEMINI_API_KEY` |
+| --- | --- | --- |
+| at `exec` | `HOME LOGNAME PATH SHELL USER` | absent |
+| after `import tools.vector_db.server` | the above **+ everything in `.env`** | **present** |
+
+The parent withheld it and the child fetched it itself.
+
+Two things make this worth an item rather than a footnote. The first is that
+the practical exposure is small — same user, same machine, a file that
+process could read anyway — but the stated boundary was simply not in force,
+and `_NOT_FORWARDED`'s entire design is that its entries are checkable. The
+second is that **nine tests existed for this seam and not one of them would
+ever have noticed.** `TestEveryVariableTheSubprocessNeedsCrosses` compares
+sets of names scraped out of source files: what is forwarded, what the
+subprocess reads, what the deploy sets, what is exempt and why. Every one of
+them passed while the thing they describe was not happening, because all nine
+read dictionaries and none of them started a process. Item 18's finding, one
+layer in: *a seam is pinned on the side you can read, which is the side that
+is not the problem.*
+
+The container was never affected. The image copies `pyproject.toml`,
+`README.md`, `mcp_server/`, `tools/` and `eval/` — not `.env`, which is
+gitignored — and compose injects `env_file` as real environment variables
+before Python starts, so `/app/.env` does not exist and the load is a no-op
+there. Local only, which is items 28 and 30 again: **the wrong path is the
+unwatched one** — except that here the unwatched path is the one where the
+agent is mounted in a desktop client.
+
+### What shipped
+
+`tools/settings.py` learns one word, `SEXTANT_ENV_SEALED`. A sealed process
+takes the environment it was given and reads no file. The check is made
+before the load and straight off `os.environ`, so a `.env` cannot unseal
+itself — were the order the other way round, a file naming that variable
+would hide every other name in it.
+
+`kb_server()` sets the seal in the child's environment. Its `env=` argument
+was `forwarded or None`, and the empty case is the common one — nothing in an
+ordinary shell overrides a retrieval knob — so the dictionary is now never
+empty and there is no arm in which the seal goes missing.
+
+Seven tests, in `test_deploy_config.py` beside the nine they repair, and they
+launch interpreters. The mechanism is proved on a copied `settings.py` in a
+temp tree with an invented variable in its own `.env`, for the reason
+`test_judge.py` copies it: CI has no `.env`, and the machine with none is the
+one that must still run the check. Unsealed, the child has the invented name;
+sealed, it does not; with the seal written *into* the `.env`, the child has
+it anyway, which is the ordering. One scan requires every
+`StdioServerParameters(` in the repository to seal its child, so the second
+MCP server somebody adds does not inherit the hole whole. And one end-to-end
+runs the real `kb_server()` against this machine's real `.env`, reading
+**names only**, skipped where there is no `.env` — the one environment in
+which the defect cannot occur.
+
+Also corrected: `tools/vector_db/server.py` opened by saying it exposes the
+store as *three* MCP tools. There are six.
+
+Three defects planted back — the seal removed from `kb_server`, the check
+removed from `settings`, and a variant in which the file may unseal itself —
+each failing its own tests and nothing else.
+
+### What the suite said about the fix
+
+Three tests in `test_regressions.py::TestTheStoreOverrideReachesTheServer`
+went red, and all three were right to: they assert on the *whole* dictionary
+`kb_server()` returns, which is the correct shape of assertion for a function
+whose entire output is a child's environment. One of them was
+`test_no_override_means_no_forced_environment`, named after the behaviour
+this item deliberately removes — with nothing to forward there used to be
+nothing to force, and the empty case is the common one, which is precisely
+where the seal would have gone missing. It is
+`test_no_override_still_forces_the_seal` now, and its docstring says what
+changed and why rather than quietly taking the new number.
+
+The fourth test in that class is the one that starts a real subprocess and
+reads the store back out of `kb_stats`. It stayed green: a sealed child still
+receives every forwarded knob, because the parent is the thing that loaded
+`.env` and forwarding is read from the parent. Confirmed live as well — the
+host connects, discovers six tools, and `kb_stats` answers 22 documents /
+1660 chunks.
+
+### Rules
+
+- **An allowlist the listed process can go behind is not an allowlist.** The
+  parent decides a child's environment, or it does not; a child that reads a
+  file for the rest has only the appearance of being curated.
+- **A fix can make another defect reachable, and that belongs in the same
+  queue, not in a later one.** Item 30 broke this and item 31 is item 30's
+  bill.
+- **Pin a process by launching it.** Nine tests over the same seam compared
+  names in source files; the one thing none of them did was run the child,
+  and that is where the claim was false.
+- **A documented refusal is a claim with a date on it.** `_NOT_FORWARDED`
+  entries are written to be checkable — so the check has to observe the
+  refusal taking effect, not the sentence describing it.

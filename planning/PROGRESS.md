@@ -5,6 +5,58 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-24 — the key that crossed anyway (₹0)
+
+Item 30's bill, eight hours later. MCP's stdio client does not hand a
+child its parent's environment: it builds `get_default_environment() |
+params.env`, six names on POSIX. So `mcp_host._FORWARDED_ENV` is the
+whole of what the knowledge-base subprocess knows about the box, and
+`_NOT_FORWARDED` is four refusals written so that *an entry is a claim
+somebody can check*. One reads: `GEMINI_API_KEY` — "a key that does not
+cross cannot leak from here."
+
+Putting `load_dotenv` in `tools/settings.py` made that false. The child
+imports `tools.vector_db.server`, which reaches `tools.settings` through
+`vector_search`, so from a checkout it read the repository's `.env`
+itself. Measured, launching the child exactly as `kb_server()` specifies:
+at `exec`, five names and no key; after the first import, the key. The
+parent withheld it and the child fetched it.
+
+Nine tests guard that seam and none of them could see it. They compare
+sets of names scraped out of source files — forwarded, read, set,
+exempt — and every one passed throughout. Item 18's finding a layer in:
+a seam is pinned on the side you can read, which is the side that is not
+the problem.
+
+`SEXTANT_ENV_SEALED` now. A sealed process takes the environment it was
+given and reads no file; the check happens before the load and straight
+off `os.environ`, so a `.env` cannot unseal itself. `kb_server()` sets
+it, and `env=forwarded or None` is gone — the empty forwarding set is the
+common case and the seal has to survive it.
+
+Three existing tests went red and were right to: they assert the whole
+dictionary `kb_server()` returns, and one was named after the behaviour
+this removes — `test_no_override_means_no_forced_environment`, from
+when an empty forwarding set meant an empty environment. That empty
+case is the common one, which is exactly where the seal would have been
+dropped. The fourth test in that class starts a real subprocess and
+reads the store back; it stayed green, because forwarding is read from
+the parent and the parent is the process that loads `.env`.
+
+Seven new tests, and they launch interpreters. The mechanism is proved on
+a copied `settings.py` in a temp tree with an invented name in its own
+`.env`, because CI has none and the machine with none is the one that
+must still run the check; a scan requires every `StdioServerParameters(`
+in the repository to seal its child; one end-to-end runs the real
+`kb_server()` against this machine's real file, reading **names only**,
+skipped where there is no `.env`. Three defects planted back.
+
+The container was never affected — the image does not copy `.env` and
+compose injects `env_file` as real variables, so `/app/.env` does not
+exist. Local only, like items 28 and 30, except the unwatched path here
+is where the agent is mounted in a desktop client. Also corrected:
+`server.py` said it exposes three MCP tools; there are six.
+
 ## 2026-10-24 — the knob that was set and never read (₹0)
 
 `mcp_server/main.py` imported twenty modules and then called
