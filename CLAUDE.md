@@ -225,6 +225,22 @@ because each one was learned the expensive way.
   matches nothing" -- and that is checked at *total* loss, because total loss
   is one `if`. Partial loss is the same sentence and the likelier case, and
   it was not checked at all.
+- **A red CI run is a question, not a dice roll.** Item 28's branch failed on
+  `test_searching_does_not_block_the_event_loop`, which neither of its
+  commits touches. Re-running first and asking afterwards is how a real
+  defect becomes "flaky" in everyone's memory. The assertion was
+  `ticks > (elapsed / 0.01) * 0.5`, and `elapsed / 0.01` is the count a 10ms
+  heartbeat reaches **if `asyncio.sleep(0.01)` sleeps exactly 10ms**, which
+  it never does -- measured idle with nothing blocking, the real ratio is
+  **0.84**, so the threshold's whole headroom is 0.84 -> 0.50 and all of it
+  is spent on how fast the box is. CI measured 0.34. **Measure the baseline,
+  do not assume it**: `_tick_rate()` returns ticks/second and the test now
+  compares searching against an idle measurement taken on the same machine
+  seconds earlier, so a slow runner lowers both. Item 13's shape and item
+  23's, in the test guarding the property the streaming server rests on.
+  **And a timing assertion needs a test that it can fail** --
+  `test_the_starvation_check_can_fail` blocks the loop on purpose and asserts
+  the assertion trips. It is the only `ASYNC251` waiver in the repo.
 - **The command that sounds like the end of the bill was the one that could
   not speak.** `deploy.sh HOST down` was `exec ssh -t ... compose down`, and
   `exec` replaces this shell -- so the arm whose name reads the most like "I
