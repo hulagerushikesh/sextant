@@ -144,13 +144,30 @@ async def grade_one(client, question: str, answer: str, sources: list[dict[str, 
 
 
 async def answer_one(host, question: str) -> dict[str, Any]:
-    """Run the real agent loop and collect what it produced."""
+    """Run the real agent loop and collect what it produced.
+
+    Web search is forced off, for the same reason `eval.agent_harness` forces
+    it off and one more. The shared reason is that a web hit makes a corpus
+    miss invisible. The one that belongs to this harness is worse: the
+    unanswerable split exists to ask whether the system *declines* when the
+    corpus cannot answer, and a model that may search the web will answer
+    those questions perfectly well -- so `correct_abstention` would be
+    measuring Google's coverage rather than this system's restraint, and
+    `faithfulness` would be grading answers against passages the corpus never
+    held. A grounded request is also billed per call.
+
+    It is passed explicitly rather than left to `web_search_default()`,
+    because the default is read from `SEXTANT_WEB_SEARCH` -- a setting that
+    belongs to whoever owns the shell, and a measurement whose meaning depends
+    on an environment variable it never reports is not a measurement.
+    """
     from mcp_server.agent import run as run_agent
 
     text: list[str] = []
     sources: list[dict[str, Any]] = []
     tools: list[str] = []
-    async for event in run_agent(question, host):
+    done: dict[str, Any] = {}
+    async for event in run_agent(question, host, web_search=False):
         if event["type"] == "token":
             text.append(event["text"])
         elif event["type"] == "answer":
@@ -160,9 +177,23 @@ async def answer_one(host, question: str) -> dict[str, Any]:
             text = [event["text"]]
         elif event["type"] == "tool_call":
             tools.append(event["name"])
-        elif event["type"] in ("sources", "done"):
-            sources = event["sources"]
-    return {"answer": "".join(text).strip(), "sources": sources, "tools": tools}
+        if event["type"] == "done":
+            done = event
+        if event["type"] in ("sources", "done"):
+            sources = event.get("sources") or sources
+    return {
+        "answer": "".join(text).strip(),
+        "sources": sources,
+        "tools": tools,
+        # The loop reports whether it ran out of room and what it cost, and
+        # this harness used to drop both on the floor. A truncated answer is
+        # one the token cap cut off mid-claim; graded without the marker it
+        # lands in the faithfulness mean as if the model had chosen to stop
+        # there, which attributes a budget to the model's judgement.
+        "turns": done.get("turns", 0),
+        "truncated": bool(done.get("truncated", False)),
+        "usage": done.get("usage", {}),
+    }
 
 
 async def run(golden: list[dict[str, Any]], limit: int | None) -> dict[str, Any]:
@@ -199,12 +230,20 @@ async def run(golden: list[dict[str, Any]], limit: int | None) -> dict[str, Any]
                     "answerable": item["answerable"],
                     "answer": produced["answer"],
                     "tools": produced["tools"],
+                    "turns": produced["turns"],
+                    "truncated": produced["truncated"],
+                    "usage": produced["usage"],
                     "citations": check_citations(produced["answer"], produced["sources"]),
                     "grade": grade.model_dump(),
                 }
             )
             mark = "declined" if grade.declined else f"f={grade.faithfulness:.2f}"
-            print(f"  {item['id']:<4} {mark:<10} {produced['answer'][:70]}")
+            # `cut` first, because it is the reason the rest of the line may
+            # look bad: a grade printed beside a truncated answer with nothing
+            # saying so invites the wrong conclusion at the only moment a
+            # person is reading per-question output.
+            cut = "cut " if produced["truncated"] else ""
+            print(f"  {item['id']:<4} {cut}{mark:<10} {produced['answer'][:70]}")
     finally:
         await host.close()
 
@@ -241,6 +280,15 @@ def summarise(records: list[dict[str, Any]]) -> dict[str, Any]:
         if records
         else None,
         "dangling_citations": sum(len(r["citations"]["dangling"]) for r in records),
+        # Two facts about the run rather than about the answers, and both were
+        # produced by the loop and discarded here. `truncated` is the count of
+        # answers the token cap cut off: every metric above is computed over
+        # them as though they were finished, so a non-zero figure is a caveat
+        # on the whole table. `cost_usd` is what this run spent -- the judge
+        # calls are not in it, only the answers, because the loop is the only
+        # half that prices itself.
+        "truncated": sum(1 for r in records if r.get("truncated")),
+        "cost_usd": round(sum(r.get("usage", {}).get("cost_usd", 0.0) for r in records), 4),
         "records": records,
     }
 
