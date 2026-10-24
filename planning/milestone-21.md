@@ -2650,3 +2650,74 @@ which is a decision and not a defect fix.
   indistinguishable to everything downstream.
 - **Fix it in the fallback too.** The pypdf path runs only where the primary
   wheel is missing — the one environment where nobody is watching.
+
+## 29 · The check that measured the machine — ₹0
+
+Shipped 2026-10-24, on item 28's branch because item 28 could not merge
+until this was fixed. CI went red on a test neither of item 28's commits
+touches:
+
+```
+AssertionError: loop was starved: 16 ticks in 0.469s
+assert 16 > (46.91622459999962 * 0.5)
+```
+
+### Re-running until it passes is the posture this project keeps removing
+
+The reflex is to call it flaky and press the button again. 18 of the
+previous 20 runs were green, so "flaky" was not established either — and a
+green re-run would have proved only that the dice landed differently. The
+question worth answering is what the assertion actually measures.
+
+```python
+expected = elapsed / 0.01
+assert ticks > expected * 0.5
+```
+
+`expected` is the tick count a 10ms heartbeat would reach **if
+`asyncio.sleep(0.01)` slept exactly 10ms**, which it never does. Measured on
+an idle fast machine with nothing blocking at all, the real ratio is
+**0.84** — sleep overshoot alone eats 16% before anything else happens. So
+the 0.5 threshold does not have the headroom it appears to: it has 0.84 down
+to 0.50, and every bit of that is spent on how fast the box is. The CI
+runner measured 0.34.
+
+The test therefore cannot distinguish *the event loop was blocked* — the
+regression it exists for — from *this machine is busy*. That is item 13's
+shape (the harness depending on a platform's tolerance) and item 23's (*a
+check whose answer depends on how fast the thing before it finished is not a
+check*), in the test guarding the property the whole streaming server rests
+on.
+
+### What it does now
+
+`_tick_rate(work)` returns ticks per second — a rate, so two measurements of
+different durations compare. The test takes an **idle** baseline on the same
+machine moments earlier and compares the searching rate against that:
+
+```python
+idle = await _tick_rate(lambda: asyncio.sleep(0.5))
+busy = await _tick_rate(lambda: asyncio.gather(*(kb.search(...) for i in range(4))))
+assert busy > idle * 0.5
+```
+
+A slow runner lowers both and the ratio survives. The regression this was
+written for — zero ticks through the entire search — still fails it by the
+whole margin.
+
+And the check now has a check: `test_the_starvation_check_can_fail` blocks
+the loop with `time.sleep` inside a coroutine and asserts the assertion
+trips. It is the only place in the repository where blocking the loop is the
+point, so the `ASYNC251` lint is waived on that line and nowhere else.
+
+### Rules
+
+- **A red CI run is a question, not a dice roll.** Re-running first and
+  asking afterwards is how a real defect becomes "flaky" in everyone's
+  memory. The re-run is evidence; it is not an answer.
+- **Measure the baseline, do not assume it.** `elapsed / 0.01` is a number
+  no machine produces. Comparing against a baseline taken on the same
+  machine seconds earlier makes the assertion about the thing it names.
+- **A timing assertion needs a test that it can fail.** Otherwise a
+  threshold loose enough never to be flaky is also loose enough never to
+  catch the regression.
