@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import pytest
 
+from tools.vector_db import loaders
 from tools.vector_db.loaders import (
     LoadedDocument,
     Locator,
     UnsupportedDocument,
     load_path,
+    unreadable_line,
 )
 
 MARKDOWN = """# Handbook
@@ -189,3 +191,120 @@ class TestPdfExtraction:
         document = load_path(pdf_file)
         assert "Second page prose" in document.text
         assert [loc.label for loc in document.locators if loc.kind == "page"] == [1, 2]
+
+
+@pytest.fixture
+def two_page_pdf(tmp_path):
+    """Two pages with distinct prose, so a lost one is visible by its absence."""
+    import pymupdf
+
+    path = tmp_path / "paper.pdf"
+    with pymupdf.open() as doc:
+        first = doc.new_page()
+        first.insert_text((72, 72), "Alpha [1] 7B 32", fontsize=10)
+        second = doc.new_page()
+        second.insert_text((72, 72), "Second page prose about results.", fontsize=10)
+        doc.save(str(path))
+    return path
+
+
+class TestThePageThatWentMissingQuietly:
+    """A page whose extraction raises is logged, skipped, and then not in the
+    corpus -- and nothing downstream used to say so. `to_document` already
+    refuses a file that parses to *nothing*, "rather than stored as an empty
+    document that silently matches nothing". The file that loses three pages
+    of a hundred is the same sentence one notch down, and it was stored in
+    silence: the agent then answers "the corpus does not mention that" about
+    something in the PDF you uploaded.
+    """
+
+    @staticmethod
+    def _break_page(monkeypatch, number: int) -> None:
+        """Make MuPDF extraction raise on one 1-based page and no other."""
+        real = loaders._page_lines
+        seen = {"n": 0}
+
+        def flaky(page):
+            seen["n"] += 1
+            if seen["n"] == number:
+                raise RuntimeError("simulated: malformed content stream")
+            return real(page)
+
+        monkeypatch.setattr(loaders, "_page_lines", flaky)
+
+    def test_the_page_number_is_recorded(self, two_page_pdf, monkeypatch):
+        self._break_page(monkeypatch, 2)
+        assert load_path(two_page_pdf).unreadable_pages == [2]
+
+    def test_a_clean_file_records_nothing(self, two_page_pdf):
+        assert load_path(two_page_pdf).unreadable_pages == []
+
+    def test_a_format_that_cannot_lose_pages_records_nothing(self, markdown_file):
+        assert load_path(markdown_file).unreadable_pages == []
+
+    def test_the_rest_of_the_document_still_arrives(self, two_page_pdf, monkeypatch):
+        # The original behaviour is right and stays: one bad page must not
+        # lose the other ninety-nine. It only may not be silent.
+        self._break_page(monkeypatch, 2)
+        document = load_path(two_page_pdf)
+        assert "Alpha [1] 7B 32" in document.text
+        assert "Second page prose" not in document.text
+
+    def test_a_lost_page_leaves_no_locator_claiming_to_be_it(self, two_page_pdf, monkeypatch):
+        # Worse than the gap would be a page locator over text that is not
+        # that page's, which would make a citation say "p. 2" about page 3.
+        self._break_page(monkeypatch, 2)
+        document = load_path(two_page_pdf)
+        assert [loc.label for loc in document.locators if loc.kind == "page"] == [1]
+
+    def test_the_pypdf_fallback_records_it_too(self, two_page_pdf, monkeypatch):
+        # Two backends, one of which only runs where the MuPDF wheel is
+        # missing -- which is exactly where a defect goes unnoticed.
+        import builtins
+
+        real_import = builtins.__import__
+
+        def no_mupdf(name, *args, **kwargs):
+            if name == "pymupdf":
+                raise ImportError("simulated: wheel unavailable")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", no_mupdf)
+
+        import pypdf
+
+        real_extract = pypdf._page.PageObject.extract_text
+
+        def flaky(self, *args, **kwargs):
+            if self.page_number == 1:  # 0-based: the second page
+                raise RuntimeError("simulated: malformed content stream")
+            return real_extract(self, *args, **kwargs)
+
+        monkeypatch.setattr(pypdf._page.PageObject, "extract_text", flaky)
+        assert load_path(two_page_pdf).unreadable_pages == [2]
+
+
+class TestTheSentenceThatSaysWhatIsMissing:
+    """One function returns the words, because the store, `/upload` and the
+    ingest CLI all have to say the same thing.
+    """
+
+    def test_says_nothing_when_nothing_was_lost(self):
+        # Callers append it unconditionally, so empty has to be empty.
+        assert unreadable_line({}) == ""
+
+    def test_names_the_document_and_the_pages(self):
+        line = unreadable_line({"paper.pdf": [7, 41]})
+        assert "paper.pdf" in line and "7, 41" in line
+
+    def test_says_the_pages_are_not_in_the_corpus(self):
+        # The consequence, not just the fact: a reader has to know the search
+        # they run next cannot find them.
+        assert "not in the corpus" in unreadable_line({"paper.pdf": [7]})
+
+    def test_counts_across_documents(self):
+        line = unreadable_line({"a.pdf": [1], "b.pdf": [2, 3]})
+        assert line.startswith("3 pages")
+
+    def test_one_page_reads_as_one_page(self):
+        assert unreadable_line({"a.pdf": [4]}).startswith("1 page could not be read and is")
