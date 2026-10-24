@@ -423,6 +423,7 @@ PREFLIGHT
       --exclude '.env' \
       --exclude 'frontend/.env.local' \
       --exclude 'graphify-out' \
+      --exclude 'dist' --exclude '*.egg-info' \
       . \
     | ssh "$REMOTE" "set -e; cd $APP_DIR
         find . -mindepth 1 -maxdepth 1 ! -name .env ! -name set-secrets.sh -exec rm -rf {} +

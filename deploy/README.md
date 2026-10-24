@@ -345,7 +345,7 @@ here. Add `--no-summaries` for a free ingest.
 # Ingest the committed corpus into the VM's Chroma volume, then restart the api
 # so it reloads the persisted store (it holds a stale segment after CLI ingest).
 ssh USER@IP 'cd ~/agenticrag && \
-  docker compose -f docker-compose.prod.yml exec api sextant-ingest eval/corpus -r && \
+  docker compose -f docker-compose.prod.yml exec api sextant-ingest sextant/eval/corpus -r && \
   docker compose -f docker-compose.prod.yml restart api'
 
 # Take a document back out (the confirmation needs -T off, so pass -y):

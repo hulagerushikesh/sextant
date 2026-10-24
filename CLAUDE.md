@@ -446,6 +446,20 @@ lifetime rather than per day.
   collection goes to the platform's user-data directory instead of
   `site-packages`, which `pip uninstall` would delete with somebody's
   corpus in it.
+- **Splitting the dependencies splits every installer, the image included.**
+  Moving `fastapi`, `uvicorn` and `google-genai` into extras is what makes
+  `pip install sextant-kb` a knowledge base -- and it silently emptied the
+  production image, whose `pip install -e .` then resolved without the web
+  framework its own `CMD` launches. Local runs could not see it: the gate
+  installs `dev`, which pulls `app`. The Dockerfile asks for `.[app]`, and
+  `TestTheImageInstallsWhatItRuns` compares what the install resolves to
+  against what the `CMD` needs -- reading the command, never the comment
+  above it, which says `pip install -e .` too.
+- **A markdown link is not Python either.** The same rename broke thirteen
+  relative links -- `README.md` pointed at a directory that had moved, and
+  every `../learning/...` inside `sextant/eval/README.md` resolved one level
+  too shallow once the file sat a level deeper. Nothing imports a link.
+  `TestEveryRelativeDocLinkResolves` walks every `.md` in the tree.
 - Publishing is **the owner's command, never the agent's**: a PyPI release
   is irreversible -- a version number cannot be re-used even after a
   delete -- and it needs a token the agent must never hold.
@@ -780,7 +794,7 @@ lifetime rather than per day.
   downloaded them into a path that dies with the container. A cache path is not
   a retrieval knob, and the category in the rule decided what got checked.
   Three declared lists now, and `TestEveryVariableTheSubprocessNeedsCrosses`
-  scans both sides of the seam: every variable named under `tools/`, and every
+  scans both sides of the seam: every variable named under `sextant/`, and every
   variable the `Dockerfile` or the compose `api` service sets, must be
   forwarded or be in `_NOT_FORWARDED` **with a reason** -- and an exemption
   whose variable nothing reads or sets any more fails too, so the table cannot

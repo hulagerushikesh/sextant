@@ -5,6 +5,37 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-24 — what the split emptied: the image and the links (₹0)
+
+Preflight for the deploy trip, before the meter started. The trip rebuilds
+the image, and 0.9.0 had changed both halves of what that build reads.
+
+| Defect | Where it would have landed | Why nothing saw it |
+| --- | --- | --- |
+| `pip install -e .` in the `Dockerfile` after `fastapi`, `uvicorn` and `google-genai` became extras — the production image is built **without the web framework its own `CMD` launches** | the container exits at start, `uvicorn: not found`; the box down after a ₹2 trip | the gate installs `dev`, which pulls `app`. An image is only wrong on the machine that builds one, and nothing here had built one |
+| 13 broken relative markdown links: `README.md` → `eval/README.md`, `planning/README.md` → `../eval/README.md`, and every `../learning/…` inside `sextant/eval/README.md`, one level too shallow once the file sat a level deeper | every reader who clicks one, on a public repository | a link is not Python: nothing imports it, nothing type-checks it |
+| `deploy/README.md`'s re-ingest command still said `sextant-ingest eval/corpus` | the runbook command fails on the box, mid-trip | the same shape as `start_all_services.sh`: a path inside a shell string |
+
+The image defect is the sharper one, and it is the cost of the split
+rather than a slip beside it: moving a dependency into an extra is a
+change to **every** installer, and the container is an installer nobody
+runs locally. `TestTheImageInstallsWhatItRuns` now resolves the extras
+the `Dockerfile` actually asks for — self-references included — against
+the import closure of what the `CMD` launches, and reads the command
+rather than the comment above it, which says `pip install -e .` too.
+Three plants: bare `.` fails both tests, `.[gen]` fails the one about
+starting, and a lie in the comment alone fails neither.
+
+Also verified at ₹0, since the rename changed the build: the Dockerfile's
+stub-tree-then-`COPY` trick still resolves. Simulated locally with
+`--no-deps` — all **38** modules importable from outside the app
+directory, because the editable finder maps one top level to a directory
+instead of four packages to four. And `dist/` and `*.egg-info` are now
+out of both the image context and the shipped tree.
+
+23 packaging tests (20 → 23), 829 Python tests. The wheel is unchanged:
+none of this is inside it, so `sextant-kb` is still 0.9.0.
+
 ## 2026-10-24 — the name every install lands in (0.9.0, ₹0)
 
 The first piece of this project meant for somebody else. The knowledge
@@ -65,9 +96,18 @@ and no web framework; `sextant-kb` launched over real stdio answers the
 handshake as `knowledge-base 0.9.0` and lists six tools. 17 new tests,
 four defects planted back, each failing only its own.
 
-Not published. A PyPI release is irreversible — a version number cannot be
-re-used even after a delete — and it needs a token the agent must never
-hold, so the upload is the owner's command.
+**Published by the owner, 2026-10-24**:
+[pypi.org/project/sextant-kb/0.9.0](https://pypi.org/project/sextant-kb/0.9.0/).
+A PyPI release is irreversible — a version number cannot be re-used even
+after a delete — and it needs a token the agent must never hold, so the
+upload was the owner's command and stayed it. The index agrees with what
+was built here: 7 base dependencies, four extras (`gen`, `app`, `bench`,
+`dev`), MIT, `>=3.11`, and both files at the byte sizes `twine check`
+passed. The TestPyPI dry run was skipped after a 403 — that token was
+still a `REPLACE_WITH_` placeholder, and TestPyPI is a separate site with
+separate accounts — which cost nothing, because what it would have shown
+is what a non-editable install of this same wheel outside the repository
+had already shown.
 
 ## 2026-10-24 — the key that crossed anyway (₹0)
 
