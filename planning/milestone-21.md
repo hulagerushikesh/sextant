@@ -2732,3 +2732,112 @@ margin. `test_the_starvation_check_can_fail` blocks the loop with
 - **A timing assertion needs a test that it can fail.** Otherwise a threshold
   loose enough never to be flaky is also loose enough never to catch the
   regression.
+
+## Item 30 — the knob that was set and never read
+
+Unplanned, found by asking items 20–29's question of the five `main()`
+functions item 24 left untouched: *can this be run, and does anyone check?*
+`eval/judge.py` could not be run at all.
+
+### What was wrong
+
+**`.env` was loaded after the code that reads it.** `mcp_server/main.py`
+imported twenty modules and then called `load_dotenv()` on line 55. Python
+runs the imports first, so every module-level constant in the import graph
+had already been evaluated:
+
+| constant | from | default it was stuck on |
+| --- | --- | --- |
+| `observability.DAILY_BUDGET_USD` | `SEXTANT_DAILY_BUDGET_USD` | `0` — **disabled** |
+| `observability.DAILY_BUDGET_SHARE` | `SEXTANT_DAILY_BUDGET_SHARE` | `1` — off |
+| `observability.RATE_LIMIT_REQUESTS` / `_WINDOW_SECONDS` | `SEXTANT_RATE_LIMIT` / `_WINDOW` | `20` / `60` |
+| `agent.MODEL` | `SEXTANT_MODEL` | `gemini-3.1-flash-lite` |
+| `configure_logging()`'s format | `SEXTANT_LOG_FORMAT` | `text` |
+
+Measured rather than reasoned about. With `SEXTANT_DAILY_BUDGET_USD=0.60` in
+`.env`, importing the app left `os.environ` holding `0.60` and
+`DAILY_BUDGET_USD` holding `0.0`. `DailyBudget`'s own docstring: *"Disabled
+when the cap is <= 0."* The operator had set a daily spend ceiling on a
+prepaid key and did not have one, and `CLAUDE.md` states the cap is set.
+
+It bit the local run only. The box takes those names from compose's
+`env_file`, so they are real environment variables before Python starts —
+the pypdf-fallback shape from item 28: the path that is wrong is the one
+nobody is watching, because the one being watched happens to take a
+different route.
+
+**`sextant-judge` had never started.** It does not load `.env` at all. Run
+from a checkout it prints `GEMINI_API_KEY is not set` and exits 1 — against
+a key sitting in the file every other entry point reads it from. It is this
+project's only measurement of faithfulness, which its own docstring calls
+*"the failure this project most needs to catch"*. Confirmed by typing
+`sextant-judge -n 1`, which costs nothing because it exits before it
+connects. Item 21 one directory over: **a check nobody can run is a check
+nobody has read** — and the numbers in `learning/floor-fallback-cost.md`
+came from `sextant-eval-agent --judge`, which loads `.env`, so nothing in
+the record was wrong, only unreachable.
+
+**The judge let the model search the web.** `eval.agent_harness` passes
+`web_search=False` and says why: a web hit makes a corpus miss invisible,
+and a grounded request is billed per call. The judge left it to
+`web_search_default()`, which reads `SEXTANT_WEB_SEARCH`. Fixing the load is
+what made this live — a setting that had never reached the process suddenly
+could. And the harm here is larger than in `agent_harness`: the unanswerable
+split asks whether the system *declines* when the corpus cannot answer, and
+a model allowed to search answers those questions well, so
+`correct_abstention` would have measured Google's coverage and
+`faithfulness` would have graded answers against passages the corpus never
+held.
+
+**Two facts the loop reports were dropped on the floor.** `done` carries
+`truncated` and `usage.cost_usd`. `agent_harness` counts both; the judge
+recorded neither. A truncated answer is one the token cap cut off mid-claim;
+graded with no marker it lands in the faithfulness mean as though the model
+had chosen to stop there — a budget charged to the model's judgement. And a
+harness that spends real money reported no cost at all.
+
+### What shipped
+
+`load_dotenv` moved into `tools/settings.py`, at import, and the three
+scattered copies (`main.py`, `ingest_cli.py`, `agent_harness.py`) are gone.
+This is not tidiness. A module cannot call `settings.getenv` without
+importing `settings`, so **there is no longer an order in which a setting
+can be read before the file that sets it** — the ordering is fixed by
+construction rather than by remembering. `load_dotenv` never overrides a
+name already present, so compose, CI and a shell export all still win.
+
+The judge passes `web_search=False` explicitly, records `turns`,
+`truncated` and `usage`, prints `cut` before the grade on a truncated
+answer, and reports `truncated` and `cost_usd` in the summary.
+
+`tests/test_judge.py`, ten tests. The ordering claim is proved on a **copy**
+of `settings.py` in a temp tree with its own `.env` and a generated module
+that reads a constant at import: `.env` is gitignored, so the machine that
+most needs the test to run is CI, which has none, and a test that skips
+there is the shape this item exists to delete. One test asserts the file
+does *not* override an existing variable, because that is what keeps the box
+correct. Two scans hold the arrangement: `load_dotenv` appears in one file,
+and no module-level environment **read** happens outside `settings.py` —
+reads only, because `faiss_ref.py` has to *write* `KMP_DUPLICATE_LIB_OK`
+before `import faiss`, and exempting that file by name would leave a hole
+shaped like whatever is behind it.
+
+All four defects were planted back; each failed its own test for its own
+reason.
+
+### Rules
+
+- **A setting read at import time must see `.env`, and only the import graph
+  decides whether it does.** An entry point cannot load the file early
+  enough — its own imports run first.
+- **Fix an ordering by construction, not by being careful.** One load, in
+  the module every read must go through, has no order to get wrong.
+- **A config knob that is set and not read fails silently and in the
+  operator's favour-sounding direction.** Nothing logs it, nothing warns,
+  and the number that would have told you is the default.
+- **A measurement whose meaning depends on an environment variable it never
+  reports is not a measurement.** Pass the setting the harness depends on,
+  do not inherit it.
+- **A scan that cannot tell a read from a write has to exempt files by
+  name**, and an exemption by name is a hole shaped like whatever is behind
+  it.

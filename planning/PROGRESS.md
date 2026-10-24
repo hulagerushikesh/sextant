@@ -5,6 +5,66 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-24 — the knob that was set and never read (₹0)
+
+`mcp_server/main.py` imported twenty modules and then called
+`load_dotenv()` on line 55. Python runs the imports first, so every
+module-level constant in the import graph had already been evaluated
+against an environment the file had not reached: `agent.MODEL`,
+`observability.DAILY_BUDGET_USD`, `RATE_LIMIT_REQUESTS`, `RATE_WINDOW`,
+`DAILY_BUDGET_SHARE`, and `configure_logging`'s `LOG_FORMAT`.
+
+Measured, not reasoned about. With `SEXTANT_DAILY_BUDGET_USD=0.60` in
+`.env`, importing the app left `os.environ` holding `0.60` and
+`DAILY_BUDGET_USD` holding `0.0` — which `DailyBudget`'s own docstring
+calls *disabled*. A daily spend ceiling set on a prepaid key, and not in
+force. `CLAUDE.md` states the cap is set; it was set and not read.
+
+Local only. The box takes those names from compose's `env_file`, so they
+are real environment variables before Python starts — item 28's pypdf
+shape, where the route that is wrong is the one nobody watches because the
+watched one happens to go a different way.
+
+The second casualty was `sextant-judge`, which loads no `.env` at all. Run
+from a checkout it prints `GEMINI_API_KEY is not set` and exits 1, against
+a key in the file every other entry point reads it from. It is this
+project's only measurement of faithfulness — *"the failure this project
+most needs to catch"*, by its own docstring — and it had never been able
+to start. Confirmed by running it, which costs nothing because it exits
+before it connects. Item 21 one directory over. Nothing in the record was
+wrong: the published faithfulness numbers came from `sextant-eval-agent
+--judge`, which does load `.env`.
+
+The load lives in `tools/settings.py` now, at import, and the three
+scattered copies (`main.py`, `ingest_cli.py`, `agent_harness.py`) are
+gone. A module cannot call `settings.getenv` without importing `settings`,
+so there is no longer an order in which a setting can be read before the
+file that sets it — fixed by construction rather than by remembering.
+`load_dotenv` never overrides, so compose, CI and a shell export all still
+win, and a test asserts that.
+
+Two more clauses in the harness that unblocked. The judge now passes
+`web_search=False` explicitly rather than inheriting
+`web_search_default()`: the unanswerable split exists to ask whether the
+system *declines*, and a model allowed to search answers those questions
+well, so `correct_abstention` would have been measuring Google's coverage.
+Loading `.env` is what made that live. And `truncated` and `cost_usd`,
+which the loop reports on `done` and this harness discarded, now reach the
+record, the per-question line (`cut` before the grade) and the summary — a
+cut-off answer graded without the marker charges the token cap to the
+model's judgement.
+
+`tests/test_judge.py`, ten tests. The ordering is proved on a **copy** of
+`settings.py` in a temp tree with its own `.env`, because the real one is
+gitignored and the machine that most needs the test is CI, which has none.
+Scans hold the arrangement: `load_dotenv` in one file, no module-level
+environment **read** outside `settings.py` — reads only, because
+`faiss_ref.py` must *write* `KMP_DUPLICATE_LIB_OK` before `import faiss`,
+and an exemption by filename is a hole shaped like whatever is behind it.
+All four defects planted back, each failing its own test.
+
+799 Python tests, 52 frontend tests. Cost ₹0.
+
 ## 2026-10-24 — the check that measured the machine (₹0)
 
 Item 28's branch went red on CI in a test neither of its commits touches:

@@ -343,6 +343,44 @@ because each one was learned the expensive way.
   happens on failure and on Ctrl-C. A checklist is what failed on 2026-09-28;
   this is the same checklist with the last step made unskippable. Leaving the
   box up takes `--keep-up`, which you have to decide to type.
+- **A setting read at import time must see `.env`, and only the import graph
+  decides whether it does.** `mcp_server/main.py` called `load_dotenv()` on line
+  55, under twenty import lines, and Python runs the imports first -- so
+  `agent.MODEL`, `observability.DAILY_BUDGET_USD`, `RATE_LIMIT_REQUESTS`,
+  `RATE_WINDOW`, `DAILY_BUDGET_SHARE` and `configure_logging`'s `LOG_FORMAT`
+  were every one of them evaluated against an environment the file had not
+  reached. **Measured**: with `SEXTANT_DAILY_BUDGET_USD=0.60` in `.env`,
+  `os.environ` held `0.60` and `DAILY_BUDGET_USD` held `0.0`, which
+  `DailyBudget` documents as *disabled*. A daily spend ceiling set on a prepaid
+  key and not in force, with nothing logged and nothing warned, because the
+  number that would have told you is the default. The box was unaffected --
+  compose's `env_file` makes those real environment variables before Python
+  starts -- so this was the local run only, which is item 28's pypdf shape: the
+  wrong path is the unwatched one. The load is in `tools/settings.py` now and
+  the three scattered copies are gone. **Fix an ordering by construction, not
+  by being careful**: a module cannot call `settings.getenv` without importing
+  `settings`, so there is no order left to get wrong. `load_dotenv` never
+  overrides, so compose, CI and a shell export still win, and a test says so.
+- **`sextant-judge` had never been able to start.** It loads no `.env`, so from
+  a checkout it exits `GEMINI_API_KEY is not set` against the key every other
+  entry point reads out of that file -- and it is the only measurement of
+  faithfulness this project has, *"the failure this project most needs to
+  catch"* by its own docstring. Item 21 one directory over: **a check nobody
+  can run is a check nobody has read.** Nothing published was wrong; those
+  numbers came from `sextant-eval-agent --judge`, which does load `.env`.
+- **A measurement whose meaning depends on an environment variable it never
+  reports is not a measurement.** The judge inherited `web_search_default()`
+  (`SEXTANT_WEB_SEARCH`) where `agent_harness` passes `web_search=False`
+  outright. The unanswerable split asks whether the system *declines* when the
+  corpus cannot answer; a model allowed to search answers those questions well,
+  so `correct_abstention` would have been grading Google's coverage. Loading
+  `.env` is what turned a dormant setting into a live one -- **a fix can make
+  another defect reachable, and that belongs in the same item.**
+- **A scan that cannot tell a read from a write has to exempt files by name,
+  and an exemption by name is a hole shaped like whatever is behind it.** The
+  pin that no module-level environment read bypasses `settings` matches reads
+  only: `faiss_ref.py` *writes* `KMP_DUPLICATE_LIB_OK` at module level and must,
+  because it has to beat `import faiss`.
 - Kill CPU-heavy local jobs (eval runs, model loads) at the end of a session.
 
 ### Where the money shows up
