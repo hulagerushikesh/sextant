@@ -24,6 +24,7 @@ from tools.vector_db.loaders import (
     PDF_SUFFIXES,
     TEXT_SUFFIXES,
     UnsupportedDocument,
+    unreadable_line,
 )
 from tools.vector_db.summaries import SummariesUnavailable, summarise
 from tools.vector_db.vector_search import KnowledgeBase, KnowledgeBaseUnavailable
@@ -111,6 +112,12 @@ async def _ingest(
         if result.get("success"):
             note = " (+ overview)" if summaries else ""
             print(f"  ok    {path.name}: {result['chunks_added']} chunks{note}")
+            # A chunk count on its own reads as "all of it". Pages the loader
+            # could not extract are not in that number and are not in the
+            # corpus, and until now the only trace was a log line.
+            lost = result.get("unreadable_pages") or {}
+            if lost:
+                print(f"  warn  {unreadable_line(lost)}")
         else:
             print(f"  fail  {path.name}: {result.get('message')}")
             failures += 1
