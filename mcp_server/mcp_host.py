@@ -108,7 +108,8 @@ _NOT_FORWARDED = {
     ),
     "GEMINI_API_KEY": (
         "the same path: nothing the subprocess can be asked to do generates "
-        "text. A key that does not cross cannot leak from here."
+        "text. A key that does not cross cannot leak from here -- which holds "
+        "only because the child is sealed and does not read .env itself."
     ),
     settings.env_name("LOG_FORMAT"): (
         "the subprocess calls logging.basicConfig itself and never reads it; "
@@ -136,17 +137,27 @@ def kb_server() -> StdioServerParameters:
     server would quietly open the default collection with the default index.
     Silently reading the wrong corpus, or the wrong index, is a much worse failure
     than not starting.
+
+    The seal is the other half of that sentence, and it is what makes
+    `_NOT_FORWARDED` true rather than merely written down. `tools.settings`
+    loads the repository's `.env` at import, which the child reaches through
+    `vector_search` -- so from a checkout every name in that file arrived in
+    the child whatever this function withheld, `GEMINI_API_KEY` included.
+    A sealed process takes the environment it was given and reads no file,
+    so this dictionary is the whole of what the child knows.
     """
     forwarded = {
         name: value
         for name in _FORWARDED_ENV
         if (value := os.getenv(name)) is not None
     }
+    # Always a non-empty dict, so there is no `env=None` arm in which the
+    # client falls back to its own defaults alone and the seal goes missing.
     return StdioServerParameters(
         command=sys.executable,
         args=["-m", "tools.vector_db.server"],
         cwd=str(REPO_ROOT),
-        env=forwarded or None,
+        env={settings.SEALED: "1", **forwarded},
     )
 
 

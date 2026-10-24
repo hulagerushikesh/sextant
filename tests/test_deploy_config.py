@@ -39,6 +39,8 @@ from mcp_server.identity import (
 )
 from tools import settings
 
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+
 DEPLOY = Path(__file__).resolve().parents[1] / "deploy"
 FRONTEND = Path(__file__).resolve().parents[1] / "frontend" / "src"
 API_CLIENT = FRONTEND / "lib" / "api.ts"
@@ -2487,6 +2489,158 @@ class TestEveryVariableTheSubprocessNeedsCrosses:
         for name in _FORWARDED_VERBATIM:
             assert f'"{name}"' in constants or f'"{name}"' in st, (
                 f"{name} is forwarded but no loader reads it"
+            )
+
+
+class TestTheChildCannotGoBehindTheAllowlist:
+    """The class above checks the list. This one runs the process.
+
+    Every test in `TestEveryVariableTheSubprocessNeedsCrosses` compares sets
+    of names read out of source files, and all nine of them passed while the
+    thing they describe was not happening. `_NOT_FORWARDED` says of
+    `GEMINI_API_KEY` that "a key that does not cross cannot leak from here",
+    and from a checkout the key crossed: the child starts with the six names
+    MCP inherits, imports `tools.vector_db.server`, reaches `tools.settings`
+    through `vector_search`, and that module loads the repository's `.env`.
+    Measured before the fix -- child environment without the key at exec,
+    with it after the first import.
+
+    A seam pinned on the side you can read is pinned on the side that is not
+    the problem, which is item 18's finding; here the readable side was a
+    dictionary and the problem was a file read two imports away. So these
+    tests launch a real interpreter and ask it what it can see.
+
+    The container was never affected: the image copies `pyproject.toml`,
+    `mcp_server/`, `tools/` and `eval/`, and compose injects `env_file` as
+    real environment variables, so `/app/.env` does not exist and the load is
+    a no-op there. The unwatched path again -- and the watched one is where
+    the agent is mounted in a desktop client.
+    """
+
+    ENV_FILE = ROOT / ".env"
+
+    @staticmethod
+    def _tree(tmp_path: pathlib.Path) -> pathlib.Path:
+        """A copy of the real `settings.py` with a `.env` beside it.
+
+        Copied for the reason `test_judge.py` copies it: `.env` is gitignored,
+        CI has none, and the machine with no `.env` is the one that must still
+        run this. The name is invented so that finding it in the child can
+        only mean the file was read.
+        """
+        package = tmp_path / "tools"
+        package.mkdir()
+        (package / "__init__.py").write_text("")
+        (package / "settings.py").write_text((ROOT / "tools" / "settings.py").read_text())
+        (tmp_path / ".env").write_text("SEXTANT_NOT_FORWARDED_PROBE=leaked\n")
+        return tmp_path
+
+    @staticmethod
+    def _probe(tree: pathlib.Path, env: dict[str, str]) -> str:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import os; from tools import settings; "
+                "print(os.environ.get('SEXTANT_NOT_FORWARDED_PROBE'))",
+            ],
+            cwd=tree,
+            capture_output=True,
+            text=True,
+            env={"PATH": "/usr/bin:/bin", "PYTHONPATH": str(tree), **env},
+        )
+        assert result.returncode == 0, result.stderr
+        return result.stdout.strip()
+
+    def test_an_unsealed_process_reads_the_file(self, tmp_path):
+        """Anti-vacuity, and the defect itself. Without the seal the child
+        takes a name its parent never gave it -- which is what made the
+        exemption table a description of an intention."""
+        assert self._probe(self._tree(tmp_path), {}) == "leaked"
+
+    def test_a_sealed_process_reads_no_file(self, tmp_path):
+        assert self._probe(self._tree(tmp_path), {settings.SEALED: "1"}) == "None"
+
+    def test_the_seal_is_read_before_the_file_is_loaded(self, tmp_path):
+        """A `.env` cannot seal the process that is about to read it. The
+        order matters the other way round too: were the check made after the
+        load, a file setting the name would hide every other name in it."""
+        tree = self._tree(tmp_path)
+        (tree / ".env").write_text(
+            f"{settings.SEALED}=1\nSEXTANT_NOT_FORWARDED_PROBE=leaked\n"
+        )
+        assert self._probe(tree, {}) == "leaked"
+
+    def test_kb_server_seals_its_child(self):
+        from mcp_server.mcp_host import kb_server
+
+        assert (kb_server().env or {}).get(settings.SEALED) == "1"
+
+    def test_the_child_environment_is_never_the_client_default_alone(self, monkeypatch):
+        """`env=` used to be `forwarded or None`, and an empty forwarding set
+        is the common case: nothing in this shell overrides a retrieval knob.
+        The seal has to survive that case, so the dictionary is never empty."""
+        from mcp_server.mcp_host import _FORWARDED_ENV, kb_server
+
+        for name in _FORWARDED_ENV:
+            monkeypatch.delenv(name, raising=False)
+        env = kb_server().env
+        assert env and settings.SEALED in env
+
+    def test_every_stdio_child_in_the_repository_is_sealed(self):
+        """The next subprocess, not this one. A second MCP server added later
+        would inherit the hole in full, and nothing else in the tree would
+        notice."""
+        launchers = [
+            path
+            for path in sorted((ROOT / "mcp_server").rglob("*.py"))
+            + sorted((ROOT / "tools").rglob("*.py"))
+            + sorted((ROOT / "eval").rglob("*.py"))
+            if "StdioServerParameters(" in path.read_text()
+        ]
+        assert launchers, "the scan found no stdio launcher at all"
+        for path in launchers:
+            text = path.read_text()
+            assert "settings.SEALED" in text, f"{path} launches a child it does not seal"
+
+    @pytest.mark.skipif(
+        not ENV_FILE.exists(), reason="no .env in this checkout; the copied tree covers it"
+    )
+    def test_the_real_child_cannot_see_what_the_host_withheld(self):
+        """The whole thing, on this machine, against the real file.
+
+        Names only: the values in `.env` are never read into the test, and the
+        assertion is about presence. Skipped where there is no `.env`, which
+        is the one environment the defect could not occur in.
+        """
+        from mcp.client.stdio import get_default_environment
+
+        from mcp_server.mcp_host import _NOT_FORWARDED, kb_server
+
+        present = {
+            line.split("=", 1)[0].strip()
+            for line in self.ENV_FILE.read_text().splitlines()
+            if "=" in line and not line.lstrip().startswith("#")
+        }
+        withheld = sorted(present & set(_NOT_FORWARDED))
+        if not withheld:
+            pytest.skip("this .env sets none of the withheld names")
+
+        params = kb_server()
+        reader = "; ".join(
+            f"print({name!r}, os.environ.get({name!r}) is not None)" for name in withheld
+        )
+        result = subprocess.run(
+            [params.command, "-c", f"import tools.vector_db.server, os; {reader}"],
+            cwd=params.cwd,
+            env={**get_default_environment(), **(params.env or {})},
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr
+        for name in withheld:
+            assert f"{name} False" in result.stdout, (
+                f"{name} is in _NOT_FORWARDED and the child has it:\n{result.stdout}"
             )
 
 

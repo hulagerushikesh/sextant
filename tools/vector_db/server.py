@@ -1,10 +1,16 @@
 """
 Knowledge-base MCP server.
 
-Exposes the ChromaDB store in `vector_search.py` as three MCP tools over stdio.
-This is a standalone server: it has no dependency on the FastAPI app, and it is
-meant to be mounted by any MCP client -- Claude Desktop, MCP Inspector, or the
-agent in `mcp_server/main.py`.
+Exposes the ChromaDB store in `vector_search.py` as six MCP tools over stdio:
+`kb_search`, `kb_ingest`, `kb_stats`, `kb_list`, `kb_ann_benchmark` and
+`kb_ann_compare`. This is a standalone server: it has no dependency on the
+FastAPI app, and it is meant to be mounted by any MCP client -- Claude Desktop,
+MCP Inspector, or the agent in `mcp_server/main.py`.
+
+Its environment is whatever the client gave it and nothing else. Mounted by the
+agent it arrives sealed (`mcp_host.kb_server`), so `tools.settings` does not
+read the repository's `.env` here: the host's allowlist is the whole of what
+this process knows about the box.
 
 Run it directly:
 
