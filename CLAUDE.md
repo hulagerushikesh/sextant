@@ -749,6 +749,18 @@ lifetime rather than per day.
   forwarded or be in `_NOT_FORWARDED` **with a reason** -- and an exemption
   whose variable nothing reads or sets any more fails too, so the table cannot
   fossilise.
+- **The KB subprocess is sealed: a sealed process reads no `.env`.**
+  `kb_server()` sets `SEXTANT_ENV_SEALED=1` in the child's environment and
+  `tools.settings` skips the load when it is set, before the load, so a `.env`
+  cannot unseal itself. Without it the allowlist above was advisory from a
+  checkout: `tools.settings` loads `.env` at import, the child reaches it
+  through `vector_search`, and every name in that file arrived -- including
+  `GEMINI_API_KEY`, whose exemption says *a key that does not cross cannot
+  leak from here*. Measured: the key absent from the child at exec and present
+  after its first import. The container was never affected (no `/app/.env`;
+  compose injects `env_file` as real variables), which is why only the local
+  path had it. **A list of nine tests compared names in source files and not
+  one ran the process** -- pin the child by launching it.
 - **Name a pin after the boundary it guards, not after the kind of thing you
   were thinking about.** `every_retrieval_knob` is a test that cannot grow: the
   next variable to cross that boundary was not a retrieval knob, so nobody
