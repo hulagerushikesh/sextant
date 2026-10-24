@@ -193,28 +193,32 @@ class TestPerDocumentCap:
         assert self.kb()._diversify(self.order, self.ids, self.scores, 3) == [0, 1, 2]
 
 
-async def _tick_rate(work) -> float:
-    """Ticks per second of a 10ms heartbeat while `work()` runs.
+async def _tick_gaps(work) -> tuple[list[float], float]:
+    """Gaps between 10ms heartbeat ticks while `work()` runs, and the duration.
 
-    A rate rather than a count, so the measurement does not care how long the
-    work took and two measurements of different durations can be compared.
+    Gaps rather than a count, because the property this file cares about is
+    *how long the loop ever went unserved* -- which is what decides whether a
+    request waits -- and not how much total throughput it kept.
     """
-    ticks = 0
+    gaps: list[float] = []
+    last = time.perf_counter()
 
     async def heartbeat():
-        nonlocal ticks
+        nonlocal last
         while True:
             await asyncio.sleep(0.01)
-            ticks += 1
+            now = time.perf_counter()
+            gaps.append(now - last)
+            last = now
 
     beat = asyncio.create_task(heartbeat())
-    started = time.perf_counter()
+    started = last = time.perf_counter()
     try:
         await work()
     finally:
         elapsed = time.perf_counter() - started
         beat.cancel()
-    return ticks / elapsed
+    return gaps, elapsed
 
 
 class TestConcurrency:
@@ -222,45 +226,53 @@ class TestConcurrency:
         # Before this was fixed a 10ms heartbeat ticked zero times during half a
         # second of searching: the server could not stream or answer /health.
         #
-        # The baseline is measured, not assumed. This used to compare the tick
-        # count against `elapsed / 0.01` -- the rate a 10ms sleep would give if
-        # `asyncio.sleep(0.01)` slept exactly 10ms, which it never does. On an
-        # idle fast machine the real ratio is about 0.84, so the 0.5 threshold
-        # had far less headroom than it looks, and all of it was spent on how
-        # fast the machine is: a loaded CI runner measured 0.34 and failed,
-        # with nothing blocking that is not blocking here. A check whose answer
-        # depends on the speed of the box is not a check -- items 13 and 23,
-        # again.
+        # The assertion is on the longest stall as a fraction of the work, and
+        # it took three wrong versions to get there. It was
+        # `ticks > (elapsed / 0.01) * 0.5` -- a throughput ratio against the
+        # rate a 10ms sleep would give if it slept exactly 10ms, which it never
+        # does; idle on a fast machine measures 0.84, so the threshold's whole
+        # headroom went to machine speed. Measuring an idle baseline on the
+        # same machine fixed that and was still wrong, because throughput is
+        # not the property: CI showed 31.9 ticks/s against 98.0 idle, and a
+        # loop ticking every 31ms answers /health perfectly well. The
+        # regression was one stall covering the entire search.
         #
-        # Measuring the idle rate on the same machine moments earlier makes the
-        # comparison about blocking and nothing else. The regression this was
-        # written for -- zero ticks through the whole search -- still fails it
-        # by the entire margin.
+        # What finally settled it: this test failed on CI only when three
+        # unrelated tests were added to this file *below* it, and passed
+        # without them -- proven by running the workflow four times over
+        # trimmed branches. The mechanism by which later tests affect an
+        # earlier one is not understood. What is clear is that a gate which
+        # moves when unrelated load is added somewhere else in the suite is
+        # measuring the machine, so the measure has to be scale-free.
+        #
+        # A fraction of `elapsed` is. The regression -- one gap spanning the
+        # whole search -- gives a ratio near 1.0 and fails by the entire
+        # margin, while CPU contention produces many small gaps and passes
+        # however many cores the box has.
         await kb.search("warm up", limit=1)
 
-        idle = await _tick_rate(lambda: asyncio.sleep(0.5))
-        busy = await _tick_rate(
+        gaps, elapsed = await _tick_gaps(
             lambda: asyncio.gather(*(kb.search(f"query {i}", limit=5) for i in range(4)))
         )
 
-        assert busy > idle * 0.5, (
-            f"loop was starved: {busy:.1f} ticks/s while searching against "
-            f"{idle:.1f} ticks/s idle on this machine"
+        longest = max(gaps, default=elapsed)
+        assert longest < elapsed * 0.25, (
+            f"loop stalled for {longest * 1000:.0f}ms of a {elapsed * 1000:.0f}ms "
+            f"search ({longest / elapsed:.0%} of it in one unserved stretch)"
         )
 
     async def test_the_starvation_check_can_fail(self, kb):
         # The assertion above only means something if blocking the loop trips
-        # it. `time.sleep` in the coroutine is precisely what the original fix removed.
-        idle = await _tick_rate(lambda: asyncio.sleep(0.3))
-
+        # it. `time.sleep` in a coroutine is exactly what the original fix
+        # removed from the search path.
         async def blocking():
             # The one place in this repository where blocking the loop on
             # purpose is the point, so the lint that forbids it is waived here
             # and nowhere else.
             time.sleep(0.3)  # noqa: ASYNC251
 
-        blocked = await _tick_rate(blocking)
-        assert blocked < idle * 0.5
+        gaps, elapsed = await _tick_gaps(blocking)
+        assert max(gaps, default=elapsed) > elapsed * 0.25
 
     async def test_concurrent_ingests_do_not_lose_a_document(self, kb):
         docs = [
