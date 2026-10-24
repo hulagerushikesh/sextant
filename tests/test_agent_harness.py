@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from eval.agent_harness import RecordingHost, answer_one, grade_record, select, summarise
-from mcp_server import agent
+from sextant.eval.agent_harness import RecordingHost, answer_one, grade_record, select, summarise
+from sextant.mcp_server import agent
 from tests.fakes import (
     FakeGemini,
     FakeHost,

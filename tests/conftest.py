@@ -61,7 +61,7 @@ def corpus_dir() -> Iterator[Path]:
 @pytest.fixture(scope="session")
 def store_dir() -> Iterator[Path]:
     """An isolated ChromaDB directory, so tests never touch a real corpus."""
-    from tools.vector_db.vector_search import PERSIST_DIR_ENV
+    from sextant.vector_db.vector_search import PERSIST_DIR_ENV
 
     directory = Path(tempfile.mkdtemp(prefix="sextant-test-store-"))
     previous = os.environ.get(PERSIST_DIR_ENV)
@@ -76,7 +76,7 @@ def store_dir() -> Iterator[Path]:
 
 @pytest.fixture(scope="session")
 def embedder():
-    from tools.vector_db.embeddings import get_embedder
+    from sextant.vector_db.embeddings import get_embedder
 
     return get_embedder()
 
@@ -89,7 +89,7 @@ def corpus_files(corpus_dir: Path) -> list[str]:
 @pytest.fixture(scope="session")
 async def kb(store_dir: Path, corpus_files: list[str]):
     """A knowledge base with the small corpus already ingested."""
-    from tools.vector_db.vector_search import KnowledgeBase
+    from sextant.vector_db.vector_search import KnowledgeBase
 
     knowledge_base = KnowledgeBase()
     for path in corpus_files:

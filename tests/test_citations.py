@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from eval.judge import check_citations
+from sextant.eval.judge import check_citations
 
 SOURCES = [
     {"n": 1, "title": "Kalman Filter", "text": "..."},

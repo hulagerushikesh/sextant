@@ -1,7 +1,7 @@
 """The TypeScript types the browser reads `/health` through.
 
 `frontend/src/lib/types.ts` opens with "Shapes the agent server sends. Mirrors
-mcp_server/main.py + agent.py." Nothing checked that. It drifted: the server
+sextant/mcp_server/main.py + agent.py." Nothing checked that. It drifted: the server
 has shipped `budget.durable` since milestone 21 item 15 -- added so that a
 figure nobody can date is not mistaken for the day's -- and the type did not
 declare it, so no component could read it without the compiler objecting, and
@@ -21,8 +21,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from mcp_server import main
-from mcp_server.observability import DailyBudget
+from sextant.mcp_server import main
+from sextant.mcp_server.observability import DailyBudget
 from tests.fakes import FakeHost
 
 TYPES = Path(__file__).resolve().parents[1] / "frontend" / "src" / "lib" / "types.ts"

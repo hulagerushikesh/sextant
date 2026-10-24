@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 from google.genai import types
 
-from mcp_server import agent
+from sextant.mcp_server import agent
 from tests.fakes import (
     FakeGemini,
     FakeHost,

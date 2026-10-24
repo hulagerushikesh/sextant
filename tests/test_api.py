@@ -12,18 +12,18 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 
-from mcp_server import main
-from mcp_server.identity import (
+from sextant import settings
+from sextant.mcp_server import main
+from sextant.mcp_server.identity import (
     CLIENT_HEADER,
     DEFAULT_OWNER,
     PROXY_HEADER,
     PROXY_SECRET,
     USER_HEADER,
 )
-from mcp_server.mcp_host import ToolUnavailable
-from mcp_server.observability import REQUEST_ID_HEADER
+from sextant.mcp_server.mcp_host import ToolUnavailable
+from sextant.mcp_server.observability import REQUEST_ID_HEADER
 from tests.fakes import FakeHost
-from tools import settings
 
 
 def sse_events(body: str) -> list[tuple[str, dict]]:
@@ -298,7 +298,7 @@ class TestQuery:
         assert seen["query"] == "spaced out"
 
     def test_a_missing_key_is_explained_rather_than_crashing(self, client, monkeypatch):
-        from mcp_server.agent import AgentUnavailable
+        from sextant.mcp_server.agent import AgentUnavailable
 
         async def failing(query, host, *_):
             # The empty loop is what makes this an async generator without

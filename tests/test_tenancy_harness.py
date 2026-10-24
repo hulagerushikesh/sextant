@@ -1,6 +1,6 @@
 """The tenancy harness: its verdict, its name, and its docstring.
 
-`eval/tenancy.py` decided milestone 20 item 2 -- one filtered collection or
+`sextant/eval/tenancy.py` decided milestone 20 item 2 -- one filtered collection or
 one per owner -- and it is the harness you re-run when the store changes and
 the answer might flip. Nothing had ever executed it. Three claims it makes
 are checked here, each of which was false when this file was written:
@@ -29,8 +29,8 @@ from typing import Any
 
 import pytest
 
-from eval import tenancy
-from eval.harness import K_PRIMARY
+from sextant.eval import tenancy
+from sextant.eval.harness import K_PRIMARY
 
 ROOT = Path(__file__).resolve().parents[1]
 _METRIC = f"recall@{K_PRIMARY}"
@@ -107,7 +107,7 @@ class TestAVerdictWithNoConsequence:
         # on the prose -- that is deciding twice, and the second decision is a
         # string match on a sentence this file is free to reword. Same lesson
         # as `billing_line` in deploy.sh: one definition, every caller asks it.
-        body = (ROOT / "eval" / "tenancy.py").read_text()
+        body = (ROOT / "sextant" / "eval" / "tenancy.py").read_text()
         assert body.count("def rule_verdict(") == 1
         assert body.count('"ACCEPTED"') == 1
         assert "ACCEPTED" not in body.split("def rule_verdict(")[0]
@@ -211,7 +211,7 @@ class TestTheDocstringDescribesThisCode:
         )
 
     def test_main_creates_no_directory_it_never_uses(self) -> None:
-        body = (ROOT / "eval" / "tenancy.py").read_text()
+        body = (ROOT / "sextant" / "eval" / "tenancy.py").read_text()
         assert "mkdtemp" not in body, (
             "the scratch tmpdir was never passed to run(); it was the vestige "
             "that made the docstring's claim look true"

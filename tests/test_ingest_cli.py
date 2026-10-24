@@ -14,9 +14,9 @@ from typing import Any
 
 import pytest
 
-from tools.vector_db import ingest_cli
-from tools.vector_db.ingest_cli import _ingest, _summaries_wanted
-from tools.vector_db.summaries import SummariesUnavailable
+from sextant.vector_db import ingest_cli
+from sextant.vector_db.ingest_cli import _ingest, _summaries_wanted
+from sextant.vector_db.summaries import SummariesUnavailable
 
 
 class FakeKB:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from mcp_server.sources import MAX_RESTORED, SourceRegistry
+from sextant.mcp_server.sources import MAX_RESTORED, SourceRegistry
 
 
 def kb_hit(**overrides):

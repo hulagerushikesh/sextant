@@ -17,7 +17,7 @@ from typing import Any
 
 import pytest
 
-from eval import harness
+from sextant.eval import harness
 
 MODES = ("dense", "lexical", "rrf", "rerank")
 METRICS = ("hit@1", "recall@3", "recall@5", "mrr", "ndcg@5")
@@ -169,7 +169,7 @@ class TestCheckRefusesAPartialGateBeforeGrading:
 
 class TestTheCommittedBaselineIsWhatCiCompares:
     def test_it_records_every_mode_the_code_can_run(self):
-        from tools.vector_db.vector_search import RETRIEVAL_MODES
+        from sextant.vector_db.vector_search import RETRIEVAL_MODES
 
         baseline = json.loads(harness.BASELINE_PATH.read_text())
         assert set(baseline["modes"]) == set(RETRIEVAL_MODES)

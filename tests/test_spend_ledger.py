@@ -11,8 +11,8 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime, timedelta
 
-from mcp_server import observability
-from mcp_server.observability import DailyBudget, spend_ledger_path
+from sextant.mcp_server import observability
+from sextant.mcp_server.observability import DailyBudget, spend_ledger_path
 
 
 def _today() -> str:
@@ -115,14 +115,14 @@ class TestTheLedgerLivesWhereTheCorpusDoes:
     """One location, resolved twice, is the drift this repository keeps paying for."""
 
     def test_it_defaults_beside_the_collection_directory(self, monkeypatch):
-        from tools.vector_db.vector_search import persist_dir
+        from sextant.vector_db.vector_search import persist_dir
 
         monkeypatch.delenv("SEXTANT_SPEND_LEDGER", raising=False)
         monkeypatch.delenv("SEXTANT_CHROMA_DIR", raising=False)
         assert spend_ledger_path() == persist_dir() / observability.SPEND_LEDGER_NAME
 
     def test_it_follows_the_collection_override(self, monkeypatch, tmp_path):
-        from tools.vector_db.vector_search import persist_dir
+        from sextant.vector_db.vector_search import persist_dir
 
         monkeypatch.delenv("SEXTANT_SPEND_LEDGER", raising=False)
         monkeypatch.setenv("SEXTANT_CHROMA_DIR", str(tmp_path / "elsewhere"))

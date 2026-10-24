@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_server.identity import (
+from sextant import settings
+from sextant.mcp_server.identity import (
     CLIENT_HEADER,
     DEFAULT_OWNER,
     PROXY_HEADER,
@@ -20,9 +21,8 @@ from mcp_server.identity import (
     owner_of,
     safe_owner,
 )
-from mcp_server.uploads import MAX_UPLOAD_BYTES, SUPPORTED_SUFFIXES, safe_name, to_document
-from tools import settings
-from tools.vector_db.loaders import UnsupportedDocument
+from sextant.mcp_server.uploads import MAX_UPLOAD_BYTES, SUPPORTED_SUFFIXES, safe_name, to_document
+from sextant.vector_db.loaders import UnsupportedDocument
 
 MARKDOWN = b"# Tuning\n\nSet the gate to 9.4877.\n\n## Noise\n\nQ absorbs model error.\n"
 
@@ -107,7 +107,7 @@ class TestParsing:
 
 
 class TestOwner:
-    """Namespacing, not isolation -- see `mcp_server/identity.py`."""
+    """Namespacing, not isolation -- see `sextant/mcp_server/identity.py`."""
 
     @pytest.mark.parametrize(
         "given, expected",
@@ -227,7 +227,7 @@ class TestAPartlyReadableFileSaysSo:
             return bytes(doc.tobytes())
 
     def test_the_pages_travel_with_the_document(self, monkeypatch):
-        from tools.vector_db import loaders
+        from sextant.vector_db import loaders
 
         real = loaders._page_lines
         seen = {"n": 0}

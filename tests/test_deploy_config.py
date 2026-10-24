@@ -3,7 +3,7 @@
 Caddy sets the header; the app reads it. Nothing in the test suite runs both,
 and nothing in the test suite can -- the proxy only exists on the box, and a
 VM trip costs money. So what is pinned here is the seam: the header names in
-`deploy/Caddyfile` are the ones `mcp_server/identity.py` declares, and the
+`deploy/Caddyfile` are the ones `sextant/mcp_server/identity.py` declares, and the
 secret that makes one believe the other is wired to both.
 
 The failure this exists for is quiet. Rename `USER_HEADER` in Python and every
@@ -31,13 +31,13 @@ from pathlib import Path
 
 import pytest
 
-from mcp_server.identity import (
+from sextant import settings
+from sextant.mcp_server.identity import (
     CLIENT_HEADER,
     PROXY_HEADER,
     PROXY_SECRET,
     USER_HEADER,
 )
-from tools import settings
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -1903,7 +1903,7 @@ class TestCiRunsTheGateWithTheSameArguments:
     """`TestCiRunsWhatTheGateRuns` pins the program names. That is not the claim.
 
     It asks whether the string `mypy` appears in the workflow, so a CI step
-    narrowed from `mypy mcp_server tools eval tests` to `mypy mcp_server` keeps
+    narrowed from `mypy sextant tests` to `mypy sextant` keeps
     the tick and type-checks **one tree of four** -- verified, that pin passes
     it. Item 14 was this exact shape one level out: `sextant-eval --check`
     guarded `--store` and `--golden` but not `--modes`, so grading one
@@ -1918,7 +1918,7 @@ class TestCiRunsTheGateWithTheSameArguments:
     # with the virtualenv prefix removed because CI has the tools on PATH.
     EXPECTED_COMMANDS = [
         "pytest tests/ -q",
-        "mypy mcp_server tools eval tests",
+        "mypy sextant tests",
         "ruff check .",
         "npm run build",
         "npm test",
@@ -2075,7 +2075,7 @@ class TestTheBrowserSendsWhatTheAppReads:
     was left out -- for exactly the reason that class's docstring gives about
     the other two. Its other end is not Python, so no test in the suite reads
     it. Before this class, `X-Sextant-Client` appeared in two places in the
-    whole repository, `mcp_server/identity.py` and
+    whole repository, `sextant/mcp_server/identity.py` and
     `frontend/src/lib/api.ts`, and no test named it at all.
 
     Renaming `CLIENT_HEADER` is green in every check there is: the Python
@@ -2311,20 +2311,20 @@ class TestEveryVariableTheSubprocessNeedsCrosses:
 
     @staticmethod
     def _declared() -> tuple[set[str], dict[str, str]]:
-        from mcp_server.mcp_host import _FORWARDED_ENV, _NOT_FORWARDED
+        from sextant.mcp_server.mcp_host import _FORWARDED_ENV, _NOT_FORWARDED
 
         return set(_FORWARDED_ENV), dict(_NOT_FORWARDED)
 
     def _subprocess_reads(self) -> set[str]:
         """Every environment variable named by code the subprocess imports.
 
-        `tools/` is the subprocess's half: `python -m tools.vector_db.server`
-        imports from nowhere else. Settings arrive through `tools.settings`, so
+        `sextant/vector_db/` is the subprocess's half: `python -m sextant.vector_db.server`
+        imports from nowhere else. Settings arrive through `sextant.settings`, so
         they are matched by key and prefixed here; a vendor name like
         GEMINI_API_KEY is read straight off `os`, so it is matched whole.
         """
         found: set[str] = set()
-        sources = sorted((self.ROOT / "tools").rglob("*.py"))
+        sources = sorted((self.ROOT / "sextant" / "vector_db").rglob("*.py"))
         assert len(sources) >= 8, f"expected the KB package, found {len(sources)}"
         for path in sources:
             if path.name == "settings.py":
@@ -2411,7 +2411,7 @@ class TestEveryVariableTheSubprocessNeedsCrosses:
         wrongly -- a different failure, worth knowing about separately."""
         from mcp.client.stdio import get_default_environment
 
-        from mcp_server.mcp_host import kb_server
+        from sextant.mcp_server.mcp_host import kb_server
 
         monkeypatch.setenv(settings.env_name("CHROMA_DIR"), "/tmp/elsewhere")
         child = get_default_environment() | (kb_server().env or {})
@@ -2419,7 +2419,7 @@ class TestEveryVariableTheSubprocessNeedsCrosses:
         assert "PATH" in child and "HOME" in child
 
     def test_every_variable_the_subprocess_reads_is_decided(self):
-        """Fail closed: a name read under `tools/` is forwarded, or it is in
+        """Fail closed: a name read under `sextant/vector_db/` is forwarded, or it is in
         `_NOT_FORWARDED` with a reason. Adding a setting and forgetting the
         host is the defect this replaces guessing about."""
         forwarded, exempt = self._declared()
@@ -2478,7 +2478,7 @@ class TestEveryVariableTheSubprocessNeedsCrosses:
         import huggingface_hub.constants as hub
         from sentence_transformers.base import model as st_model
 
-        from mcp_server.mcp_host import _FORWARDED_VERBATIM
+        from sextant.mcp_server.mcp_host import _FORWARDED_VERBATIM
 
         sources = []
         for module in (hub, st_model):
@@ -2500,7 +2500,7 @@ class TestTheChildCannotGoBehindTheAllowlist:
     thing they describe was not happening. `_NOT_FORWARDED` says of
     `GEMINI_API_KEY` that "a key that does not cross cannot leak from here",
     and from a checkout the key crossed: the child starts with the six names
-    MCP inherits, imports `tools.vector_db.server`, reaches `tools.settings`
+    MCP inherits, imports `sextant.vector_db.server`, reaches `sextant.settings`
     through `vector_search`, and that module loads the repository's `.env`.
     Measured before the fix -- child environment without the key at exec,
     with it after the first import.
@@ -2511,7 +2511,8 @@ class TestTheChildCannotGoBehindTheAllowlist:
     tests launch a real interpreter and ask it what it can see.
 
     The container was never affected: the image copies `pyproject.toml`,
-    `mcp_server/`, `tools/` and `eval/`, and compose injects `env_file` as
+    `sextant/mcp_server/`, `sextant/vector_db/` and `sextant/eval/`, and compose
+    injects `env_file` as
     real environment variables, so `/app/.env` does not exist and the load is
     a no-op there. The unwatched path again -- and the watched one is where
     the agent is mounted in a desktop client.
@@ -2528,10 +2529,11 @@ class TestTheChildCannotGoBehindTheAllowlist:
         run this. The name is invented so that finding it in the child can
         only mean the file was read.
         """
-        package = tmp_path / "tools"
+        package = tmp_path / "sextant"
         package.mkdir()
         (package / "__init__.py").write_text("")
-        (package / "settings.py").write_text((ROOT / "tools" / "settings.py").read_text())
+        (package / "settings.py").write_text((ROOT / "sextant" / "settings.py").read_text())
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "stand-in"\n')
         (tmp_path / ".env").write_text("SEXTANT_NOT_FORWARDED_PROBE=leaked\n")
         return tmp_path
 
@@ -2541,7 +2543,7 @@ class TestTheChildCannotGoBehindTheAllowlist:
             [
                 sys.executable,
                 "-c",
-                "import os; from tools import settings; "
+                "import os; from sextant import settings; "
                 "print(os.environ.get('SEXTANT_NOT_FORWARDED_PROBE'))",
             ],
             cwd=tree,
@@ -2572,7 +2574,7 @@ class TestTheChildCannotGoBehindTheAllowlist:
         assert self._probe(tree, {}) == "leaked"
 
     def test_kb_server_seals_its_child(self):
-        from mcp_server.mcp_host import kb_server
+        from sextant.mcp_server.mcp_host import kb_server
 
         assert (kb_server().env or {}).get(settings.SEALED) == "1"
 
@@ -2580,7 +2582,7 @@ class TestTheChildCannotGoBehindTheAllowlist:
         """`env=` used to be `forwarded or None`, and an empty forwarding set
         is the common case: nothing in this shell overrides a retrieval knob.
         The seal has to survive that case, so the dictionary is never empty."""
-        from mcp_server.mcp_host import _FORWARDED_ENV, kb_server
+        from sextant.mcp_server.mcp_host import _FORWARDED_ENV, kb_server
 
         for name in _FORWARDED_ENV:
             monkeypatch.delenv(name, raising=False)
@@ -2593,9 +2595,7 @@ class TestTheChildCannotGoBehindTheAllowlist:
         notice."""
         launchers = [
             path
-            for path in sorted((ROOT / "mcp_server").rglob("*.py"))
-            + sorted((ROOT / "tools").rglob("*.py"))
-            + sorted((ROOT / "eval").rglob("*.py"))
+            for path in sorted((ROOT / "sextant").rglob("*.py"))
             if "StdioServerParameters(" in path.read_text()
         ]
         assert launchers, "the scan found no stdio launcher at all"
@@ -2615,7 +2615,7 @@ class TestTheChildCannotGoBehindTheAllowlist:
         """
         from mcp.client.stdio import get_default_environment
 
-        from mcp_server.mcp_host import _NOT_FORWARDED, kb_server
+        from sextant.mcp_server.mcp_host import _NOT_FORWARDED, kb_server
 
         present = {
             line.split("=", 1)[0].strip()
@@ -2631,7 +2631,7 @@ class TestTheChildCannotGoBehindTheAllowlist:
             f"print({name!r}, os.environ.get({name!r}) is not None)" for name in withheld
         )
         result = subprocess.run(
-            [params.command, "-c", f"import tools.vector_db.server, os; {reader}"],
+            [params.command, "-c", f"import sextant.vector_db.server, os; {reader}"],
             cwd=params.cwd,
             env={**get_default_environment(), **(params.env or {})},
             capture_output=True,

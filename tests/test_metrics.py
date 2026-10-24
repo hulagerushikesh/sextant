@@ -6,7 +6,7 @@ import math
 
 import pytest
 
-from eval.metrics import abstention, ndcg_at_k, recall_at_k, reciprocal_rank, summarise
+from sextant.eval.metrics import abstention, ndcg_at_k, recall_at_k, reciprocal_rank, summarise
 
 
 class TestRecall:
@@ -93,14 +93,14 @@ class TestGradingUnit:
     """The harness grades what a question labels: documents, or pages of one."""
 
     def test_document_labelled_question_collapses_chunks_to_document(self):
-        from eval.harness import _relevant, _unit
+        from sextant.eval.harness import _relevant, _unit
 
         hit = {"document_id": "kalman-filter", "page": 3}
         assert _unit(hit, by_page=False) == "kalman-filter"
         assert _relevant({"relevant_docs": ["kalman-filter"]}) == {"kalman-filter"}
 
     def test_page_labelled_question_grades_pages(self):
-        from eval.harness import _relevant, _unit
+        from sextant.eval.harness import _relevant, _unit
 
         hit = {"document_id": "survey", "page": 24}
         assert _unit(hit, by_page=True) == "survey#p24"

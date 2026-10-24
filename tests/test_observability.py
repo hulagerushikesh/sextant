@@ -9,9 +9,10 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 
-from mcp_server import main
-from mcp_server.identity import CLIENT_HEADER, PROXY_HEADER, PROXY_SECRET, USER_HEADER
-from mcp_server.observability import (
+from sextant import settings
+from sextant.mcp_server import main
+from sextant.mcp_server.identity import CLIENT_HEADER, PROXY_HEADER, PROXY_SECRET, USER_HEADER
+from sextant.mcp_server.observability import (
     REQUEST_ID_HEADER,
     DailyBudget,
     JsonFormatter,
@@ -19,9 +20,8 @@ from mcp_server.observability import (
     RequestIdFilter,
     request_id,
 )
-from mcp_server.pricing import estimate_cost
+from sextant.mcp_server.pricing import estimate_cost
 from tests.fakes import FakeHost
-from tools import settings
 
 
 @pytest.fixture

@@ -2,9 +2,9 @@
 
 # ruff: noqa: E501 -- the fixtures are real pypdf lines, and pypdf does not wrap.
 
-from tools.vector_db.chunking import chunk_text
-from tools.vector_db.loaders import LoadedDocument, Locator
-from tools.vector_db.tables import (
+from sextant.vector_db.chunking import chunk_text
+from sextant.vector_db.loaders import LoadedDocument, Locator
+from sextant.vector_db.tables import (
     TableSpan,
     find_markdown_tables,
     find_pdf_tables,

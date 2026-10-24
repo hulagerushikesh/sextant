@@ -1,25 +1,44 @@
 [project]
-name = "sextant"
-version = "0.8.7"
-description = "sextant: an MCP-native agentic RAG system with measured retrieval"
+name = "sextant-kb"
+version = "0.9.0"
+description = "A knowledge base that is a real MCP server: measured retrieval over your own documents, in any MCP client"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
+readme = "README.md"
+keywords = ["mcp", "model-context-protocol", "rag", "retrieval", "vector-search", "chromadb"]
+authors = [{ name = "Rushikesh Hulage" }]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Text Processing :: Indexing",
+]
 
+# The distribution is `sextant-kb` because `sextant` is taken on PyPI. The
+# import package is `sextant`, one top level for the whole project: before
+# 0.9.0 it was three -- `tools`, `mcp_server` and `eval` -- and all three
+# names are *already distributions on PyPI*, so a released wheel would have
+# dropped three squatted generic packages into every installer's
+# site-packages. A name that is fine inside a checkout is not fine inside
+# everybody else's.
+
+# The base install is the MCP server and the two CLIs that feed it: a
+# knowledge base, no agent and no model. Everything that needs a network
+# service or an API key is an extra, so `pip install sextant-kb` cannot
+# install a web framework somebody mounting this in Claude Desktop will
+# never start.
 dependencies = [
-    # Web layer
-    "fastapi>=0.115",
-    "uvicorn[standard]>=0.32",
+    # Protocol
+    "mcp[cli]>=2.0",
     "pydantic>=2.9",
 
     # Config
     "python-dotenv>=1.0",
 
-    # Generation
-    "google-genai>=2.19",
-
-    # Protocol
-    "mcp[cli]>=2.0",
+    # Document loading
     "pymupdf>=1.26",  # PDF text; reads layout instead of guessing word spacing (AGPL)
     "pypdf>=5.0",     # fallback extractor when the MuPDF wheel is unavailable
 
@@ -29,12 +48,12 @@ dependencies = [
 ]
 
 [project.scripts]
-sextant-kb = "tools.vector_db.server:main"
-sextant-ingest = "tools.vector_db.ingest_cli:main"
-sextant-forget = "tools.vector_db.forget_cli:main"
-sextant-eval = "eval.harness:main"
-sextant-eval-agent = "eval.agent_harness:main"
-sextant-judge = "eval.judge:main"
+sextant-kb = "sextant.vector_db.server:main"
+sextant-ingest = "sextant.vector_db.ingest_cli:main"
+sextant-forget = "sextant.vector_db.forget_cli:main"
+sextant-eval = "sextant.eval.harness:main"
+sextant-eval-agent = "sextant.eval.agent_harness:main"
+sextant-judge = "sextant.eval.judge:main"
 # The pre-rename `agenticrag-*` aliases were removed in 0.8, one release after
 # the rename, as promised in milestone 15. The AGENTICRAG_ *environment* prefix
 # outlived them by one release and was removed in 0.8.1; the box's .env was
@@ -43,18 +62,41 @@ sextant-judge = "eval.judge:main"
 # silent default.
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=8.3",
-    "pytest-asyncio>=0.24",
-    "httpx>=0.27",
-    "ruff>=0.7",
-    "mypy>=1.13",
+# Per-document overviews at ingest, and anything that calls a model.
+# `summaries.py` imports it inside the function and raises
+# `SummariesUnavailable` naming this extra, so the base install ingests
+# text happily and says why there are no overviews.
+gen = [
+    "google-genai>=2.19",
+]
+# The FastAPI agent server -- `sextant.mcp_server`. Not needed to run the
+# knowledge base, which is the whole point of it being an extra.
+app = [
+    "sextant-kb[gen]",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
 ]
 # Optional: the FAISS reference column in the ANN benchmark. Not required to run
 # the app or the hand-written indexes; the benchmark notes it as skipped if absent.
 bench = [
     "faiss-cpu>=1.9",
 ]
+dev = [
+    # The gate runs the whole suite, which includes the agent server's tests.
+    "sextant-kb[app]",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.27",
+    "ruff>=0.7",
+    "mypy>=1.13",
+    "build>=1.2",
+    "twine>=5.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/hulagerushikesh/sextant"
+Repository = "https://github.com/hulagerushikesh/sextant"
+Changelog = "https://github.com/hulagerushikesh/sextant/blob/main/planning/PROGRESS.md"
 
 [tool.ruff]
 line-length = 100
@@ -67,8 +109,13 @@ select = ["E", "F", "I", "UP", "B", "ASYNC"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 
-[tool.setuptools]
-packages = ["mcp_server", "tools", "tools.vector_db", "eval"]
+# Found, not listed. The hand-written list this replaces named four packages
+# and omitted the ANN subpackage, so every wheel built from it would have
+# been missing the index implementations -- invisible because an editable
+# install resolves the directory and nobody had ever built a wheel. A list
+# that mirrors the tree by hand falls behind the tree silently.
+[tool.setuptools.packages.find]
+include = ["sextant*"]
 
 [tool.mypy]
 # 3.12, not the 3.11 floor in requires-python: numpy's own stubs use `type`
@@ -84,4 +131,4 @@ warn_redundant_casts = true
 warn_unreachable = true
 no_implicit_optional = true
 check_untyped_defs = true
-exclude = "^(planning|learning|frontend)/"
+exclude = "^(planning|learning|frontend|build|dist)/"
