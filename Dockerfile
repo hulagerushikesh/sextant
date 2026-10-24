@@ -23,13 +23,11 @@ COPY pyproject.toml README.md ./
 # turns a 2 GB image into a 6 GB one and every rebuild re-downloads it. With
 # a satisfying torch already present, `pip install -e .` leaves it alone.
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
-RUN mkdir -p mcp_server tools/vector_db eval \
-    && touch mcp_server/__init__.py tools/__init__.py tools/vector_db/__init__.py eval/__init__.py \
+RUN mkdir -p sextant/vector_db/ann sextant/mcp_server sextant/eval \
+    && find sextant -type d -exec touch {}/__init__.py \; \
     && pip install --no-cache-dir -e .
 
-COPY mcp_server/ mcp_server/
-COPY tools/ tools/
-COPY eval/ eval/
+COPY sextant/ sextant/
 
 # Bake the models into the image. Without this the first query after
 # `docker compose up` silently downloads ~180 MB and appears to hang.
@@ -57,4 +55,4 @@ RUN mkdir -p /data/chroma && chown app:app /data/chroma
 
 USER app
 EXPOSE 8000
-CMD ["uvicorn", "mcp_server.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "sextant.mcp_server.main:app", "--host", "0.0.0.0", "--port", "8000"]

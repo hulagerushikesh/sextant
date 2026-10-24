@@ -11,7 +11,7 @@ from typing import Any, cast
 
 import pytest
 
-from tools.vector_db.vector_search import (
+from sextant.vector_db.vector_search import (
     DISTANCE_SPACE,
     PERSIST_DIR_ENV,
     KnowledgeBase,
@@ -76,7 +76,7 @@ class TestScoresMeanWhatTheySay:
         """Every store that existed before the stamp was built with MiniLM."""
         import chromadb
 
-        from tools.vector_db.embeddings import LOCAL_MODEL
+        from sextant.vector_db.embeddings import LOCAL_MODEL
 
         store = tmp_path / "old"
         client = chromadb.PersistentClient(path=str(store))
@@ -98,7 +98,7 @@ class TestTheStoreOverrideReachesTheServer:
     isolated store, would silently have read the user's real corpus."""
 
     async def test_the_subprocess_opens_the_overridden_store(self, tmp_path, monkeypatch):
-        from mcp_server.mcp_host import MCPHost
+        from sextant.mcp_server.mcp_host import MCPHost
 
         store = tmp_path / "forwarded"
         monkeypatch.setenv(PERSIST_DIR_ENV, str(store))
@@ -124,14 +124,14 @@ class TestTheStoreOverrideReachesTheServer:
         result depends on who runs it is the failure this milestone keeps
         finding, so the environment is made explicit rather than inherited.
         """
-        from mcp_server.mcp_host import _FORWARDED_ENV
+        from sextant.mcp_server.mcp_host import _FORWARDED_ENV
 
         for name in _FORWARDED_ENV:
             monkeypatch.delenv(name, raising=False)
 
     def test_the_launch_parameters_carry_the_override(self, monkeypatch):
-        from mcp_server.mcp_host import kb_server
-        from tools import settings
+        from sextant import settings
+        from sextant.mcp_server.mcp_host import kb_server
 
         self._quiet(monkeypatch)
         monkeypatch.setenv(PERSIST_DIR_ENV, "/tmp/somewhere")
@@ -145,7 +145,7 @@ class TestTheStoreOverrideReachesTheServer:
         with nothing to forward there was nothing to force.
 
         There is now, and it is the one thing that must never be dropped.
-        `tools.settings` loads `.env` at import and the child reaches it
+        `sextant.settings` loads `.env` at import and the child reaches it
         through `vector_search`, so an unsealed child reads the repository's
         file itself and `_NOT_FORWARDED` -- `GEMINI_API_KEY` included -- stops
         meaning anything. The empty forwarding set is the *common* case, so
@@ -153,8 +153,8 @@ class TestTheStoreOverrideReachesTheServer:
         See `TestTheChildCannotGoBehindTheAllowlist`, which launches the
         child rather than reading this dictionary.
         """
-        from mcp_server.mcp_host import kb_server
-        from tools import settings
+        from sextant import settings
+        from sextant.mcp_server.mcp_host import kb_server
 
         self._quiet(monkeypatch)
         assert kb_server().env == {settings.SEALED: "1"}
@@ -168,8 +168,8 @@ class TestTheStoreOverrideReachesTheServer:
         assertions. It is driven off the declared list now, so a knob added to
         one place and not the other has somewhere to show up.
         """
-        from mcp_server.mcp_host import _FORWARDED_SETTINGS, kb_server
-        from tools import settings
+        from sextant import settings
+        from sextant.mcp_server.mcp_host import _FORWARDED_SETTINGS, kb_server
 
         self._quiet(monkeypatch)
         expected = {}
@@ -210,7 +210,7 @@ class TestTheAgentCannotWrite:
     from the model."""
 
     def test_ingest_is_not_declared_to_the_model(self):
-        from mcp_server.agent import READABLE_TOOLS, declare_tools
+        from sextant.mcp_server.agent import READABLE_TOOLS, declare_tools
         from tests.fakes import FakeHost, as_host
 
         assert "kb_ingest" not in READABLE_TOOLS
@@ -226,14 +226,14 @@ class TestTheOldEnvironmentPrefixIsLoudNotSilent:
     now has to announce itself instead of doing nothing."""
 
     def test_the_old_spelling_is_no_longer_read(self, monkeypatch):
-        from tools import settings
+        from sextant import settings
 
         monkeypatch.delenv("SEXTANT_MAX_PER_DOCUMENT", raising=False)
         monkeypatch.setenv("AGENTICRAG_MAX_PER_DOCUMENT", "7")
         assert settings.getenv("MAX_PER_DOCUMENT", "2") == "2"
 
     def test_a_leftover_variable_is_reported_with_its_new_name(self, monkeypatch):
-        from tools import settings
+        from sextant import settings
 
         monkeypatch.setenv("AGENTICRAG_ANN_INDEX", "hnsw")
         warning = settings.legacy_warning()
@@ -241,7 +241,7 @@ class TestTheOldEnvironmentPrefixIsLoudNotSilent:
         assert "AGENTICRAG_ANN_INDEX -> SEXTANT_ANN_INDEX" in warning
 
     def test_a_clean_environment_says_nothing(self, monkeypatch):
-        from tools import settings
+        from sextant import settings
 
         for name in settings.legacy_names():
             monkeypatch.delenv(name, raising=False)
@@ -268,7 +268,7 @@ class TestTheSubprocessGetsTheModelCache:
     """
 
     def test_the_cache_location_crosses_the_process_boundary(self, monkeypatch):
-        from mcp_server.mcp_host import kb_server
+        from sextant.mcp_server.mcp_host import kb_server
 
         monkeypatch.setenv("HF_HOME", "/opt/models")
         monkeypatch.setenv("HF_HUB_OFFLINE", "1")
@@ -286,7 +286,7 @@ class TestTheSubprocessGetsTheModelCache:
         """
         from mcp.client.stdio import get_default_environment
 
-        from mcp_server.mcp_host import kb_server
+        from sextant.mcp_server.mcp_host import kb_server
 
         monkeypatch.setenv("HOME", "/home/app")
         monkeypatch.setenv("HF_HOME", "/opt/models")

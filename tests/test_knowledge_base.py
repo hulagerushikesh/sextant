@@ -7,8 +7,8 @@ import time
 
 import pytest
 
-from tools.vector_db import vector_search
-from tools.vector_db.vector_search import RETRIEVAL_MODES, KnowledgeBase
+from sextant.vector_db import vector_search
+from sextant.vector_db.vector_search import RETRIEVAL_MODES, KnowledgeBase
 
 
 class TestIngestion:
@@ -298,7 +298,7 @@ class TestHealth:
 
 class TestEmptyCollection:
     async def test_search_on_an_empty_store_returns_nothing(self, tmp_path, monkeypatch):
-        from tools.vector_db.vector_search import PERSIST_DIR_ENV
+        from sextant.vector_db.vector_search import PERSIST_DIR_ENV
 
         monkeypatch.setenv(PERSIST_DIR_ENV, str(tmp_path / "empty"))
         empty = KnowledgeBase(collection_name="empty")
@@ -316,19 +316,19 @@ class TestDenseBackend:
     """
 
     def test_the_default_backend_is_chroma(self):
-        from tools.vector_db.vector_search import configured_ann_backend
+        from sextant.vector_db.vector_search import configured_ann_backend
 
         assert configured_ann_backend() == "chroma"
 
     def test_every_known_backend_is_accepted_case_insensitively(self, monkeypatch):
-        from tools.vector_db.vector_search import ANN_BACKENDS, configured_ann_backend
+        from sextant.vector_db.vector_search import ANN_BACKENDS, configured_ann_backend
 
         for name in ANN_BACKENDS:
             monkeypatch.setenv("SEXTANT_ANN_INDEX", name.upper())
             assert configured_ann_backend() == name
 
     def test_an_unknown_backend_is_rejected_loudly(self, monkeypatch):
-        from tools.vector_db.vector_search import (
+        from sextant.vector_db.vector_search import (
             KnowledgeBaseUnavailable,
             configured_ann_backend,
         )
@@ -341,7 +341,7 @@ class TestDenseBackend:
     async def test_flat_backend_matches_chroma_and_reports_itself(self, kb, monkeypatch):
         # The `kb` fixture guarantees the shared corpus is ingested into the store
         # this new instance also opens.
-        from tools.vector_db.vector_search import KnowledgeBase
+        from sextant.vector_db.vector_search import KnowledgeBase
 
         query = "how do you estimate hidden state"
         chroma_top = (await kb.search(query, limit=5))["results"][0]["id"]
@@ -368,7 +368,7 @@ class TestTheStoreReportsWhatIsNotInIt:
     `_store` builds the sentence, so `/upload` (which arrives as a dict) and
     `sextant-ingest` (which arrives as a LoadedDocument) cannot disagree, and
     neither re-derives "was anything lost?" from a chunk count it has no way
-    to check. Same shape as `rule_verdict` in eval/tenancy.py.
+    to check. Same shape as `rule_verdict` in sextant/eval/tenancy.py.
     """
 
     @pytest.fixture

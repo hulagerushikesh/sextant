@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from tools.vector_db import loaders
-from tools.vector_db.loaders import (
+from sextant.vector_db import loaders
+from sextant.vector_db.loaders import (
     LoadedDocument,
     Locator,
     UnsupportedDocument,

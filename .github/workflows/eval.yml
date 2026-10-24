@@ -46,12 +46,12 @@ jobs:
         run: ruff check .
 
       - name: Type check
-        run: mypy mcp_server tools eval tests
+        run: mypy sextant tests
 
       - name: Unit tests
         run: pytest tests/ -q
 
-      # Rebuilds the index from eval/corpus on every run, so this also proves
+      # Rebuilds the index from sextant/eval/corpus on every run, so this also proves
       # ingestion still works end to end.
       - name: Retrieval evaluation
         run: sextant-eval --check --out eval-results.json

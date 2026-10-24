@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tools.vector_db.retrieval import BM25Index, reciprocal_rank_fusion, tokenize
+from sextant.vector_db.retrieval import BM25Index, reciprocal_rank_fusion, tokenize
 
 DOCS = {
     "c1": "A Kalman filter estimates hidden state from noisy measurements.",
@@ -93,7 +93,7 @@ class TestFusion:
 
 @pytest.fixture(scope="module")
 def reranker():
-    from tools.vector_db.retrieval import CrossEncoderReranker
+    from sextant.vector_db.retrieval import CrossEncoderReranker
 
     return CrossEncoderReranker()
 

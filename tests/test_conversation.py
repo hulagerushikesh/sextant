@@ -7,7 +7,7 @@ cost the user their answer.
 
 from __future__ import annotations
 
-from mcp_server.conversation import MAX_CHARS, MAX_TURN_CHARS, MAX_TURNS, replay
+from sextant.mcp_server.conversation import MAX_CHARS, MAX_TURN_CHARS, MAX_TURNS, replay
 
 
 def exchange(n: int) -> list[dict[str, str]]:

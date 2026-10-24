@@ -20,9 +20,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from tools.vector_db.ann import FlatIndex, HnswIndex, IvfPqIndex, RerankIndex
-from tools.vector_db.ann.base import normalise, similarity
-from tools.vector_db.ann.benchmark import Grid, compare_query, recall_at_k, sweep
+from sextant.vector_db.ann import FlatIndex, HnswIndex, IvfPqIndex, RerankIndex
+from sextant.vector_db.ann.base import normalise, similarity
+from sextant.vector_db.ann.benchmark import Grid, compare_query, recall_at_k, sweep
 
 
 def clustered(n: int, dim: int, clusters: int, seed: int, spread: float = 0.35):
@@ -411,7 +411,7 @@ class TestFaissReference:
 
     def test_faiss_hnsw_recovers_recall(self):
         pytest.importorskip("faiss")
-        from tools.vector_db.ann import FaissHnswIndex
+        from sextant.vector_db.ann import FaissHnswIndex
 
         ids, vecs = clustered(600, 128, clusters=12, seed=1)
         flat = FlatIndex()
@@ -425,7 +425,7 @@ class TestFaissReference:
 
     def test_faiss_ivfpq_builds_and_scores_in_range(self):
         pytest.importorskip("faiss")
-        from tools.vector_db.ann import FaissIvfPqIndex
+        from sextant.vector_db.ann import FaissIvfPqIndex
 
         ids, vecs = clustered(1500, 128, clusters=16, seed=3, spread=0.4)
         fi = FaissIvfPqIndex(nlist=64, nprobe=8, m=16)
@@ -437,7 +437,7 @@ class TestFaissReference:
 
     def test_faiss_indexes_handle_empty_corpus(self):
         pytest.importorskip("faiss")
-        from tools.vector_db.ann import FaissHnswIndex, FaissIvfPqIndex
+        from sextant.vector_db.ann import FaissHnswIndex, FaissIvfPqIndex
 
         for index in (FaissHnswIndex(), FaissIvfPqIndex(m=8)):
             index.build([], np.empty((0, 64), dtype="float32"))

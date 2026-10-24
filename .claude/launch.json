@@ -7,7 +7,7 @@
       "runtimeArgs": [
         "-m",
         "uvicorn",
-        "mcp_server.main:app",
+        "sextant.mcp_server.main:app",
         "--port",
         "8100"
       ],
