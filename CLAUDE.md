@@ -16,6 +16,17 @@ because each one was learned the expensive way.
 
 - `origin` = `github.com/hulagerushikesh/sextant` (public since 2026-09-20, MIT). `upstream` =
   the original course repo; **never push there**.
+- **Every `gh` command needs `--repo hulagerushikesh/sextant`.** `gh` picks a
+  remote by its own rules and in this checkout it picks `upstream`:
+  `gh repo view` answers `SudhanshuR37/AgenticRAG`, with `WRITE`. So `gh run
+  list` quietly reports another repository's runs -- the first symptom was an
+  empty list for a branch that had just been pushed -- and `gh workflow run`
+  would dispatch there. The never-push rule is enforced by naming a remote on
+  `git push`; `gh` takes no remote, so it is not covered by it.
+- CI triggers on `push` to `main` and on `pull_request` only. A branch push
+  runs nothing: dispatch it with
+  `gh workflow run ci --repo hulagerushikesh/sextant --ref <branch>`, and
+  watch the run -- never report a fix from the commit that attempts it.
 - Branch first, commit, fast-forward `main`. Autonomous commits are fine once
   an aim is stated; deploying to `main` in production is not autonomous.
 - **Scan staged contents, not filenames, for secrets before every commit**
