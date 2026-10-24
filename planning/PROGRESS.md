@@ -7,40 +7,43 @@ story is the root README.
 
 ## 2026-10-24 — the check that measured the machine (₹0)
 
-Item 28's branch went red on CI, in a test neither of its commits touches:
+Item 28's branch went red on CI in a test neither of its commits touches:
+`loop was starved: 16 ticks in 0.469s`. A re-run failed too, so "flaky" was
+not it. Five workflow runs over trimmed branches established what was true:
 
-```
-AssertionError: loop was starved: 16 ticks in 0.469s
-assert 16 > (46.91622459999962 * 0.5)
-```
+| tree | result |
+| --- | --- |
+| full branch | **fail** ×3 |
+| `main`, untouched | pass |
+| `main` + the hardened check only | pass |
+| `main` + item 28's **source** only | pass |
+| full branch minus three new `test_knowledge_base.py` tests | pass |
 
-The reflex is to call it flaky and press re-run. 18 of the previous 20 runs
-were green, so "flaky" was not established either, and a green re-run would
-have proved only that the dice landed differently.
+Item 28's shipped code is innocent — proven by experiment, not argued. The
+test flips when three unrelated tests are added to the same file *below*
+it, and **the mechanism by which later tests affect an earlier one is not
+understood**. It is recorded as not understood rather than guessed at.
 
-```python
-expected = elapsed / 0.01
-assert ticks > expected * 0.5
-```
+Three wrong assertions preceded the right one. The original,
+`ticks > (elapsed / 0.01) * 0.5`, compares against the count a 10ms
+heartbeat reaches *if `asyncio.sleep(0.01)` sleeps exactly 10ms* — measured
+idle, the real ratio is 0.84, so the whole headroom went to machine speed.
+Measuring an idle baseline on the same machine was better and produced the
+number that mattered: CI reported **31.9 ticks/s busy against 98.0 idle**,
+so the runner was at nominal speed and the loop really was down to a third.
 
-`expected` is the tick count a 10ms heartbeat would reach **if
-`asyncio.sleep(0.01)` slept exactly 10ms**, which it never does. Measured on
-an idle fast machine with nothing blocking at all, the real ratio is
-**0.84** — overshoot alone eats 16%. So the threshold's headroom is 0.84
-down to 0.50 and every bit of it is spent on how fast the box is; the runner
-measured 0.34. The test cannot distinguish *the event loop was blocked*,
-which is the regression it exists for, from *this machine is busy*. Item
-13's shape and item 23's, in the test guarding the property the whole
-streaming server rests on.
+Which is when the actual error became visible: a loop ticking every 31ms
+answers `/health` perfectly well. Throughput was never the property. The
+regression in the test's own comment is *"ticked zero times during half a
+second"* — one stall spanning the entire search.
 
-`_tick_rate(work)` returns ticks per second now, and the test takes an idle
-baseline on the same machine moments earlier: `busy > idle * 0.5`. A slow
-runner lowers both and the ratio survives; zero ticks through the search
-still fails by the entire margin. The check also has a check —
-`test_the_starvation_check_can_fail` blocks the loop with `time.sleep`
-inside a coroutine and asserts the assertion trips, which is the only place
-in the repository where blocking the loop is the point and the only
-`ASYNC251` waiver.
+So `_tick_gaps()` returns the gaps between ticks and the assertion is on the
+longest one as a fraction of the work: `longest < elapsed * 0.25`.
+Scale-free, so core count, runner speed and whatever else the suite is doing
+drop out — the one thing none of the three previous versions managed. The
+regression gives a ratio near 1.0 and fails by the whole margin.
+`test_the_starvation_check_can_fail` blocks the loop on purpose and asserts
+the assertion trips; it is the only `ASYNC251` waiver in the repository.
 
 ## 2026-10-24 — the page that went missing quietly (₹0)
 
