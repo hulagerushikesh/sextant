@@ -411,10 +411,6 @@ def main() -> None:
     """Console-script entry point: `sextant-eval-agent`."""
     import os
 
-    from dotenv import load_dotenv
-
-    load_dotenv(EVAL_DIR.parent / ".env")
-
     parser = argparse.ArgumentParser(
         prog="sextant-eval-agent",
         description="Run golden questions through the agent loop and grade what it retrieved.",

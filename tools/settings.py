@@ -11,16 +11,50 @@ setting and a second thing to get right. What replaces it is `legacy_names()`:
 a stale variable is now a printed warning instead of a silent default, which is
 the failure the fallback existed to prevent.
 
-Kept dependency-free on purpose: both the agent server and the knowledge-base
-subprocess import it, and neither may pull the other's heavy imports.
+Kept free of *heavy* imports on purpose: both the agent server and the
+knowledge-base subprocess import it, and neither may pull the other's model
+stack. `python-dotenv` is a hard dependency already and costs a few
+milliseconds, which is the price of the paragraph below.
+
+## Why `.env` is loaded here and nowhere else
+
+Because an entry point cannot load it early enough. `mcp_server/main.py`
+called `load_dotenv()` at line 55, under twenty import lines -- and Python
+runs the imports first, so by the time the call happened `agent.MODEL`,
+`observability.DAILY_BUDGET_USD`, `RATE_LIMIT_REQUESTS`, `RATE_WINDOW` and
+`DAILY_BUDGET_SHARE` had already been evaluated against an environment the
+file had not reached. Measured, not reasoned about: with
+`SEXTANT_DAILY_BUDGET_USD=0.60` in `.env`, importing the app left
+`os.environ` holding `0.60` and `DAILY_BUDGET_USD` holding `0.0`, which
+`DailyBudget` reads as *no cap at all*. The operator had set a daily spend
+ceiling on a prepaid key and did not have one.
+
+It bit only the local run. The box gets those names from compose's
+`env_file`, so they are real environment variables before Python starts --
+the one environment nobody is watching, again.
+
+Loading it here fixes the ordering by construction rather than by being
+careful: a module cannot call `settings.getenv` without importing this
+module, so there is no longer an order in which a setting can be read before
+the file that sets it. `load_dotenv` does not override a name that is
+already in the environment, so compose, CI and a shell export all still win.
 """
 
 from __future__ import annotations
 
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 PREFIX = "SEXTANT_"
 LEGACY_PREFIX = "AGENTICRAG_"
+
+# The repository root as seen from an editable install. Absent in a wheel
+# installed elsewhere, where `load_dotenv` on a missing path is a no-op.
+DOTENV_PATH = Path(__file__).resolve().parents[1] / ".env"
+
+load_dotenv(DOTENV_PATH)
 
 
 def env_name(key: str) -> str:
