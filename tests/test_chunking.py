@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from tools.vector_db.chunking import DEFAULT_TARGET_TOKENS, chunk_text
+from sextant.vector_db.chunking import DEFAULT_TARGET_TOKENS, chunk_text
 
 PARAGRAPH = (
     "The assignment problem asks how to pair workers with tasks at minimum total "
@@ -150,14 +150,14 @@ class TestEmbedderConfiguration:
     """The embedding model is a setting, and its query instruction goes with it."""
 
     def test_default_model_is_minilm_with_no_query_prefix(self, embedder, monkeypatch):
-        from tools.vector_db.embeddings import LOCAL_MODEL, configured_model
+        from sextant.vector_db.embeddings import LOCAL_MODEL, configured_model
 
         monkeypatch.delenv("SEXTANT_EMBEDDER", raising=False)
         assert configured_model() == LOCAL_MODEL
         assert embedder.query_prefix == ""
 
     def test_env_selects_the_model(self, monkeypatch):
-        from tools.vector_db.embeddings import configured_model
+        from sextant.vector_db.embeddings import configured_model
 
         monkeypatch.setenv("SEXTANT_EMBEDDER", "BAAI/bge-small-en-v1.5")
         assert configured_model() == "BAAI/bge-small-en-v1.5"
@@ -178,19 +178,19 @@ class TestChunkSizeConfiguration:
     """Chunk size is a setting; the embedder's window is still the wall."""
 
     def test_defaults_without_the_variable(self, monkeypatch):
-        from tools.vector_db.chunking import configured_chunk_sizes
+        from sextant.vector_db.chunking import configured_chunk_sizes
 
         monkeypatch.delenv("SEXTANT_CHUNK_TOKENS", raising=False)
         assert configured_chunk_sizes() == (DEFAULT_TARGET_TOKENS, 40)
 
     def test_overlap_follows_the_target(self, monkeypatch):
-        from tools.vector_db.chunking import configured_chunk_sizes
+        from sextant.vector_db.chunking import configured_chunk_sizes
 
         monkeypatch.setenv("SEXTANT_CHUNK_TOKENS", "150")
         assert configured_chunk_sizes() == (150, 30)
 
     def test_garbage_and_fragments_are_refused(self, monkeypatch):
-        from tools.vector_db.chunking import configured_chunk_sizes
+        from sextant.vector_db.chunking import configured_chunk_sizes
 
         monkeypatch.setenv("SEXTANT_CHUNK_TOKENS", "lots")
         with pytest.raises(ValueError):
@@ -200,7 +200,7 @@ class TestChunkSizeConfiguration:
             configured_chunk_sizes()
 
     def test_a_target_past_the_embedder_window_is_refused_at_startup(self, monkeypatch, tmp_path):
-        from tools.vector_db.vector_search import KnowledgeBase, KnowledgeBaseUnavailable
+        from sextant.vector_db.vector_search import KnowledgeBase, KnowledgeBaseUnavailable
 
         monkeypatch.setenv("SEXTANT_CHROMA_DIR", str(tmp_path / "store"))
         monkeypatch.setenv("SEXTANT_CHUNK_TOKENS", "400")  # MiniLM's window is 256

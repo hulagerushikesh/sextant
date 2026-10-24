@@ -22,16 +22,16 @@ from typing import Any
 
 import pytest
 
-from mcp_server.identity import DEFAULT_OWNER
-from mcp_server.scope import (
+from sextant.mcp_server.identity import DEFAULT_OWNER
+from sextant.mcp_server.scope import (
     READ_TOOLS,
     WRITE_TOOLS,
     ForbiddenWrite,
     ScopedHost,
     trim,
 )
-from mcp_server.uploads import to_document
-from tools.vector_db.vector_search import KnowledgeBase
+from sextant.mcp_server.uploads import to_document
+from sextant.vector_db.vector_search import KnowledgeBase
 
 SEARCH: dict[str, Any] = {
     "success": True,
@@ -257,8 +257,8 @@ class TestWrites:
         # Only READABLE_TOOLS are ever declared, so this means the model named
         # something it was not offered. Telling it so lets the turn finish; a
         # raised exception would 500 a question somebody asked in good faith.
-        from mcp_server.agent import _execute
-        from mcp_server.sources import SourceRegistry
+        from sextant.mcp_server.agent import _execute
+        from sextant.mcp_server.sources import SourceRegistry
 
         host = ScopedHost(FakeInner({}), "ada")
         text, is_error, _ = await _execute("kb_wipe", {}, host, SourceRegistry())
@@ -267,7 +267,7 @@ class TestWrites:
     def test_every_tool_the_server_exposes_is_classified(self):
         # The pin that makes an allow-list honest: adding a tool fails here
         # until somebody decides which half of the boundary it is on.
-        from tools.vector_db import server
+        from sextant.vector_db import server
 
         exposed = {name for name in dir(server) if name.startswith("kb_")}
         assert exposed == READ_TOOLS | WRITE_TOOLS
@@ -340,7 +340,7 @@ class TestTheInvariant:
     """
 
     def test_no_tool_lets_its_caller_name_a_corpus(self):
-        from tools.vector_db import server
+        from sextant.vector_db import server
 
         forbidden = {"owner", "corpus", "tenant", "user", "client", "collection", "namespace"}
         for name in (n for n in dir(server) if n.startswith("kb_")):
@@ -447,7 +447,7 @@ class TestEveryRouteIsOnOneSideOfTheBoundary:
 
         from fastapi.routing import APIRoute
 
-        from mcp_server import main
+        from sextant.mcp_server import main
 
         out = {}
         for route in main.app.routes:

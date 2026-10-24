@@ -15,9 +15,9 @@ from typing import Any
 
 import pytest
 
-from mcp_server.uploads import to_document
-from tools.vector_db.forget_cli import _forget, _list
-from tools.vector_db.vector_search import KnowledgeBase
+from sextant.mcp_server.uploads import to_document
+from sextant.vector_db.forget_cli import _forget, _list
+from sextant.vector_db.vector_search import KnowledgeBase
 
 
 @pytest.fixture

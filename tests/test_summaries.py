@@ -8,9 +8,9 @@ from typing import Any
 
 import pytest
 
-from tools.vector_db import summaries
-from tools.vector_db.loaders import load_path
-from tools.vector_db.summaries import (
+from sextant.vector_db import summaries
+from sextant.vector_db.loaders import load_path
+from sextant.vector_db.summaries import (
     SUMMARY_KIND,
     SummariesUnavailable,
     summarise,

@@ -166,7 +166,7 @@ class FakeHost:
     async def call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         self.calls.append((name, arguments))
         if name not in self.results:
-            from mcp_server.mcp_host import ToolUnavailable
+            from sextant.mcp_server.mcp_host import ToolUnavailable
 
             raise ToolUnavailable(f"no scripted result for {name}")
         return self.results[name]

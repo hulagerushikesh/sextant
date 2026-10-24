@@ -2,10 +2,10 @@
 
 Four claims, in the order they were found.
 
-1. A setting read at import time must see `.env`. `mcp_server/main.py` loaded
+1. A setting read at import time must see `.env`. `sextant/mcp_server/main.py` loaded
    the file twenty lines below the imports that read it, so every module-level
    constant in the application resolved against an environment the file had
-   not reached. The load lives in `tools.settings` now, which is the one
+   not reached. The load lives in `sextant.settings` now, which is the one
    module an environment read cannot avoid importing.
 
 2. `sextant-judge` had never been able to start from a checkout. It is the
@@ -31,7 +31,7 @@ from pathlib import Path
 
 import pytest
 
-from eval import judge
+from sextant.eval import judge
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -48,20 +48,21 @@ class TestASettingReadAtImportTimeSeesTheFile:
 
     @staticmethod
     def _tree(tmp_path: Path, body: str) -> Path:
-        package = tmp_path / "tools"
+        package = tmp_path / "sextant"
         package.mkdir()
         (package / "__init__.py").write_text("")
-        (package / "settings.py").write_text((ROOT / "tools" / "settings.py").read_text())
+        (package / "settings.py").write_text((ROOT / "sextant" / "settings.py").read_text())
         # A module shaped exactly like `observability` and `agent`: a constant
         # evaluated once, at import, from a setting.
         (package / "knob.py").write_text(body)
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "stand-in"\n')
         (tmp_path / ".env").write_text("SEXTANT_DAILY_BUDGET_USD=0.60\n")
         return tmp_path
 
     @staticmethod
     def _read(tmp_path: Path, expression: str) -> str:
         result = subprocess.run(
-            [sys.executable, "-c", f"from tools import knob; print({expression})"],
+            [sys.executable, "-c", f"from sextant import knob; print({expression})"],
             cwd=tmp_path,
             capture_output=True,
             text=True,
@@ -77,7 +78,7 @@ class TestASettingReadAtImportTimeSeesTheFile:
             tmp_path,
             textwrap.dedent(
                 """
-                from tools import settings
+                from sextant import settings
 
                 CAP = float(settings.getenv("DAILY_BUDGET_USD", "0") or "0")
                 """
@@ -92,14 +93,14 @@ class TestASettingReadAtImportTimeSeesTheFile:
             tmp_path,
             textwrap.dedent(
                 """
-                from tools import settings
+                from sextant import settings
 
                 CAP = float(settings.getenv("DAILY_BUDGET_USD", "0") or "0")
                 """
             ),
         )
         result = subprocess.run(
-            [sys.executable, "-c", "from tools import knob; print(knob.CAP)"],
+            [sys.executable, "-c", "from sextant import knob; print(knob.CAP)"],
             cwd=tree,
             capture_output=True,
             text=True,
@@ -126,17 +127,17 @@ class TestTheEnvFileIsLoadedInOnePlace:
     def test_only_settings_calls_load_dotenv(self):
         callers = sorted(
             path.relative_to(ROOT).as_posix()
-            for tree in ("mcp_server", "tools", "eval")
+            for tree in ("sextant",)
             for path in (ROOT / tree).rglob("*.py")
             if "load_dotenv(" in path.read_text()
         )
-        assert callers == ["tools/settings.py"], callers
+        assert callers == ["sextant/settings.py"], callers
 
     def test_no_module_level_environment_read_bypasses_settings(self):
         """Everything resolved at import goes through `settings.getenv`.
 
         A bare `os.environ[...]` at module level would be read before
-        `tools.settings` had necessarily been imported, which is the defect
+        `sextant.settings` had necessarily been imported, which is the defect
         with the fix routed around.
 
         Reads only. `faiss_ref.py` *writes* `KMP_DUPLICATE_LIB_OK` at module
@@ -148,9 +149,9 @@ class TestTheEnvFileIsLoadedInOnePlace:
         """
         reads = ("os.getenv(", "os.environ.get(", "os.environ[")
         offenders: list[str] = []
-        for tree in ("mcp_server", "tools", "eval"):
+        for tree in ("sextant",):
             for path in (ROOT / tree).rglob("*.py"):
-                if path == ROOT / "tools" / "settings.py":
+                if path == ROOT / "sextant" / "settings.py":
                     continue
                 for number, line in enumerate(path.read_text().splitlines(), 1):
                     if line[:1].isspace() or line.lstrip().startswith("#"):
@@ -177,7 +178,7 @@ class TestTheJudgeDoesNotSearchTheWeb:
             seen.update(kwargs)
             yield {"type": "done", "sources": [], "turns": 1, "truncated": False, "usage": {}}
 
-        import mcp_server.agent as agent_module
+        import sextant.mcp_server.agent as agent_module
 
         monkeypatch.setattr(agent_module, "run", fake_run)
         await judge.answer_one(object(), "anything")
@@ -200,7 +201,7 @@ class TestWhatTheLoopReportedReachesTheRecord:
         return fake_run
 
     async def test_a_cut_off_answer_is_marked_as_one(self, monkeypatch):
-        import mcp_server.agent as agent_module
+        import sextant.mcp_server.agent as agent_module
 
         monkeypatch.setattr(agent_module, "run", self._events(True, 0.0031))
         produced = await judge.answer_one(object(), "q")
@@ -209,7 +210,7 @@ class TestWhatTheLoopReportedReachesTheRecord:
         assert produced["usage"]["cost_usd"] == 0.0031
 
     async def test_a_finished_answer_is_not(self, monkeypatch):
-        import mcp_server.agent as agent_module
+        import sextant.mcp_server.agent as agent_module
 
         monkeypatch.setattr(agent_module, "run", self._events(False, 0.0012))
         produced = await judge.answer_one(object(), "q")
@@ -259,7 +260,7 @@ class TestTheEntryPointStartsFromACheckout:
         neither, and the claim has no meaning there. The ordering itself is
         covered without a skip by the copied-tree tests above.
         """
-        from tools.settings import DOTENV_PATH
+        from sextant.settings import DOTENV_PATH
 
         if not DOTENV_PATH.exists() or "GEMINI_API_KEY=" not in DOTENV_PATH.read_text():
             pytest.skip("no .env with a key; the claim is about a developer's checkout")
