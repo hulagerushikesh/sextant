@@ -23,9 +23,16 @@ COPY pyproject.toml README.md ./
 # turns a 2 GB image into a 6 GB one and every rebuild re-downloads it. With
 # a satisfying torch already present, `pip install -e .` leaves it alone.
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+# `.[app]`, not `.` -- and the brackets are the whole deployment. 0.9.0 moved
+# fastapi, uvicorn and google-genai out of the base dependencies so that
+# `pip install sextant-kb` is a knowledge base and nothing else. This image is
+# the other case: it runs the agent server, so it has to ask for the extra that
+# provides it. Built without the brackets the container exits at start with
+# `uvicorn: not found` -- invisible locally, because the gate installs `dev`,
+# which pulls `app`. `app` depends on `gen`, so the model client comes with it.
 RUN mkdir -p sextant/vector_db/ann sextant/mcp_server sextant/eval \
     && find sextant -type d -exec touch {}/__init__.py \; \
-    && pip install --no-cache-dir -e .
+    && pip install --no-cache-dir -e '.[app]'
 
 COPY sextant/ sextant/
 

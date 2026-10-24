@@ -309,3 +309,168 @@ class TestEveryModulePathOutsidePythonResolves:
         assert targets, f"{source} launches no module -- has the pattern drifted?"
         broken = sorted(t for t in targets if not self._resolves(t))
         assert not broken, f"{source} launches something that does not exist: {broken}"
+
+
+class TestTheImageInstallsWhatItRuns:
+    """The split in `pyproject.toml` is also a claim about the container.
+
+    0.9.0 moved `fastapi`, `uvicorn` and `google-genai` out of the base
+    dependencies and into extras, which is the whole point of the base
+    install being a knowledge base. The Dockerfile kept `pip install -e .`
+    -- so the production image is built without the web framework whose
+    server its own `CMD` launches, and the container exits at start with
+    `uvicorn: not found`.
+
+    Nothing could see it. The gate installs the `dev` extra, which pulls
+    `app`, so every local run has what the image lacks; an image is only
+    wrong on the machine that builds one. This holds the seam the way
+    item 18 says to: in the far end's language -- what `pip install`
+    was actually asked for, against what the `CMD` actually needs.
+    """
+
+    DOCKERFILE = (ROOT / "Dockerfile").read_text()
+
+    @staticmethod
+    def _requested_extras(text: str) -> set[str]:
+        """The extras on the Dockerfile's editable install of this project."""
+        # Instructions only. The prose above the line says `pip install -e .`
+        # too, and reading the comment instead of the command is how a check
+        # of a seam ends up checking the description of the seam.
+        code = "\n".join(
+            line for line in text.splitlines() if not line.lstrip().startswith("#")
+        )
+        match = re.search(
+            r"""pip install[^\n]*?-e\s+(?P<q>['"]?)\.(?P<extras>\[[^\]]*\])?(?P=q)(?=\s|$)""",
+            code,
+        )
+        assert match, "the Dockerfile no longer installs this project with `pip install -e`"
+        inside = (match.group("extras") or "[]")[1:-1]
+        return {part.strip() for part in inside.split(",") if part.strip()}
+
+    @staticmethod
+    def _provided(extras: set[str]) -> set[str]:
+        """Distributions a `pip install .[extras]` resolves to, self-refs included."""
+        optional = PYPROJECT["project"].get("optional-dependencies", {})
+        names: set[str] = set()
+        pending = list(PYPROJECT["project"]["dependencies"])
+        seen_extras = set()
+        stack = sorted(extras)
+        while stack:
+            extra = stack.pop()
+            if extra in seen_extras:
+                continue
+            seen_extras.add(extra)
+            pending.extend(optional.get(extra, []))
+        while pending:
+            requirement = pending.pop()
+            # `sextant-kb[app]` inside an extra pulls that extra in turn.
+            self_ref = re.fullmatch(r"sextant-kb\[([^\]]+)\]", requirement.strip())
+            if self_ref:
+                for extra in self_ref.group(1).split(","):
+                    extra = extra.strip()
+                    if extra not in seen_extras:
+                        seen_extras.add(extra)
+                        pending.extend(optional.get(extra, []))
+                continue
+            name = re.split(r"[\[<>=!;~ ]", requirement.strip(), maxsplit=1)[0]
+            names.add(name.lower().replace("_", "-"))
+        return names
+
+    def _needed(self) -> dict[str, str]:
+        """Top level -> distribution, for everything the image's CMD needs.
+
+        Resolved through installed metadata rather than a hand-written
+        table: a table mapping distributions to their import names is the
+        same shape as the `packages` list this file exists because of.
+        """
+        from importlib.metadata import packages_distributions
+
+        cmd = re.search(r'CMD\s*\[\s*"([^"]+)"', self.DOCKERFILE)
+        assert cmd, "the Dockerfile has no exec-form CMD -- has it been rewritten?"
+        launched = re.search(r"\b(sextant[\w.]*):\w+", self.DOCKERFILE)
+        assert launched, "the Dockerfile launches no module in this package"
+
+        tops = {cmd.group(1)}  # the console script the container runs
+        for name in sorted(_closure(launched.group(1))):
+            path = ROOT / (name.replace(".", "/") + ".py")
+            if path.exists():
+                tops |= _imports(path, module_level_only=True)
+
+        mapping = packages_distributions()
+        needed = {}
+        for top in sorted(tops):
+            if top.startswith("sextant"):
+                continue
+            for dist in mapping.get(top, []):
+                needed[top] = dist.lower().replace("_", "-")
+        return needed
+
+    def test_the_cmd_can_start_in_the_image_the_dockerfile_builds(self):
+        needed = self._needed()
+        # Anti-vacuity: the two the 0.9.0 split moved out of the base must
+        # be classified, or this test passes by finding nothing.
+        assert {"fastapi", "uvicorn"} <= set(needed), (
+            f"the scan did not classify the web framework: {sorted(needed)}"
+        )
+        provided = self._provided(self._requested_extras(self.DOCKERFILE))
+        missing = {
+            top: dist for top, dist in needed.items() if dist not in provided
+        }
+        assert not missing, (
+            "the image's CMD needs distributions its `pip install` never asks for "
+            f"-- the container exits at start: {missing}"
+        )
+
+    def test_the_model_client_is_installed_in_the_image(self):
+        """The box answers questions; answering needs the `gen` extra.
+
+        Separate from the test above because `summaries.py` imports it
+        inside the function, so the import graph cannot see it -- it is a
+        dependency of what the deployment is *for*, not of what loads.
+        """
+        provided = self._provided(self._requested_extras(self.DOCKERFILE))
+        assert "google-genai" in provided, (
+            "the deployed image could retrieve but never answer: "
+            f"`pip install -e .{sorted(self._requested_extras(self.DOCKERFILE))}` "
+            f"resolves to {sorted(provided)}"
+        )
+
+
+class TestEveryRelativeDocLinkResolves:
+    """The other half of a rename nothing executes.
+
+    0.9.0 moved `eval/` to `sextant/eval/`, which broke thirteen relative
+    links across the documentation: `README.md` pointed at a directory
+    that no longer existed, and every `../learning/...` link inside
+    `sextant/eval/README.md` resolved one level too shallow once the file
+    sat a level deeper. A markdown link is not Python either -- nothing
+    imports it, nothing type-checks it, and the only reader who finds out
+    is the one who clicked it.
+    """
+
+    SKIP = {".venv", "node_modules", ".git", "build", "dist", "__pycache__"}
+
+    @staticmethod
+    def _docs() -> list[pathlib.Path]:
+        return sorted(
+            p
+            for p in ROOT.rglob("*.md")
+            if not set(p.relative_to(ROOT).parts) & TestEveryRelativeDocLinkResolves.SKIP
+        )
+
+    def test_no_markdown_link_points_at_a_path_that_is_not_there(self):
+        docs = self._docs()
+        assert len(docs) > 30, f"the scan found only {len(docs)} documents"
+        broken = []
+        checked = 0
+        for doc in docs:
+            for match in re.finditer(r"\]\(([^)\s]+)\)", doc.read_text()):
+                target = match.group(1).split("#")[0].strip()
+                if not target or target.startswith(("http", "mailto", "#")):
+                    continue
+                checked += 1
+                if not (doc.parent / target).exists():
+                    broken.append(f"{doc.relative_to(ROOT)} -> {target}")
+        # Anti-vacuity: a regex that stops matching would pass silently.
+        assert checked > 100, f"only {checked} relative links found -- has the pattern drifted?"
+        assert not broken, f"links to files that do not exist: {broken}"

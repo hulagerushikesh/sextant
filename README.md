@@ -208,7 +208,7 @@ never separated from what produced it.
 ```
 
 65 labelled questions over a committed 21-document corpus, graded per
-configuration. Full method and results in [`eval/README.md`](eval/README.md).
+configuration. Full method and results in [`sextant/eval/README.md`](sextant/eval/README.md).
 
 | mode | hit@1 | recall@3 | MRR | nDCG@5 |
 | --- | --- | --- | --- | --- |
@@ -227,7 +227,7 @@ running both.
 chunks it ties fusion on hit@1 and MRR and gains 0.001 on nDCG@5; fusion
 already ranks correctly and the cross-encoder has nothing to fix. On a
 1,602-chunk store (a 144-page PDF, 32 page-labelled questions,
-`eval/golden-large.jsonl`) it leads on hit@1 0.926 vs 0.889 and nDCG@5 0.931
+`sextant/eval/golden-large.jsonl`) it leads on hit@1 0.926 vs 0.889 and nDCG@5 0.931
 vs 0.904, and it is the only stage whose score is calibrated enough to
 abstain on: 0.000 on every off-corpus question, ~0.95 on in-corpus ones,
 where RRF's rank reciprocals separate by 0.003. That is why it stays.

@@ -13,7 +13,7 @@ product.
 | **History** | [`trackers/`](trackers/) — HTML checklists from phases 9–13 · [`archive/`](archive/) — course-era docs describing features never built (`archive/README.md`) |
 
 Operational runbooks stay next to what they operate: [`../deploy/README.md`](../deploy/README.md)
-(GCP + Caddy), [`../eval/README.md`](../eval/README.md) (golden set + metrics).
+(GCP + Caddy), [`../sextant/eval/README.md`](../sextant/eval/README.md) (golden set + metrics).
 
 ## Status (2026-10-06)
 

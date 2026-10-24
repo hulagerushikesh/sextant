@@ -94,7 +94,7 @@ now settled the other way.
 `golden-large.jsonl`: 32 questions over *A Survey of Large Language Models*
 (arXiv 2303.18223, 144 pages, 1,550 chunks at the time; the pinned file is
 now v19, md5 `b0facc450634ab588d0cd82c8be15ace`, extracted with PyMuPDF —
-see [`learning/pdf-extraction.md`](../learning/pdf-extraction.md)) sitting in a store beside the 21
+see [`learning/pdf-extraction.md`](../../learning/pdf-extraction.md)) sitting in a store beside the 21
 handbook documents (52 chunks, acting as distractors). One PDF is one document,
 so these questions label **pages** and the harness grades page hits; two
 multi-hop questions label two pages each. Kinds: 10 exact-term, 11 paraphrase,
@@ -150,7 +150,7 @@ Six table-row questions (L33–L38, kind `table`) were added to
 chunker emits a few rows at a time under one copy of the header
 (`sextant/vector_db/tables.py`). Same mixed store, control against treatment,
 rerank mode. Measured 2026-09-16; full sweep and the dense-crowding failure
-of one-row-per-chunk in [`learning/table-chunking.md`](../learning/table-chunking.md).
+of one-row-per-chunk in [`learning/table-chunking.md`](../../learning/table-chunking.md).
 
 | large set, 38 q | hit@1 | recall@3 | recall@5 | MRR | nDCG@5 | misses |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -169,14 +169,14 @@ The returned list holds each document to `SEXTANT_MAX_PER_DOCUMENT` (2)
 chunks when a competitive document is waiting, under cosine and
 cross-encoder scores only. `baseline.json` dense recall@5 0.955 → 0.973
 from this; rerank unchanged. Three rounds and the survey-set question a
-hard cap lost are in [`../learning/candidate-cap.md`](../learning/candidate-cap.md).
+hard cap lost are in [`../learning/candidate-cap.md`](../../learning/candidate-cap.md).
 Re-run any experiment's control with `SEXTANT_MAX_PER_DOCUMENT=0`.
 
 Under the 0.01 floor the cross-encoder's order is noise, and chunks there
 are ordered by dense cosine instead (`SEXTANT_SUBFLOOR_ORDER`, default
 `dense`; `none` for the old order). `baseline.json` rerank recall@5 0.964
 → 0.982 from this; nothing at or above the floor moves, so the agent's
-results are unchanged. [`../learning/subfloor-order.md`](../learning/subfloor-order.md).
+results are unchanged. [`../learning/subfloor-order.md`](../../learning/subfloor-order.md).
 
 When nothing clears the floor the search returns an empty list
 (`SEXTANT_FLOOR_FALLBACK`, default `none`). `dense` returns the dense
@@ -185,8 +185,8 @@ with `below_floor: true`, and the agent prefixes them with a warning. Not
 the default: on the agent it halved the loop's cost on unanswerable
 questions with abstention intact, but did not help the answerable ones it
 was built for, and on all 55 answerable questions it is safe but fires on
-one of them. [`../learning/floor-fallback.md`](../learning/floor-fallback.md),
-[`../learning/floor-fallback-cost.md`](../learning/floor-fallback-cost.md).
+one of them. [`../learning/floor-fallback.md`](../../learning/floor-fallback.md),
+[`../learning/floor-fallback-cost.md`](../../learning/floor-fallback-cost.md).
 
 ## Setting min_score
 
@@ -251,7 +251,7 @@ document's first chunk is its overview — so the pre-registered bar could
 not be met; what they buy is rank (global rerank hit@1 0.6 → 1.0, local
 +0.02) at the cost of dense recall@5 (−0.07 alone, crowding). Opt-in; the
 committed baseline is built without them. Full table in
-[`learning/summary-chunks.md`](../learning/summary-chunks.md).
+[`learning/summary-chunks.md`](../../learning/summary-chunks.md).
 
 ## Agent-level retrieval
 
@@ -269,7 +269,7 @@ first query) and **recall@union** (everything any search retrieved), plus
 the tool sequence, searches, turns and cost per question. A question
 answered from `kb_list` makes no search, so it also grades **named** — the
 share of expected documents whose title appears in the answer
-([`learning/kb-list.md`](../learning/kb-list.md)). `--unanswerable` adds the
+([`learning/kb-list.md`](../../learning/kb-list.md)). `--unanswerable` adds the
 whole unanswerable split and `--judge` sends every answer through
 `sextant.eval.judge` as well (faithfulness, relevance, declined; a second model
 call per question, `SEXTANT_JUDGE_MODEL` to grade on a cheaper model),
@@ -277,10 +277,10 @@ which is how abstention is measured end to end — an unanswerable row has
 no retrieval grade and stays out of those means. Every search also records
 `below_floor`, and the grade counts them: a `SEXTANT_FLOOR_FALLBACK=dense`
 run whose count is 0 did not test the knob, whatever else its numbers did
-([`learning/floor-fallback-cost.md`](../learning/floor-fallback-cost.md)). Multi-hop questions are the point:
+([`learning/floor-fallback-cost.md`](../../learning/floor-fallback-cost.md)). Multi-hop questions are the point:
 under the shipped prompt the loop searched once and answered half, and one
 prompt bullet is what changed that. Results and the two product findings it
-surfaced are in [`learning/agent-loop.md`](../learning/agent-loop.md).
+surfaced are in [`learning/agent-loop.md`](../../learning/agent-loop.md).
 Costs about $0.04 for 29 questions, so it is not in the CI gate.
 
 ## What this does not measure

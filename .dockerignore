@@ -8,3 +8,5 @@ frontend/dist/
 .ruff_cache/
 .pytest_cache/
 docs/
+dist/
+build/

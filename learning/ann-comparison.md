@@ -14,7 +14,7 @@ numbers say and, more importantly, what they *mean*.
 - **IVF-PQ + rerank** — the same IVF-PQ candidates, re-scored exactly. Recovers
   the recall the quantization lost while keeping IVF-PQ's tiny hot footprint.
 
-The code is in [`tools/vector_db/ann/`](../tools/vector_db/ann/). Each file opens
+The code is in [`tools/vector_db/ann/`](../sextant/vector_db/ann/). Each file opens
 with the algorithm explained in prose — the point of writing them by hand was to
 make the behaviour legible, so start there if you want the *why* behind a curve.
 
