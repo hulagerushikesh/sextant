@@ -149,12 +149,10 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    # The key lives in .env like the agent's, and is read whether or not a flag
-    # was passed, because with neither flag the key is what decides.
-    from dotenv import load_dotenv
-
-    load_dotenv(Path(__file__).resolve().parents[2] / ".env")
-
+    # The key lives in .env like the agent's -- loaded by `tools.settings` at
+    # import, so it is already in the environment here -- and is read whether
+    # or not a flag was passed, because with neither flag the key is what
+    # decides.
     logging.basicConfig(
         level=logging.INFO if args.verbose else logging.WARNING,
         format="%(levelname)s %(message)s",
