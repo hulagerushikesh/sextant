@@ -193,28 +193,74 @@ class TestPerDocumentCap:
         assert self.kb()._diversify(self.order, self.ids, self.scores, 3) == [0, 1, 2]
 
 
+async def _tick_rate(work) -> float:
+    """Ticks per second of a 10ms heartbeat while `work()` runs.
+
+    A rate rather than a count, so the measurement does not care how long the
+    work took and two measurements of different durations can be compared.
+    """
+    ticks = 0
+
+    async def heartbeat():
+        nonlocal ticks
+        while True:
+            await asyncio.sleep(0.01)
+            ticks += 1
+
+    beat = asyncio.create_task(heartbeat())
+    started = time.perf_counter()
+    try:
+        await work()
+    finally:
+        elapsed = time.perf_counter() - started
+        beat.cancel()
+    return ticks / elapsed
+
+
 class TestConcurrency:
     async def test_searching_does_not_block_the_event_loop(self, kb):
         # Before this was fixed a 10ms heartbeat ticked zero times during half a
         # second of searching: the server could not stream or answer /health.
+        #
+        # The baseline is measured, not assumed. This used to compare the tick
+        # count against `elapsed / 0.01` -- the rate a 10ms sleep would give if
+        # `asyncio.sleep(0.01)` slept exactly 10ms, which it never does. On an
+        # idle fast machine the real ratio is about 0.84, so the 0.5 threshold
+        # had far less headroom than it looks, and all of it was spent on how
+        # fast the machine is: a loaded CI runner measured 0.34 and failed,
+        # with nothing blocking that is not blocking here. A check whose answer
+        # depends on the speed of the box is not a check -- items 13 and 23,
+        # again.
+        #
+        # Measuring the idle rate on the same machine moments earlier makes the
+        # comparison about blocking and nothing else. The regression this was
+        # written for -- zero ticks through the whole search -- still fails it
+        # by the entire margin.
         await kb.search("warm up", limit=1)
 
-        ticks = 0
+        idle = await _tick_rate(lambda: asyncio.sleep(0.5))
+        busy = await _tick_rate(
+            lambda: asyncio.gather(*(kb.search(f"query {i}", limit=5) for i in range(4)))
+        )
 
-        async def heartbeat():
-            nonlocal ticks
-            while True:
-                await asyncio.sleep(0.01)
-                ticks += 1
+        assert busy > idle * 0.5, (
+            f"loop was starved: {busy:.1f} ticks/s while searching against "
+            f"{idle:.1f} ticks/s idle on this machine"
+        )
 
-        beat = asyncio.create_task(heartbeat())
-        started = time.perf_counter()
-        await asyncio.gather(*(kb.search(f"query {i}", limit=5) for i in range(4)))
-        elapsed = time.perf_counter() - started
-        beat.cancel()
+    async def test_the_starvation_check_can_fail(self, kb):
+        # The assertion above only means something if blocking the loop trips
+        # it. `time.sleep` in the coroutine is precisely what the original fix removed.
+        idle = await _tick_rate(lambda: asyncio.sleep(0.3))
 
-        expected = elapsed / 0.01
-        assert ticks > expected * 0.5, f"loop was starved: {ticks} ticks in {elapsed:.3f}s"
+        async def blocking():
+            # The one place in this repository where blocking the loop on
+            # purpose is the point, so the lint that forbids it is waived here
+            # and nowhere else.
+            time.sleep(0.3)  # noqa: ASYNC251
+
+        blocked = await _tick_rate(blocking)
+        assert blocked < idle * 0.5
 
     async def test_concurrent_ingests_do_not_lose_a_document(self, kb):
         docs = [
