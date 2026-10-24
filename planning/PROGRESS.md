@@ -5,6 +5,63 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-24 — the page that went missing quietly (₹0)
+
+Back to the Python side, and to the worst thing a retrieval system can do:
+be missing something and not know it is.
+
+`mcp_server/uploads.py` already states the principle, in the docstring of
+the function that breaks it — a file that parses to nothing *"should be
+reported rather than stored as an empty document that silently matches
+nothing"*. That is enforced at 100% loss and nowhere else. At 1–99% it was
+this, in `loaders.py`:
+
+```python
+except Exception as e:
+    # One malformed page should not lose the other ninety-nine.
+    logger.warning("Page %d of %s could not be extracted: %s", ...)
+    pages.append("")
+```
+
+The comment is right and the behaviour stays. What followed it was not: the
+empty string reaches `_load_pdf`, which does `if not text: continue`, so a
+page that **failed** and a page that is **blank** become the same value — no
+locator, no text, no record. The document is stored and the person is told
+`Indexed 1 file — 240 chunks`.
+
+Three pages of a hundred are not in the corpus. Every later search misses
+them, the agent answers *"the corpus does not mention that"* about something
+in the PDF that was uploaded, and nothing in `/upload`, `sextant-ingest`,
+`/stats` or the answer itself could say why. The only trace was a
+`logger.warning` going to a Docker log on a box nobody reads — item 25's
+`durable` one layer down and with worse consequences, because a wrong spend
+figure is at least read.
+
+`LoadedDocument.unreadable_pages` now carries the page numbers, filled by
+both backends — MuPDF and the pypdf fallback, the second of which runs only
+where the MuPDF wheel is missing, which is exactly where a defect goes
+unnoticed. `_add_documents_sync` carries it across the dict boundary
+`/upload` crosses, so `_store` is the single place that decides whether
+anything went missing and the single place that words it:
+
+```
+Stored 1 document(s) as 240 chunk(s). 2 pages could not be read and are not
+in the corpus: paper.pdf p. 7, 41.
+```
+
+`unreadable_line()` owns that sentence — `rule_verdict` and `billing_line`
+again — and returns the empty string when there is nothing to say, so every
+caller appends it unconditionally. `sextant-ingest` prints it under the `ok`
+line; `/upload` does not build it, the message arrives carrying it.
+
+Left alone on purpose: the fact is reported, not stored. Putting it in chunk
+metadata would let a citation say "from a document with two pages missing",
+which is better and is a schema migration with a decision behind it.
+
+18 new tests. 5 of the 7 behavioural ones fail against the original; the
+other 2 are clean-run guards that must pass both ways, and 11 cover the new
+loader surface.
+
 ## 2026-10-24 — the warning that hides on a phone (₹0)
 
 This one began as a correction. Items 25 and 26 both wrote down that the

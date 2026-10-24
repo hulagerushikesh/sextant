@@ -2567,3 +2567,86 @@ the thing it described turned a deferred non-defect into a real one.
 - **Check the claim before you write it down, including in a "not done"
   note.** Two items asserted "unmarked" without opening the file. The
   correction is the item.
+
+## 28 · The page that went missing quietly — ₹0
+
+Shipped 2026-10-24. Back to the Python side, and to the worst thing a
+retrieval system can do: be missing something and not know it is.
+
+### The principle was already written in the file that breaks it
+
+`mcp_server/uploads.py`, `to_document`, its own docstring:
+
+> Raises UnsupportedDocument … for a file that parses to nothing — a scanned
+> PDF with no text layer is the common case, and **it should be reported
+> rather than stored as an empty document that silently matches nothing.**
+
+That is enforced at 100% loss and nowhere else. At 1%–99% it is this, in
+`loaders.py`:
+
+```python
+except Exception as e:
+    # One malformed page should not lose the other ninety-nine.
+    logger.warning("Page %d of %s could not be extracted: %s", number, path.name, e)
+    pages.append("")
+```
+
+The comment is right and the behaviour stays. What followed it was not. The
+empty string goes into `_load_pdf`, which does `if not text: continue` — so a
+page that *failed* and a page that is *blank* become the same thing, no
+locator is written, and the text is not in the document. The file is then
+stored, and the person who uploaded it is told `Indexed 1 file — 240 chunks`.
+
+Three pages of a hundred are not in the corpus. Every later search misses
+them. The agent says *"the corpus does not mention that"* about something in
+the PDF you uploaded, and there is nothing — in `/upload`, in
+`sextant-ingest`, in `/stats`, in the answer — that could tell you why. The
+only trace was a `logger.warning` going to a Docker log on a box nobody
+reads: item 25's `durable` exactly, one layer down and with worse
+consequences, because a wrong spend figure is read and a missing page is not.
+
+### What it does now
+
+`LoadedDocument` gains `unreadable_pages: list[int]`, and both PDF backends
+fill it — MuPDF and the pypdf fallback, the second of which only runs where
+the MuPDF wheel is missing, which is exactly where a defect goes unnoticed.
+`_add_documents_sync` carries it across the dict boundary that `/upload`
+crosses, so `_store` is the one place that decides whether anything went
+missing and the one place that says so:
+
+```
+Stored 1 document(s) as 240 chunk(s). 2 pages could not be read and are not
+in the corpus: paper.pdf p. 7, 41.
+```
+
+`unreadable_line()` returns that sentence and nothing else does, for the same
+reason `eval/tenancy.py` has one `rule_verdict` and `deploy.sh` one
+`billing_line`: `/upload` and `sextant-ingest` must not be able to disagree
+about it, and neither may re-derive "was anything lost?" from a chunk count
+it cannot check. It returns the empty string for no loss, so every caller
+appends it unconditionally.
+
+`sextant-ingest` prints it under the `ok` line. `/upload` does not build it
+at all — the message arrives already carrying it.
+
+### What was deliberately not done
+
+The fact is reported, not **stored**. Putting `unreadable_pages` into chunk
+metadata would let a citation say "from a document with two pages missing",
+which is better — and it is a store-schema change with a migration behind it,
+which is a decision and not a defect fix.
+
+### Rules
+
+- **A detected loss that only reaches a log has not been reported.** The
+  warning was correct, accurate and seventeen months old. Nobody has ever
+  read it.
+- **Enforce a principle at every degree, not only at the easy boundary.**
+  "Report it rather than store something that silently matches nothing" was
+  checked at total loss because total loss is one `if`. Partial loss is the
+  same sentence and the more likely case.
+- **A failure and an absence must not reduce to the same value.** `""` for a
+  page that raised and `""` for a page that is blank made the two
+  indistinguishable to everything downstream.
+- **Fix it in the fallback too.** The pypdf path runs only where the primary
+  wheel is missing — the one environment where nobody is watching.
