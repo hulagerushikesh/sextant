@@ -266,3 +266,46 @@ class TestTheVersionIsNotWrittenTwice:
             if pattern.search(line)
         ]
         assert not offenders, f"a hand-written version: {offenders}"
+
+
+class TestEveryModulePathOutsidePythonResolves:
+    """A rename leaves these pointing nowhere and nothing notices.
+
+    `start_all_services.sh` is the entry point the README hands a
+    newcomer, and 0.9.0 moved the module it launches. The shell string
+    `uvicorn sextant.mcp_server.main:app` is not Python, so no import
+    error, no type error and no test failure -- the script just stops
+    working, for somebody who is running it for the first time. Item 23
+    established that it had never been executed; this is the half of it a
+    test can hold.
+    """
+
+    @staticmethod
+    def _resolves(target: str) -> bool:
+        module_name, _, attribute = target.partition(":")
+        path = ROOT / (module_name.replace(".", "/") + ".py")
+        if not path.exists():
+            return False
+        tree = ast.parse(path.read_text())
+        names = {
+            node.name
+            for node in tree.body
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+        } | {
+            t.id
+            for node in tree.body
+            if isinstance(node, ast.Assign)
+            for t in node.targets
+            if isinstance(t, ast.Name)
+        }
+        return attribute in names
+
+    @pytest.mark.parametrize(
+        "source", ["start_all_services.sh", "Dockerfile", ".claude/launch.json"]
+    )
+    def test_the_launched_module_exists(self, source):
+        text = (ROOT / source).read_text()
+        targets = set(re.findall(r"\b(sextant[\w.]*:\w+)", text))
+        assert targets, f"{source} launches no module -- has the pattern drifted?"
+        broken = sorted(t for t in targets if not self._resolves(t))
+        assert not broken, f"{source} launches something that does not exist: {broken}"
