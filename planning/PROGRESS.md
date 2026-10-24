@@ -5,6 +5,70 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-24 — the name every install lands in (0.9.0, ₹0)
+
+The first piece of this project meant for somebody else. The knowledge
+base is a real MCP server and works in any MCP client, so it is published
+on its own as `sextant-kb` — install it, point Claude Desktop at the
+console script, done, with no checkout and no agent server.
+
+Packaging it turned out to be a correctness job, not a metadata job.
+**`tools`, `eval` and `mcp_server` — the three top-level import packages
+this project had — are all already distributions on PyPI.** A release as
+it stood would have dropped three squatted generic names into every
+installer's `site-packages`, where they collide with whatever else claims
+them. A name that is fine inside a checkout is not fine inside everybody
+else's. One top level now, `sextant`, with `vector_db`, `mcp_server` and
+`eval` beneath it; the distribution is `sextant-kb` because `sextant` is
+taken.
+
+**The move broke two of four copies of one fact and the suite found it.**
+Four modules answered "where is the repository root?" with their own
+`parents[N]`. One level deeper, `settings.py` and `vector_search.py` were
+still right and `observability.py` and `mcp_host.py` were not — and
+`observability.py`'s own docstring says two defaults for one location "is
+exactly the kind of drift this repository keeps paying for". It was one of
+the two. `settings.repo_root()` is the only thing that knows the shape
+now, and a test fails on a second `parents[`.
+
+**Then a wheel was built and launched, which nothing here had ever done.**
+An editable install resolves a directory on disk, so it is green on
+exactly the three things a wheel decides, and all three were wrong:
+
+| What | Was | Found by |
+| --- | --- | --- |
+| `[tool.setuptools] packages` | a hand-written list of four that omitted the ANN subpackage — every wheel it would have built was missing the index implementations | inspecting the built wheel |
+| `MCPServer(version=)` | the literal `"0.4.0"`, five releases stale — the version an MCP client *displays* for this server | launching the wheel and reading the handshake |
+| `FastAPI(version=)` | the literal `"0.3.0"`, six releases stale — served in the OpenAPI schema at `/docs` | the test written for the one above |
+
+Both versions come from `sextant.__version__` now, which reads the
+installed distribution, and the package list is found rather than
+written. **A number with two homes falls behind in the one nobody reads.**
+
+A wheel also has no repository around it, and three things turned on
+that: `.env` is not read, the subprocess gets no `cwd`, and the collection
+defaulted to a path beside the source — which for an installed package is
+`site-packages`, so a person's corpus would have been deleted by the next
+`pip uninstall`. It goes to the platform's user-data directory instead.
+
+The base install is a knowledge base and nothing else: `fastapi`,
+`uvicorn` and `google-genai` are extras, so mounting this in Claude
+Desktop does not install a web framework that is never started.
+`summaries.py` already imported the model client inside the function that
+needs it, and a test now pins that it stays there — move it to the top and
+the base install stops starting, with no other symptom, on a machine that
+is not this one.
+
+Measured, from the built wheel installed outside the repository: one
+top-level entry `sextant`, 44 files, ANN present, seven base requirements
+and no web framework; `sextant-kb` launched over real stdio answers the
+handshake as `knowledge-base 0.9.0` and lists six tools. 17 new tests,
+four defects planted back, each failing only its own.
+
+Not published. A PyPI release is irreversible — a version number cannot be
+re-used even after a delete — and it needs a token the agent must never
+hold, so the upload is the owner's command.
+
 ## 2026-10-24 — the key that crossed anyway (₹0)
 
 Item 30's bill, eight hours later. MCP's stdio client does not hand a
