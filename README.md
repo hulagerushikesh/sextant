@@ -45,7 +45,42 @@ never built and are kept for history only.
 
 ## The MCP server
 
-`tools/vector_db/server.py` exposes four tools over stdio:
+The knowledge base is a real MCP server: its own process, speaking JSON-RPC
+over stdio, with no dependency on the FastAPI app in this repository. It is
+published on its own so it can be used without any of the rest:
+
+```bash
+pip install sextant-kb
+```
+
+That installs the server and the two commands that feed it, and nothing
+else — no web framework, no model client. Index some documents and mount it:
+
+```bash
+sextant-ingest ~/Documents/papers -r          # PDF, Markdown, text
+```
+
+```json
+{
+  "mcpServers": {
+    "knowledge-base": {
+      "command": "/absolute/path/to/sextant-kb"
+    }
+  }
+}
+```
+
+That goes in `~/Library/Application Support/Claude/claude_desktop_config.json`
+(macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows); restart the
+app afterwards. `which sextant-kb` gives the path. No `cwd` is needed — the
+console script resolves the package on its own.
+
+Two things happen on first use, both once. The embedding and reranking models
+(~120 MB) are downloaded from Hugging Face, so the first query is slow and
+needs a network. And the collection is created: in a checkout that is
+`<repo>/chroma_db`, and from an installed wheel it is the platform's user-data
+directory, because writing a person's corpus under `site-packages` would hand
+it to the next `pip uninstall`. `SEXTANT_CHROMA_DIR` overrides both.
 
 | Tool | Does |
 | --- | --- |
@@ -53,30 +88,22 @@ never built and are kept for history only.
 | `kb_list` | Every document with its title, size and what it is about — a listing, for "what do my documents cover?" |
 | `kb_ingest` | Embed and store documents; re-using an id replaces it |
 | `kb_stats` | Collection size, embedding model, storage path |
+| `kb_ann_benchmark` | Build one index — flat, HNSW or IVF-PQ — and report recall against exact search |
+| `kb_ann_compare` | The same query through every index, side by side |
 
-It has no dependency on the FastAPI app. Verified against MCP Inspector:
+Verified against MCP Inspector:
 
 ```bash
-npx @modelcontextprotocol/inspector --cli .venv/bin/sextant-kb --method tools/list
+npx @modelcontextprotocol/inspector --cli $(which sextant-kb) --method tools/list
 ```
 
-To mount it in Claude Desktop, add this to
-`~/Library/Application Support/Claude/claude_desktop_config.json` and restart the
-app. No `cwd` is needed — the console script resolves the package on its own.
-
-```json
-{
-  "mcpServers": {
-    "knowledge-base": {
-      "command": "/absolute/path/to/sextant/.venv/bin/sextant-kb"
-    }
-  }
-}
-```
+Everything else in this repository — the agent loop, the HTTP API, the
+browser interface, the evaluation harnesses — is the system built *on* that
+server, and installs with `pip install 'sextant-kb[app]'` or from a checkout.
 
 ## The agent loop
 
-`mcp_server/agent.py` declares the discovered MCP schemas to the Messages API
+`sextant/mcp_server/agent.py` declares the discovered MCP schemas to the Messages API
 next to Google's built-in `google_search`, then runs until the model stops asking
 for tools. Two tiers with very different execution paths:
 
@@ -214,7 +241,7 @@ by injecting a regression to confirm it fires.
 
 ```bash
 pytest tests/ -q          # 320 tests, ~140s (two models load once)
-mypy mcp_server tools eval tests
+mypy sextant tests
 ruff check .
 pre-commit install
 ```
@@ -387,14 +414,14 @@ the complete list rather than a delta.
 frontend/            React 19 + Vite + TypeScript UI, Tailwind v4 + shadcn:
                      transcript, inline citations, trace, drag-and-drop
                      ingestion, saved conversations, ⌘K, the Index Lab
-mcp_server/
+sextant/mcp_server/
   main.py            FastAPI agent server (:8000) — HTTP surface only
   agent.py           The tool-use loop: declares tools, runs turns, emits events
   mcp_host.py        MCP client: connects, discovers tools, calls them
   sources.py         Numbered citable sources, shared by both retrieval tiers
   conversation.py    Bounds a client transcript into replayable model turns
   uploads.py         Uploaded bytes → text plus page/section spans
-tools/vector_db/
+sextant/vector_db/
   server.py          The MCP server (stdio) — the reusable artifact
   vector_search.py   Orchestration: chunk on ingest, hybrid search on query
   loaders.py         PDF (PyMuPDF; lines rebuilt from span baselines; pypdf fallback), Markdown, text → text plus page, section and table spans
@@ -406,7 +433,7 @@ tools/vector_db/
   ann/               flat, HNSW, IVF-PQ (+rerank) in NumPy; FAISS reference; benchmark
   ingest_cli.py      `sextant-ingest` — index files from disk
   forget_cli.py      `sextant-forget` — take a document and its chunks back out
-tools/settings.py    `SEXTANT_*` env names; reports pre-rename leftovers
+sextant/settings.py    `SEXTANT_*` env names; reports pre-rename leftovers
 chroma_db/           Persistent vector store (gitignored)
 eval/
   corpus/            21 committed documents — the fixed evaluation corpus
@@ -435,7 +462,7 @@ either visible or unproven.
 **Citations are controls, not decoration.** Every `[3]` in an answer opens the
 passage the model actually read. A label with nothing behind it renders struck
 through in red rather than as plain text: that is the dangling citation
-`eval/judge.py` counts, and it should be as visible to a reader as it is to the
+`sextant/eval/judge.py` counts, and it should be as visible to a reader as it is to the
 metrics. The passage shipped to the browser is the whole chunk — the old
 400-character excerpt was sized for whole documents and outlived the reason for
 it by three phases.
@@ -458,7 +485,7 @@ so "and how are detections assigned?" is a follow-up rather than a fresh
 question. What is *not* replayed is the tool transcript — the passages retrieved
 in earlier turns stay behind. Replaying them would resend every passage ever
 retrieved on every question; the model searches again instead, which is the
-cheap half. See [`mcp_server/conversation.py`](mcp_server/conversation.py).
+cheap half. See [`sextant/mcp_server/conversation.py`](sextant/mcp_server/conversation.py).
 
 **Citation labels survive the round trip.** `[3]` means the same passage in the
 fifth answer as in the first. The server keeps no session state, so the client

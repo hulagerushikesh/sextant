@@ -92,7 +92,7 @@ because each one was learned the expensive way.
   suite greps for its own stubs -- under a unique sentinel name, because the
   first version matched `sleep 30` and would have killed a bystander's.
 - **A verdict with no consequence is not a verdict.** Seven modules define a
-  `main()`; only `eval/harness.py` was ever invoked by a test. `eval/tenancy.py`
+  `main()`; only `sextant/eval/harness.py` was ever invoked by a test. `sextant/eval/tenancy.py`
   -- the harness that settled "one filtered collection or one per owner" and
   the one you re-run when the store changes -- computed `A is ACCEPTED` or
   `A is REJECTED`, printed it, and **returned**, so the shell saw exit 0 either
@@ -104,8 +104,8 @@ because each one was learned the expensive way.
   same reason `deploy.sh` has one `billing_line`.
 - **The name a program prints must be a name you can type.** `prog=` is what
   every usage line and every argparse error hands the operator, and
-  `eval/tenancy.py` said `sextant-eval-tenancy`, which is not in
-  `[project.scripts]` and never was. It is `python -m eval.tenancy` now, which
+  `sextant/eval/tenancy.py` said `sextant-eval-tenancy`, which is not in
+  `[project.scripts]` and never was. It is `python -m sextant.eval.tenancy` now, which
   is what the docs always said, and every `prog=` in the tree is pinned to a
   registered script or an existing module.
 - **An unused variable can be load-bearing for a lie.** The module docstring
@@ -149,7 +149,7 @@ because each one was learned the expensive way.
   `Server unreachable` was printed about a box that had just answered 503 --
   caught reviewing the fix above, which would have shipped it intact.
 - **"Mirrors X" is a claim, and a type that makes it needs a test.**
-  `frontend/src/lib/types.ts` says it mirrors `mcp_server/main.py` and had
+  `frontend/src/lib/types.ts` says it mirrors `sextant/mcp_server/main.py` and had
   dropped `durable`, `resets_in_seconds` and `share`. That omission is the
   *mechanism* of the two bullets above: TypeScript will not let a component
   read a field the interface does not declare, so the honest flag was
@@ -344,7 +344,7 @@ because each one was learned the expensive way.
   this is the same checklist with the last step made unskippable. Leaving the
   box up takes `--keep-up`, which you have to decide to type.
 - **A setting read at import time must see `.env`, and only the import graph
-  decides whether it does.** `mcp_server/main.py` called `load_dotenv()` on line
+  decides whether it does.** `sextant/mcp_server/main.py` called `load_dotenv()` on line
   55, under twenty import lines, and Python runs the imports first -- so
   `agent.MODEL`, `observability.DAILY_BUDGET_USD`, `RATE_LIMIT_REQUESTS`,
   `RATE_WINDOW`, `DAILY_BUDGET_SHARE` and `configure_logging`'s `LOG_FORMAT`
@@ -356,7 +356,7 @@ because each one was learned the expensive way.
   number that would have told you is the default. The box was unaffected --
   compose's `env_file` makes those real environment variables before Python
   starts -- so this was the local run only, which is item 28's pypdf shape: the
-  wrong path is the unwatched one. The load is in `tools/settings.py` now and
+  wrong path is the unwatched one. The load is in `sextant/settings.py` now and
   the three scattered copies are gone. **Fix an ordering by construction, not
   by being careful**: a module cannot call `settings.getenv` without importing
   `settings`, so there is no order left to get wrong. `load_dotenv` never
@@ -400,7 +400,7 @@ What `/health` does **not** include, so it always reads low against the bill:
   about $0.003/document at upload. `sextant-eval` spends nothing -- retrieval
   is local.
 - It is an **estimate** from a hard-coded table, `PRICING_AS_OF` in
-  `mcp_server/pricing.py`, currently `2026-08` and priced for
+  `sextant/mcp_server/pricing.py`, currently `2026-08` and priced for
   gemini-3.1-flash-lite ($0.25 / $1.50 per Mtok). Bump `SEXTANT_MODEL` without
   bumping those and the number understates the bill.
 - **Grounded search is priced per request** at $0.014, ignoring the
@@ -414,6 +414,42 @@ so a deploy or a restart does not begin the day again at zero; before
 2026-10-08 it was in memory only, which made the cap a limit per process
 lifetime rather than per day.
 
+## Packaging
+
+- **One top-level import package: `sextant`.** Until 0.9.0 it was three --
+  `tools`, `mcp_server` and `eval` -- and **all three are already
+  distributions on PyPI**, so the first release would have dropped three
+  squatted generic names into every installer's `site-packages`. A name
+  that is fine inside a checkout is not fine inside everybody else's. The
+  distribution is `sextant-kb` because `sextant` is taken.
+- **Build a wheel and launch it; an editable install cannot see a packaging
+  defect.** An editable install resolves a directory on disk, so it is green
+  on exactly the things a wheel decides. Running one found three defects in
+  an hour: the hand-written `packages` list omitted the ANN subpackage, so
+  every wheel it would have produced was missing the index implementations;
+  `MCPServer(version=...)` was the literal `"0.4.0"` and `FastAPI(version=)`
+  was `"0.3.0"`, five and six releases stale, and both are *displayed* --
+  one in an MCP client's server listing, one in the OpenAPI schema at
+  `/docs`. **A number with two homes falls behind in the one nobody reads.**
+  Versions come from `sextant.__version__`, which reads the installed
+  distribution; `TestTheVersionIsNotWrittenTwice` fails on a literal.
+- **`settings.repo_root()` is the only thing that knows the tree's shape.**
+  Four modules used to answer "where is the root?" with their own
+  `parents[N]`. Moving the packages one level down broke two and left two
+  right, and the suite caught it only because a *different* copy disagreed
+  -- `observability.py`, whose own docstring says two defaults for one
+  location "is exactly the kind of drift this repository keeps paying for".
+  It was one of the two that broke.
+- **A wheel has no repository around it.** `repo_root()` returns `None` when
+  there is no `pyproject.toml` beside the package, and that decides three
+  things: `.env` is not read, the subprocess gets no `cwd`, and the
+  collection goes to the platform's user-data directory instead of
+  `site-packages`, which `pip uninstall` would delete with somebody's
+  corpus in it.
+- Publishing is **the owner's command, never the agent's**: a PyPI release
+  is irreversible -- a version number cannot be re-used even after a
+  delete -- and it needs a token the agent must never hold.
+
 ## Local ports
 
 - `:8100` — this project's API (safe to restart).
@@ -424,7 +460,7 @@ lifetime rather than per day.
 ## Gate before a commit that touches code
 
 ```bash
-./.venv/bin/pytest tests/ -q && ./.venv/bin/mypy mcp_server tools eval tests && ./.venv/bin/ruff check . && (cd frontend && npm run build && npm test)
+./.venv/bin/pytest tests/ -q && ./.venv/bin/mypy sextant tests && ./.venv/bin/ruff check . && (cd frontend && npm run build && npm test)
 ```
 
 ## CI
@@ -479,7 +515,7 @@ lifetime rather than per day.
   so a frontend type error failed only by hand.
 - **And with the same arguments, which is the actual claim.** The pin above
   matches program *names*, so a CI step narrowed from
-  `mypy mcp_server tools eval tests` to `mypy mcp_server` keeps the green tick
+  `mypy sextant tests` to `mypy sextant` keeps the green tick
   while type-checking **one tree of four** -- checked, that pin passes it. Item
   14's shape exactly: same program, different claim.
   `TestCiRunsTheGateWithTheSameArguments` compares the arguments too. CI may run
@@ -563,7 +599,7 @@ lifetime rather than per day.
   stops Caddy. `tests/test_deploy_config.py` pins the header names on both
   sides, because renaming one in Python breaks nothing a Python test can see.
 - Since 0.8.4 what a tool returns is **scoped to the asker**:
-  `mcp_server/scope.ScopedHost` wraps the process-global host per request and
+  `sextant/mcp_server/scope.ScopedHost` wraps the process-global host per request and
   drops any entry carrying a `document_id` the owner may not see. Deny by
   default — it trims every result, not a named list of tools. A document is
   visible unless it is an `upload:<someone else>:*`, so the CLI-ingested
@@ -751,9 +787,9 @@ lifetime rather than per day.
   fossilise.
 - **The KB subprocess is sealed: a sealed process reads no `.env`.**
   `kb_server()` sets `SEXTANT_ENV_SEALED=1` in the child's environment and
-  `tools.settings` skips the load when it is set, before the load, so a `.env`
+  `sextant.settings` skips the load when it is set, before the load, so a `.env`
   cannot unseal itself. Without it the allowlist above was advisory from a
-  checkout: `tools.settings` loads `.env` at import, the child reaches it
+  checkout: `sextant.settings` loads `.env` at import, the child reaches it
   through `vector_search`, and every name in that file arrived -- including
   `GEMINI_API_KEY`, whose exemption says *a key that does not cross cannot
   leak from here*. Measured: the key absent from the child at exec and present
