@@ -5,6 +5,43 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-10-24 — the check that measured the machine (₹0)
+
+Item 28's branch went red on CI, in a test neither of its commits touches:
+
+```
+AssertionError: loop was starved: 16 ticks in 0.469s
+assert 16 > (46.91622459999962 * 0.5)
+```
+
+The reflex is to call it flaky and press re-run. 18 of the previous 20 runs
+were green, so "flaky" was not established either, and a green re-run would
+have proved only that the dice landed differently.
+
+```python
+expected = elapsed / 0.01
+assert ticks > expected * 0.5
+```
+
+`expected` is the tick count a 10ms heartbeat would reach **if
+`asyncio.sleep(0.01)` slept exactly 10ms**, which it never does. Measured on
+an idle fast machine with nothing blocking at all, the real ratio is
+**0.84** — overshoot alone eats 16%. So the threshold's headroom is 0.84
+down to 0.50 and every bit of it is spent on how fast the box is; the runner
+measured 0.34. The test cannot distinguish *the event loop was blocked*,
+which is the regression it exists for, from *this machine is busy*. Item
+13's shape and item 23's, in the test guarding the property the whole
+streaming server rests on.
+
+`_tick_rate(work)` returns ticks per second now, and the test takes an idle
+baseline on the same machine moments earlier: `busy > idle * 0.5`. A slow
+runner lowers both and the ratio survives; zero ticks through the search
+still fails by the entire margin. The check also has a check —
+`test_the_starvation_check_can_fail` blocks the loop with `time.sleep`
+inside a coroutine and asserts the assertion trips, which is the only place
+in the repository where blocking the loop is the point and the only
+`ASYNC251` waiver.
+
 ## 2026-10-24 — the page that went missing quietly (₹0)
 
 Back to the Python side, and to the worst thing a retrieval system can do:
