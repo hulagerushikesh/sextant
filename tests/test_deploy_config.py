@@ -297,6 +297,52 @@ case "$*" in
   # which the DNS compare then read as "this VM is 401".
   *ifconfig.me*) echo "${FAKE_MY_IP-203.0.113.7}"; exit 0 ;;
 esac
+# Cloudflare's DNS API, as step 1b and the park use it. One file of state --
+# the A record's content, or empty for no record -- so that "the trip wrote
+# the record" and "the name resolves" are one story and the dig stub below
+# cannot agree with a write that never happened.
+case "$*" in
+  *dns_records*)
+    method=GET; data=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        -X)     method="$2"; shift 2 ;;
+        --data) data="$2";   shift 2 ;;
+        *)      shift ;;
+      esac
+    done
+    rec="$FAKE_STATE.dns"
+    # A token without Zone:DNS:Edit. 200 with "success": false, which is the
+    # answer the verdict function exists to read.
+    if [ "${FAKE_CF_REFUSES:-0}" = 1 ]; then
+      echo '{"success":false,"errors":[{"message":"Actor is not authorized"}]}'
+      exit 0
+    fi
+    case "$method" in
+      GET)
+        if [ -s "$rec" ]; then
+          one='{"id":"rec1","name":"%s","content":"%s","proxied":false,"ttl":60}'
+          printf '{"success":true,"result":['"$one"']}\n' \
+            "${FAKE_CF_NAME-example.invalid}" "$(cat "$rec")"
+        else
+          echo '{"success":true,"result":[]}'
+        fi ;;
+      DELETE)
+        if [ "${FAKE_CF_DELETE_FAILS:-0}" != 1 ]; then : > "$rec"; fi
+        echo '{"success":true,"result":{"id":"rec1"}}' ;;
+      *)
+        ip=$(printf '%s' "$data" | sed -n 's/.*"content": *"\\([^"]*\\)".*/\\1/p')
+        # A zone that already had the name pinned somewhere else, or a plan
+        # that forces the orange cloud on: the API says success and the record
+        # is not what was asked for.
+        if [ "${FAKE_CF_WRITES_WRONG:-0}" = 1 ]; then ip=203.0.113.99; fi
+        printf '%s' "$ip" > "$rec"
+        one='{"id":"rec1","name":"%s","content":"%s","proxied":%s,"ttl":60}'
+        printf '{"success":true,"result":'"$one"'}\n' \
+          "${FAKE_CF_NAME-example.invalid}" "$ip" "${FAKE_CF_PROXIED:-false}" ;;
+    esac
+    exit 0 ;;
+esac
 if [ "${FAKE_GATE_DOWN:-0}" = 1 ]; then echo 000; exit 7; fi
 auth=""; hdrs=""; URL_PATH="/health"; discard_body=0; want_code=0
 while [ $# -gt 0 ]; do
@@ -372,6 +418,19 @@ fi
 """
 
 
+_DIG_STUB = """#!/usr/bin/env bash
+# Stands in for dig, and answers out of the same file the Cloudflare stub
+# writes -- so a resolve that agrees with a record nobody wrote is not a thing
+# this harness can produce. FAKE_DNS_LAGS is the resolver that has not caught
+# up yet; FAKE_DNS_ANSWER is a name pointing somewhere else entirely, which is
+# the state every trip before this one left behind.
+if [ "${FAKE_DNS_LAGS:-0}" = 1 ]; then exit 0; fi
+if [ -n "${FAKE_DNS_ANSWER-}" ]; then echo "$FAKE_DNS_ANSWER"; exit 0; fi
+cat "$FAKE_STATE.dns" 2>/dev/null
+echo
+"""
+
+
 _GNU_TAR_STUB = """#!/usr/bin/env bash
 # Stands in for GNU tar, which is what Linux and CI have. It rejects the
 # BSD-only flags the way GNU tar does -- by exiting, not by ignoring them.
@@ -404,7 +463,12 @@ def _run_trip(
     """Run the whole script offline. Returns (exit code, stdout+stderr)."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    stubs = [("ssh", _SSH_STUB), ("gcloud", _GCLOUD_STUB), ("curl", _CURL_STUB)]
+    stubs = [
+        ("ssh", _SSH_STUB),
+        ("gcloud", _GCLOUD_STUB),
+        ("curl", _CURL_STUB),
+        ("dig", _DIG_STUB),
+    ]
     if gnu_tar:
         stubs.append(("tar", _GNU_TAR_STUB))
     for name, body in stubs:
@@ -428,12 +492,18 @@ def _run_trip(
     # The box's corpus, as far as the probe scan is concerned: empty until
     # step 7 uploads into it.
     pathlib.Path(str(state) + ".corpus").write_text("")
+    # No A record to begin with, which is the real starting point: every trip
+    # reserves a new address, so whatever the name said last time is stale.
+    pathlib.Path(str(state) + ".dns").write_text("")
 
     env = {
         **os.environ,
         "PATH": f"{bin_dir}:{os.environ['PATH']}",
         "FAKE_BOX": str(box.parent),
         "FAKE_STATE": str(state),
+        # The DNS wait is a second of nothing in a test, not a minute.
+        "VM_DNS_TRIES": "2",
+        "VM_DNS_SLEEP": "0",
         "FAKE_HEALTH": (
             '{"status":"healthy","mcp_connected":true,'
             '"model_configured":true,"budget":{"budget_usd":0.6}}'
@@ -1102,6 +1172,123 @@ class TestTheGateIsCheckedFromOutside:
         assert "check(s) failed" in out
         assert "agenticrag is TERMINATED" in out
         assert code != 0
+
+
+class TestTheTripOwnsThePublicName:
+    """Step 1b, and the half of the park that goes with it.
+
+    Every trip reserves a *new* external address, and steps 6 and 7 are the
+    only checks that go through PUBLIC_URL. So from the day step 6 was written
+    until 2026-10-28 it could only pass if a human hand-edited Cloudflare
+    inside the twenty minutes the box was up -- and nothing in the script said
+    so. Step 6 had never once run against a live box. A check nobody can run
+    is a check nobody has read.
+
+    The other half matters more than the convenience: the address goes back to
+    GCP's pool when the trip parks. A name left pointing at it is a subdomain
+    takeover waiting for whoever reserves that address next.
+    """
+
+    CF = {"CF_API_TOKEN": "sentinel0cf0token0do0not0print", "CF_ZONE_ID": "zone1"}
+
+    def test_without_a_token_the_trip_says_the_name_is_not_its_doing(self, tmp_path):
+        # And does not fail for it: a build-and-park trip never touches the
+        # name. Step 6 is what counts a name that does not answer.
+        code, out = _run_trip(tmp_path, GOOD_ENV)
+        assert "CF_API_TOKEN/CF_ZONE_ID unset" in out
+        assert code == 0
+
+    def test_a_name_pointing_somewhere_else_is_named_with_both_addresses(self, tmp_path):
+        # The state every trip before this one left behind, and the reason
+        # step 6 reported nothing for three weeks.
+        _, out = _run_trip(tmp_path, GOOD_ENV, FAKE_DNS_ANSWER="203.0.113.50")
+        assert "it resolves to 203.0.113.50; this trip is at 10.0.0.1" in out
+        assert "steps 6 and 7 cannot pass" in out
+
+    def test_with_a_token_the_name_is_pointed_at_this_trips_address(self, tmp_path):
+        code, out = _run_trip(tmp_path, GOOD_ENV, **self.CF)
+        assert "example.invalid -> 10.0.0.1 (proxied=False" in out
+        assert "resolves here" in out
+        assert code == 0
+
+    def test_the_name_is_released_before_the_address_it_points_at(self, tmp_path):
+        # Order is the whole point. An address handed back to GCP's pool while
+        # the name still points at it is somebody else's subdomain.
+        _, out = _run_trip(tmp_path, GOOD_ENV, **self.CF)
+        assert "example.invalid has no A record now" in out
+        assert out.index("releasing example.invalid") < out.index("parking agenticrag")
+
+    def test_the_name_is_released_even_when_the_trip_dies_early(self, tmp_path):
+        # Same reason parking is a trap and not a last line: the run that most
+        # needs the cleanup is the one that stopped half way.
+        # GOOD_ENV with the proxy secret blanked: step 1b has already pointed
+        # the name by the time step 2 refuses to build.
+        code, out = _run_trip(
+            tmp_path,
+            GOOD_ENV.replace(SENTINELS["SEXTANT_PROXY_SECRET"], ""),
+            **self.CF,
+        )
+        assert code != 0, "the empty proxy secret still stops the trip"
+        assert "every request would 403" in out
+        assert "example.invalid has no A record now" in out
+
+    def test_a_delete_that_did_not_take_takes_the_zero_away(self, tmp_path):
+        # Read back, not assumed. The API returning is not the record being
+        # gone, and only the second one makes the address safe to release.
+        code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_CF_DELETE_FAILS="1", **self.CF)
+        assert "STILL points at an address this park is releasing" in out
+        assert code != 0
+
+    def test_a_token_that_cannot_write_the_zone_fails_the_trip(self, tmp_path):
+        # Cloudflare answers 200 with "success": false, which is the same
+        # shape as /upload answering 200 for a file it could not read.
+        code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_CF_REFUSES="1", **self.CF)
+        assert "refused: Actor is not authorized" in out
+        assert "the name does not point at this box" in out
+        assert code != 0
+
+    def test_a_record_written_to_the_wrong_address_fails_the_trip(self, tmp_path):
+        code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_CF_WRITES_WRONG="1", **self.CF)
+        assert "it points at 203.0.113.99, not 10.0.0.1" in out
+        assert code != 0
+
+    def test_the_orange_cloud_is_a_failure_and_says_which_check_it_breaks(self, tmp_path):
+        # Proxied, Cloudflare terminates TLS and rewrites headers, so step 6's
+        # forged X-Sextant-Proxy-Auth never reaches Caddy to be overwritten --
+        # and the one check that proves the proxy vouches for names stops
+        # meaning anything while still printing a number.
+        code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_CF_PROXIED="true", **self.CF)
+        assert "step 6 cannot prove the gate through the orange cloud" in out
+        assert code != 0
+
+    def test_a_resolver_that_lags_is_reported_and_the_name_still_comes_down(self, tmp_path):
+        # Set upstream is not the same as visible here, and the two are worth
+        # distinguishing: one is a thing to fix, the other a thing to wait out.
+        code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_DNS_LAGS="1", **self.CF)
+        assert "Cloudflare has it, but this machine still resolves nothing" in out
+        assert "example.invalid has no A record now" in out
+        assert code == 0, "a slow resolver is step 6's failure to count, not step 1b's"
+
+    def test_the_verification_pass_points_the_name_too(self, tmp_path):
+        # --no-deploy is steps 5 to 7 and nothing else, so it is the run that
+        # needs the name most, not least.
+        _, out = _run_trip(tmp_path, GOOD_ENV, args=["--no-deploy"], **self.CF)
+        assert "example.invalid -> 10.0.0.1" in out
+        assert "shipping the working tree" not in out
+
+    def test_the_token_is_never_printed(self, tmp_path):
+        # It is on a curl config file on a pipe, never in argv, so it is not
+        # in `ps` on this machine either while the trip runs.
+        _, out = _run_trip(tmp_path, GOOD_ENV, FAKE_CF_REFUSES="1", **self.CF)
+        assert self.CF["CF_API_TOKEN"] not in out
+        assert "--data" not in out
+
+    def test_the_trip_reads_the_name_off_the_box_and_not_out_of_this_repo(self):
+        # The same rule step 6 follows for PUBLIC_URL: this repo is public and
+        # the name is not something to publish in it.
+        text = TRIP.read_text()
+        assert "hulage" not in text.lower()
+        assert "sed -n 's/^PUBLIC_URL=//p' .env" in text
 
 
 class TestTheIsolationIsProvenFromOutside:

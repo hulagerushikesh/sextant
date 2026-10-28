@@ -2965,3 +2965,119 @@ host connects, discovers six tools, and `kb_stats` answers 22 documents /
 - **A documented refusal is a claim with a date on it.** `_NOT_FORWARDED`
   entries are written to be checkable — so the check has to observe the
   refusal taking effect, not the sentence describing it.
+
+## Item 34 — the trip reserved an address and nothing told DNS
+
+Found by looking at what the 2026-10-27 trip actually left behind, rather
+than at what it reported. The box was `TERMINATED`, and `agenticrag-ip` was
+still reserved and still attached — ~₹21/day for an address nothing uses.
+The script had already caught that: the park reads the address back, prints
+the rate and the release command on stderr, and takes the 0 away. It did all
+three. The terminal it ran in was closed, so nobody read any of it.
+
+That is the small half. The large half is why the trip was worth running at
+all and what it could not prove.
+
+### The window nobody could hit
+
+`trip.sh` reserves a **new** external address in step 1 and releases it in
+the park. Steps 6 and 7 are the only checks in the whole script that go
+through `PUBLIC_URL`. Between them sat nothing: `grep -i 'dns\|dig\|hulage'`
+over the script found not one line. So the name could only point at the box
+if a human opened the Cloudflare dashboard and edited an A record inside the
+twenty minutes the box was up, with an address the script had printed — and
+the script never said so, the README said so only in B3, as a one-time
+provisioning step, and B3's table says `<static IP from B1>` as though the
+address were stable.
+
+Step 6 was written on 2026-10-06 against exactly the failure it could not be
+run for. On 2026-10-28, three weeks and several trips later, it had never
+once executed against a live box. `dig +short agenticrag.hulage.in
+@tricia.ns.cloudflare.com` returned blank — asked of Cloudflare's own
+authoritative nameserver, so that is non-existence and not a stale cache.
+The record had never been created at all.
+
+This is *a check nobody can run is a check nobody has read*, in its most
+expensive form yet: not a line printed and discarded (items 5–10), but a
+whole step whose precondition was a human action nothing asked for.
+
+### What step 1b does
+
+Between step 1 and step 2, so a `--no-deploy` verification pass gets it too —
+that run is steps 5 to 7 and nothing else, which makes it the run that needs
+the name most, not least.
+
+The address comes from `addresses describe --format='get(address)'`. The
+**name** is read off the box's `.env`, the same way step 6 reads
+`PUBLIC_URL`. `CF_ZONE_ID` and `CF_API_TOKEN` come from the operator's
+environment and are never in this repo, which is public; the token reaches
+`curl` on a config file on a pipe, never argv, so it is not in `ps` on this
+machine while the trip runs.
+
+Unset, it is a skip like step 6's credentials — but a skip that still *says
+something*, because the comparison is free: it resolves the name and prints
+where it points against where this trip is. That is the line that would have
+made the 2026-10-27 trip legible from its first minute.
+
+### Read back, not assumed
+
+Cloudflare answers `200` with `"success": false` for a token that cannot
+write the zone — the same shape as `/upload` answering 200 for a file it
+could not read, which is item 8. So the verdict comes out of the body, and
+three different wrong outcomes each fail the trip with their own sentence: a
+refusal, a record that landed on a **different address**, and a record that
+is **proxied**. The third is worth stating: the orange cloud terminates TLS
+and rewrites headers, so step 6's forged `X-Sextant-Proxy-Auth` check — the
+one whose 200 proves Caddy *sets* rather than appends — stops meaning
+anything while still printing a number. A check that cannot fail is the
+thing this milestone keeps finding.
+
+Resolution is a fourth, separate question, with three outcomes like the ssh
+door: the address, nothing, or `?` on a machine with no `dig`. "The name
+points nowhere" is a thing to act on; "I could not look" is not, and reading
+the second as the first sends you to fix DNS that was never broken. A
+resolver that lags is reported and **not** counted — the failure it causes is
+step 6's, and step 6 counts it.
+
+### The park takes the name down first
+
+Before the address, not after, and that ordering is the item's point. The
+park hands the address back to GCP's pool. A name still pointing at it
+belongs to whoever reserves it next — a subdomain takeover, from a public
+repo that names the subdomain. No hazard exists today only because the
+record was never created; the moment step 1b starts creating it, the park
+owes a delete. The delete is read back, because the API returning and the
+record being gone are different claims, and only the second one makes the
+address safe to release. A delete that did not take takes the 0 away and
+prints where to finish it by hand.
+
+### The harness
+
+Two new stubs. The Cloudflare one keeps the record's content in one file so
+that "the trip wrote the record" and "the name resolves" are one story — the
+`dig` stub answers out of that same file, which means a resolve agreeing with
+a write that never happened is not a thing this harness can produce. Both
+follow the lesson from items 5, 8 and 20: a stub that can only succeed makes
+the check unfalsifiable, so the knobs are failures — `FAKE_CF_REFUSES`,
+`FAKE_CF_WRITES_WRONG`, `FAKE_CF_PROXIED`, `FAKE_CF_DELETE_FAILS`,
+`FAKE_DNS_LAGS`, `FAKE_DNS_ANSWER`.
+
+13 tests. Two plants to confirm they are not decorative: deleting the
+content comparison in `cf_verdict` fails
+`test_a_record_written_to_the_wrong_address_fails_the_trip` and nothing else;
+moving the name's release to *after* the address fails
+`test_the_name_is_released_before_the_address_it_points_at` and nothing else.
+
+### Rules
+
+- **A step whose precondition is an unasked-for human action is a step that
+  does not run.** Step 6 existed for three weeks, was correct, and proved
+  nothing, because the twenty-minute window it needed was never named.
+- **Infrastructure a script creates, it owns — including the things that
+  point at it.** `trip.sh` reserved and released an address while a name
+  pointing at that address was somebody else's problem. There was no
+  somebody else.
+- **Release what points at a resource before releasing the resource.** The
+  dangling direction is the dangerous one.
+- **A skip can still answer the question.** Reading where the name points
+  costs nothing and is worth printing even when the trip is not managing it.

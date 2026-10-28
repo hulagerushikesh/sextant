@@ -79,6 +79,37 @@ configured. After the build it checks that a forged `X-Sextant-User` sent
 straight at the api container is refused, and lists the store's document ids
 so a pre-0.8.2 `upload:<stem>` leftover shows up by name.
 
+**Step 1b points the public name at the address this trip reserved.** Every
+trip reserves a *new* external address, and steps 6 and 7 are the only checks
+that go through `PUBLIC_URL` — so from the day step 6 was written until
+2026-10-28 it could only pass if you hand-edited DNS inside the twenty minutes
+the box was up, and nothing said so. Step 6 had never once run against a live
+box. Export a Cloudflare token and the trip does it:
+
+```bash
+export CF_ZONE_ID='...'       # the zone, from its Cloudflare overview page
+export CF_API_TOKEN='...'     # Zone:DNS:Edit, scoped to that one zone
+```
+
+The token goes to `curl` on a config file on a pipe, never argv, and nothing
+prints it. The record is written grey-cloud (`proxied: false`) at TTL 60 and
+**read back**: a token that cannot write the zone, a record that landed on a
+different address, or a proxied record all fail the trip, because Cloudflare
+answers `200` with `"success": false` the same way `/upload` does. Proxied in
+particular is a failure with a reason — the orange cloud terminates TLS and
+rewrites headers, so step 6's forged `X-Sextant-Proxy-Auth` check stops meaning
+anything while still printing a number.
+
+Unset, the step is a skip like step 6's credentials: it says it is not managing
+the name, and compares what the name resolves to against this trip's address so
+you know whether to edit by hand. It does not fail — a build-and-park trip was
+never asked to touch DNS.
+
+**The park takes the name down before it releases the address**, and that
+ordering is the point. The address goes back to GCP's pool; a name still
+pointing at it belongs to whoever reserves it next. A delete that did not take
+is read back and takes the trip's exit code away.
+
 **Step 6 runs from your machine, not the box.** Every other check goes
 through `docker exec` at `localhost:8000` — inside the box, behind Caddy — so
 until this step existed the trip never touched the gate it exists to deploy,
@@ -224,6 +255,11 @@ dig +short agenticrag.hulage.in     # must return the static IP
 
 Don't run B5 until that returns the right IP — a premature `up` makes Caddy hit
 Let's Encrypt's rate limit on failed challenges.
+
+After the first time, stop doing this by hand: export `CF_ZONE_ID` and
+`CF_API_TOKEN` and step 1b of `deploy/trip.sh` upserts the record on every trip
+and deletes it on the park, which is what the address being different every
+trip actually requires.
 
 ---
 
