@@ -5,6 +5,10 @@
 #   deploy/trip.sh --keep-up       # same, but leave it running (say why out loud)
 #   deploy/trip.sh --no-deploy     # start + verify + park, no rebuild
 #
+# Export CF_API_TOKEN and CF_ZONE_ID and the trip points the public name at
+# the address it just reserved, and takes the name down again when it parks.
+# Without them steps 6 and 7 need a hand-edit at Cloudflare while the box is up.
+#
 # Why this exists: on 2026-09-28 a trip ended waiting for the owner to rotate a
 # key. The box stayed RUNNING for 125.5 hours and billed Rs703 against a
 # Rs50-100/day cap. The work had taken twenty minutes and about Rs2.
@@ -24,6 +28,22 @@ INSTANCE="${VM_INSTANCE:-agenticrag}"
 REGION="${ZONE%-*}"
 ADDRESS="${VM_ADDRESS:-agenticrag-ip}"
 ACCESS_CONFIG="external-nat"
+# The public name. Every trip reserves a *new* address, and steps 6 and 7 are
+# the only checks that go through PUBLIC_URL -- so until 2026-10-28 they could
+# only pass if a human hand-edited DNS inside the twenty minutes the box was
+# up. Nothing said so, and step 6 had never once run against a live box.
+#
+# The token and the zone id come from the operator's environment and are never
+# in this repo, which is public. Unset, step 1b says what it did not do rather
+# than doing nothing quietly. The token wants Zone:DNS:Edit on that one zone.
+CF_API="${CF_API_URL:-https://api.cloudflare.com/client/v4}"
+CF_TTL="${CF_DNS_TTL:-60}"
+DNS_TRIES="${VM_DNS_TRIES:-12}"
+DNS_SLEEP="${VM_DNS_SLEEP:-5}"
+# Set by step 1b when this trip wrote the record, and read by the park, which
+# must take the name down before the address it points at is released.
+DNS_HOST=""
+DNS_SET=0
 # SSH_RULE and MY_IP_URL, and the door check itself, come from lib.sh -- the
 # same copy `deploy.sh start` uses, because a door check that exists in one of
 # two scripts is a door check in neither.
@@ -99,6 +119,23 @@ park() {
     # production corpus are not something a 0 should be able to say happened.
     if ! forget_probes; then
       echo "   probe documents are still in the production corpus." >&2
+      if [ "$code" = 0 ]; then code=1; fi
+    fi
+  fi
+
+  # Before the address, not after. The record points at a GCP address this
+  # park is about to hand back to the pool, and a name still pointing at an
+  # address somebody else can reserve is a subdomain takeover -- so this is the
+  # one cleanup that is worse to do late than not to have done. It takes the 0
+  # away if it fails, for the same reason the address does.
+  if [ "${DNS_SET:-0}" = 1 ]; then
+    say "releasing $DNS_HOST before the address it points at"
+    if forget_dns "$DNS_HOST"; then
+      echo "   $DNS_HOST has no A record now"
+    else
+      echo "   $DNS_HOST STILL points at an address this park is releasing." >&2
+      echo "   whoever reserves that address next answers for the name. remove it:" >&2
+      echo "   dash.cloudflare.com -> DNS -> Records -> delete the A record for $DNS_HOST" >&2
       if [ "$code" = 0 ]; then code=1; fi
     fi
   fi
@@ -191,6 +228,117 @@ forget_probes() {
   return 0
 }
 
+# ---------------------------------------------------------------------------
+# The public name.
+#
+# Four small functions rather than one: the park needs the delete, step 1b
+# needs the upsert, and both need to read the record back afterwards. A write
+# that is not read back is the defect this whole script was rewritten to stop.
+# ---------------------------------------------------------------------------
+
+# The token goes on a config file on a pipe, never in argv, so it is not in
+# `ps` output on this machine while the trip runs -- the same rule the gate
+# credentials in step 6 follow.
+cf() {
+  local method="$1" path="$2" body="${3:-}"
+  local args=(-s --max-time 30 -X "$method"
+    --config <(printf 'header = "Authorization: Bearer %s"\n' "$CF_API_TOKEN")
+    -H 'Content-Type: application/json')
+  if [ -n "$body" ]; then args+=(--data "$body"); fi
+  curl "${args[@]}" "$CF_API$path" 2>/dev/null || true
+}
+
+# The A record's id, or nothing. Nothing is a real answer -- a first trip, or a
+# park after a trip that already cleaned up -- so it is not an error.
+cf_record_id() {
+  cf GET "/zones/$CF_ZONE_ID/dns_records?type=A&name=$1" | python3 -c '
+import json
+import sys
+
+try:
+    found = (json.load(sys.stdin).get("result") or [])
+except Exception:
+    raise SystemExit(0)
+for row in found:
+    print(row.get("id") or "")
+    break
+'
+}
+
+# Turns one Cloudflare answer into one line and an exit status. Cloudflare
+# replies 200 with `"success": false` for a token that cannot write the zone,
+# which is the same shape as /upload answering 200 for a file it could not
+# read: the status code says the request arrived, not that anything happened.
+cf_verdict() {
+  WANT="$1" python3 -c '
+import json
+import os
+import sys
+
+want = os.environ["WANT"]
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print("Cloudflare did not answer with json")
+    raise SystemExit(1)
+if not d.get("success"):
+    said = "; ".join(str(e.get("message", e)) for e in (d.get("errors") or []))
+    print("refused: %s" % (said or "no reason given"))
+    raise SystemExit(1)
+r = d.get("result") or {}
+print("%s -> %s (proxied=%s, ttl=%s)"
+      % (r.get("name"), r.get("content"), r.get("proxied"), r.get("ttl")))
+if r.get("content") != want:
+    print("     it points at %s, not %s" % (r.get("content"), want))
+    raise SystemExit(1)
+# Orange cloud terminates TLS at Cloudflare and rewrites headers on the way
+# through, so step 6 check 4 -- a forged X-Sextant-Proxy-Auth that must still
+# reach the app and be overwritten by Caddy -- stops meaning anything.
+if r.get("proxied"):
+    print("     proxied: step 6 cannot prove the gate through the orange cloud")
+    raise SystemExit(1)
+'
+}
+
+cf_upsert() {
+  local host="$1" ip="$2" id body
+  id=$(cf_record_id "$host")
+  body=$(HOST="$host" IP="$ip" TTL="$CF_TTL" python3 -c '
+import json
+import os
+
+print(json.dumps({"type": "A", "name": os.environ["HOST"],
+                  "content": os.environ["IP"], "ttl": int(os.environ["TTL"]),
+                  "proxied": False}))
+')
+  if [ -n "$id" ]; then
+    cf PUT "/zones/$CF_ZONE_ID/dns_records/$id" "$body" | cf_verdict "$ip"
+  else
+    cf POST "/zones/$CF_ZONE_ID/dns_records" "$body" | cf_verdict "$ip"
+  fi
+}
+
+# Deletes and then asks again, because "the API returned" and "the record is
+# gone" are different claims and only the second one makes the address safe to
+# release.
+forget_dns() {
+  local host="$1" id
+  id=$(cf_record_id "$host")
+  if [ -z "$id" ]; then return 0; fi
+  cf DELETE "/zones/$CF_ZONE_ID/dns_records/$id" >/dev/null
+  [ -z "$(cf_record_id "$host")" ]
+}
+
+# What the world sees, as against what Cloudflare was told. Three outcomes like
+# the ssh door, not two: an address, nothing, or `?` for a machine with no dig
+# -- because "the name points nowhere" is a thing to act on and "I could not
+# look" is not, and reading the second as the first sends you to fix DNS that
+# was never broken.
+resolved() {
+  if ! command -v dig >/dev/null 2>&1; then echo '?'; return 0; fi
+  dig +short A "$1" 2>/dev/null | grep -E '^[0-9.]+$' | head -1 || true
+}
+
 # Whether port 22 is open to *this* machine, which is a different question from
 # whether the box is up. Both halves are readable from the laptop for nothing:
 # the rule's source ranges, and this machine's public address. On 2026-10-07
@@ -234,6 +382,65 @@ if ! ssh -o ConnectTimeout=10 -o BatchMode=yes "$REMOTE" true; then
 fi
 SSH_UP=1
 echo "   up"
+
+# Outside the --no-deploy guard: a verification pass is exactly the run that
+# needs the name to point at this box, because steps 6 and 7 are all it does.
+say "1b - the public name"
+TRIP_IP=$("${GC[@]}" addresses describe "$ADDRESS" --region="$REGION" \
+  --format='get(address)' 2>/dev/null | tr -d '[:space:]')
+# Read off the box rather than written here, for the reason step 6 reads it:
+# this repo is public and the name is not something to publish in it.
+DNS_HOST=$(ssh "$REMOTE" "cd $APP_DIR && sed -n 's/^PUBLIC_URL=//p' .env" 2>/dev/null \
+  | tr -d '\r' | sed -e 's#^[a-zA-Z][a-zA-Z0-9+.-]*://##' -e 's#[/:].*##')
+if [ -z "$DNS_HOST" ]; then
+  echo "   no PUBLIC_URL on the box -- there is no name to point at $TRIP_IP" >&2
+  echo "   step 6 fails on this too, and says so there" >&2
+elif [ -z "${CF_API_TOKEN:-}" ] || [ -z "${CF_ZONE_ID:-}" ]; then
+  # Not a failure. A deploy-only trip never touches the name, and step 6 is
+  # what counts a name that does not answer -- counting it twice would make a
+  # build-and-park trip red for a thing it was not asked to do.
+  echo "   CF_API_TOKEN/CF_ZONE_ID unset -- this trip is not managing $DNS_HOST."
+  now=$(resolved "$DNS_HOST")
+  if [ "$now" = '?' ]; then
+    echo "   no dig on this machine, so where it points is unknown"
+  elif [ "$now" = "$TRIP_IP" ]; then
+    echo "   it already resolves to this trip's address"
+  else
+    printf '   it resolves to %s; this trip is at %s, so steps 6 and 7 cannot pass.\n' \
+      "${now:-nothing}" "$TRIP_IP"
+    echo "   fix it for every future trip instead of by hand, once:"
+    echo "     export CF_ZONE_ID=...  CF_API_TOKEN=...   # Zone:DNS:Edit, that zone only"
+  fi
+else
+  if line=$(cf_upsert "$DNS_HOST" "$TRIP_IP"); then
+    DNS_SET=1
+    printf '   %s\n' "$line"
+  else
+    printf '%s\n' "$line" | sed 's/^/   /' >&2
+    echo "   the name does not point at this box, so steps 6 and 7 cannot pass" >&2
+    GATE_FAILURES=$((GATE_FAILURES + 1))
+  fi
+  if [ "$DNS_SET" = 1 ]; then
+    # Set upstream is not the same as visible here. A fresh record at ttl 60 is
+    # usually seconds; a resolver that never catches up is reported, not waited
+    # on, because the failure it causes is step 6's and step 6 counts it.
+    for i in $(seq 1 "$DNS_TRIES"); do
+      now=$(resolved "$DNS_HOST")
+      if [ "$now" = "$TRIP_IP" ] || [ "$now" = '?' ]; then break; fi
+      printf '   waiting for %s to resolve here (%s)\n' "$DNS_HOST" "$i"
+      sleep "$DNS_SLEEP"
+    done
+    now=$(resolved "$DNS_HOST")
+    if [ "$now" = "$TRIP_IP" ]; then
+      echo "   resolves here"
+    elif [ "$now" = '?' ]; then
+      echo "   no dig on this machine, so only Cloudflare's own answer was read"
+    else
+      printf '   Cloudflare has it, but this machine still resolves %s\n' "${now:-nothing}" >&2
+      echo "   steps 6 and 7 may fail on a name that is right upstream" >&2
+    fi
+  fi
+fi
 
 if [ "$DEPLOY" = 1 ]; then
   say "2 - the box's .env, names only (values are never printed)"

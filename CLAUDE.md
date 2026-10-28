@@ -56,6 +56,25 @@ because each one was learned the expensive way.
   a human — a key to paste, a decision — parks first and restarts later.
   Restarting costs ₹2; on 2026-09-28 a box left running while waiting for a
   key rotation billed **₹703 over 125.5 hours**, against a ₹50-100/day cap.
+- **Infrastructure a script creates, it owns — including whatever points at
+  it.** `deploy/trip.sh` reserved a *new* external address on every trip and
+  released it on the park, and had no DNS step at all. Steps 6 and 7 are the
+  only checks that go through `PUBLIC_URL`, so the one check that proves the
+  gate end to end could only pass if a human hand-edited Cloudflare inside the
+  twenty minutes the box was up — with an address the script printed and never
+  mentioned. Step 6 was written 2026-10-06 and had still never run against a
+  live box on 2026-10-28; the A record had never been created. Export
+  `CF_ZONE_ID` and `CF_API_TOKEN` (Zone:DNS:Edit, operator's environment only —
+  this repo is public) and step 1b upserts the record grey-cloud and reads it
+  back, and the park deletes it **before** releasing the address: the address
+  goes back to GCP's pool, and a name still pointing at it belongs to whoever
+  reserves it next. Unset, step 1b is a skip that still prints where the name
+  points against where this trip is, which costs nothing and is the line that
+  makes a trip legible from its first minute.
+- **A queue is read by its headings, not its row numbers.** Twelve of
+  milestone 21's rows sat under `## Done — Milestone 17` in
+  [`planning/NEXT.md`](planning/NEXT.md), so the milestone read as 21 items
+  when it holds 33, and a status report came out 20/21 instead of 32/33.
 - **A report with a gap reads as reassurance.** `deploy.sh HOST status` is named
   above as the command that says what is billing, and until 2026-10-12 it said
   it for **two of GCP's eight instance states**: the billing `case` had arms for
