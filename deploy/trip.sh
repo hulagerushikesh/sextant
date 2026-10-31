@@ -442,6 +442,62 @@ else
   fi
 fi
 
+# Before step 2, because step 2 is the gate check and this is what it checks.
+# The writer writes and the gate decides: a fixer that validated its own output
+# would be a second reader of a rule that has one home, and a check whose
+# subject is the thing that wrote it.
+say "1c - the box's secrets"
+if [ -z "${SEXTANT_SECRETS_FILE:-}" ]; then
+  # A skip that says what it did not do, like 1b. Most trips change no secret,
+  # and a trip that only verifies must not need the operator's password file.
+  echo "   SEXTANT_SECRETS_FILE unset -- this trip is not changing the box's .env."
+  echo "   point it at a file of KEY=VALUE lines to rotate the model key or"
+  echo "   re-hash a gate password without a hand-edit (deploy/set-secrets.sh)."
+else
+  # On 2026-10-31 the documented way to put a secret on this box was
+  # `set-secrets.sh`, a file CLAUDE.md had named since go-live and nobody had
+  # written, so the real way was a hand-edit in vi -- and a hand-edit ate the
+  # `$` signs out of slot 2's bcrypt hash. Caddy crash-looped on
+  # `illegal base64 data at input byte 5` after a ten-minute build. The
+  # plaintexts go over ssh on STDIN and are hashed ON the box, so no hash
+  # crosses a shell and there is no transit to mangle it in.
+  if [ ! -r "$SEXTANT_SECRETS_FILE" ]; then
+    echo "   cannot read $SEXTANT_SECRETS_FILE" >&2
+    exit 1
+  fi
+  ssh "$REMOTE" "cat > $APP_DIR/set-secrets.sh && chmod 700 $APP_DIR/set-secrets.sh" \
+    < "$(dirname "${BASH_SOURCE[0]}")/set-secrets.sh"
+  # Shipped every trip rather than trusted to be there: step 3 preserves the
+  # file across the wipe, so a stale copy would otherwise outlive the tree it
+  # came from -- the `_FORWARDED_ENV` shape, in a file on another machine.
+  if ! ssh "$REMOTE" "cd $APP_DIR && ./set-secrets.sh" < "$SEXTANT_SECRETS_FILE"; then
+    echo "   the box's .env was not changed and nothing was built." >&2
+    exit 1
+  fi
+  if [ "$DEPLOY" != 1 ]; then
+    echo "   --no-deploy: .env is written but the containers still hold the old"
+    echo "   values. Caddy and the api read it at start, so this needs a deploy."
+  fi
+  # Steps 6 and 7 log in with the plaintext the operator has just stated here.
+  # Making them state it a second time in SEXTANT_TRIP_AUTH is a chance to
+  # state it differently, and the symptom would be a 401 at step 6 read as a
+  # fault in the hash this step just wrote.
+  secret_of() {   # secret_of <key> -- from the operator's file, never printed
+    sed -n "s/^$1=//p" "$SEXTANT_SECRETS_FILE" | head -1 | tr -d '\r'
+  }
+  tu=$(secret_of BASIC_AUTH_USER); tp=$(secret_of BASIC_AUTH_PASS)
+  if [ -n "$tu" ] && [ -n "$tp" ] && [ -z "${SEXTANT_TRIP_AUTH:-}" ]; then
+    export SEXTANT_TRIP_AUTH="$tu:$tp"
+    echo "   step 6 will log in as the first gate user named in that file"
+  fi
+  tu=$(secret_of BASIC_AUTH_USER_2); tp=$(secret_of BASIC_AUTH_PASS_2)
+  if [ -n "$tu" ] && [ -n "$tp" ] && [ -z "${SEXTANT_TRIP_AUTH_2:-}" ]; then
+    export SEXTANT_TRIP_AUTH_2="$tu:$tp"
+    echo "   step 7 will prove isolation with the second user named in that file"
+  fi
+  unset tu tp
+fi
+
 if [ "$DEPLOY" = 1 ]; then
   say "2 - the box's .env, names only (values are never printed)"
   # [A-Z0-9_] and not [A-Z_]: the second and third gate users are spelled

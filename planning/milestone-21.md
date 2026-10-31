@@ -3176,3 +3176,124 @@ dead-check guard. Gate green: 851 Python + 52 frontend, mypy clean on 69 files.
 
 **Cost.** ₹0 to fix. ₹1 of VM time to discover, and the ten minutes of build
 that preceded it are the thing this item removes from every future trip.
+
+## Item 37 — the script `CLAUDE.md` told everyone to run had never been written
+
+Found while sequencing item 3, not by looking for it. Item 3 needed two things
+on the box — slot 2 re-hashed and the model key rotated — and both are edits to
+`~/agenticrag/.env`, which `trip.sh` step 3 deliberately never ships. The
+question *"how does a secret get onto that box?"* has a documented answer, in
+`CLAUDE.md`'s Secrets section, since go-live:
+
+> Never type credentials. On the VM the owner runs `set-secrets.sh`; the gate
+> password and key are never seen by the agent.
+
+And `trip.sh` step 3 protects a file by that name from the wipe it performs
+before every deploy:
+
+```bash
+find . -mindepth 1 -maxdepth 1 ! -name '.env*' ! -name set-secrets.sh -exec rm -rf {} +
+```
+
+Two separate places written by someone who believed the file was there. **It
+existed in no commit.** `ls deploy/` was the whole investigation.
+
+### What the absence actually cost
+
+The documented path did not exist, so the real path was `nano .env` over ssh.
+Two consequences, and both of them are other items:
+
+- **Item 36 is the symptom of this.** A bcrypt hash retyped into vi through an
+  ssh session is a `$2a$12$...` string crossing two shells, and on 2026-10-31
+  it arrived with the `$` signs gone. Caddy crash-looped on
+  `base64-decoding password: illegal base64 data at input byte 5` after a
+  ten-minute build. Item 36 made that a ₹0 stop instead of a post-build one,
+  which is right and does not stop it happening again — the gate catches a
+  mangled hash, it does not stop hands mangling one.
+- **It is why the leaked model key outlived four trips.** Rotating
+  `GEMINI_API_KEY` meant a hand-edit, a hand-edit needs the box *up*, and a box
+  up while waiting for a human to type is exactly the shape that billed **₹703
+  over 125.5 hours** on 2026-09-28. Every trip since has correctly refused to
+  wait — and so correctly deferred the rotation. The standing rule and the task
+  were in deadlock, and the thing holding the deadlock open was a missing file.
+
+**Two open halves of item 3 were one missing file.** That is the finding.
+
+### The script
+
+`deploy/set-secrets.sh` runs **on the box**, in `~/agenticrag`:
+
+- **Values arrive on stdin, never argv.** `ps` publishes a command line on the
+  box and on the laptop that typed it. `trip.sh` step 6 pipes gate credentials
+  to curl for the same reason, and that precedent is cited in the file.
+- **A password is given as `BASIC_AUTH_PASS[_2|_3]` and hashed on the box**, by
+  `caddy:2-alpine` — the image `deploy/Dockerfile.caddy` is built `FROM`, so it
+  is already pulled on any box that has ever deployed, and the plaintext goes to
+  the container on *its* stdin rather than through `--plaintext`. The hash is
+  born where it will be used: there is no transit left to mangle it in.
+- **A ready-made `BASIC_AUTH_HASH` is refused**, naming the `PASS` key to use
+  instead. Accepting one would reopen the path that caused item 36, and the
+  whole point is to close it rather than to guard it twice.
+- **An allow-list of keys**, for the reason writes are an allow-list everywhere
+  else in this project: a typo'd name appended to `.env` as a new line is
+  indistinguishable from a setting that does nothing.
+- **`.env` is rewritten in place**, order and comments preserved, to a dated
+  backup (`.env.bak.<ts>` — not `.env.bak`, or the second run would overwrite
+  the only copy of what the box had before the first). Values are never
+  printed; only key names, lengths and verdicts.
+- **No `declare -A`.** macOS ships bash 3.2 and the box runs bash 5, so an
+  associative array would have passed on CI's Ubuntu and failed on the laptop
+  the harness runs on. That is the BSD-vs-GNU tar shape a fourth time, and it
+  was caught by running the script here before wiring it in. Keys live in
+  dynamic variable names via `printf -v`, which is what `gate-slots.sh` already
+  does, and every key reaches that `printf` only after the allow-list has
+  vouched for its spelling.
+
+### The writer does not judge its own work
+
+`trip.sh` step 1c runs the script; **step 2's `gate-slots.sh` decides whether
+the result is acceptable**, immediately afterwards and before anything is
+built. The script says so in its own header and points at the file that judges
+it.
+
+This is the one design decision worth defending. A fixer that validated its own
+output would be a second reader of a rule that item 36 had just given a single
+home — the shape `_FORWARDED_ENV` and the preflight key list both got wrong —
+and worse, it would be a check whose subject is the thing that wrote it. The
+separation is pinned from both directions: `test_the_gate_rule_has_exactly_one_home`
+fails if the bcrypt rule appears in a second `deploy/*.sh`, and
+`test_the_writer_does_not_carry_the_rule_that_judges_it` fails if
+`set-secrets.sh` grows one, or if step 1c ends up ordered after the gate check.
+
+Step 1c also **derives `SEXTANT_TRIP_AUTH` / `_2` from the same file**. Steps 6
+and 7 log in with the plaintext the operator has just stated; making them state
+it again in a second variable is a chance to state it differently, and the
+symptom would be a 401 at step 6 read as a fault in the hash step 1c had just
+written. An already-exported value wins, so deriving is a default and not an
+override. Unset `SEXTANT_SECRETS_FILE` is a skip that prints what it did not
+do, the shape step 1b already uses — most trips change no secret, and a trip
+that is only verifying must not need the operator's password file.
+
+### Measurements
+
+- `deploy/set-secrets.sh`: 161 lines. `trip.sh` grew step 1c, 52 lines.
+- Tests: **863 Python** (851 + 12) + 52 frontend; mypy clean (69 files); ruff
+  clean; frontend build clean.
+- Run against a fixture `.env` holding the box's real 2026-10-31 state — slot 2
+  filled on one side with a hash whose `$` signs are gone —
+  `gate-slots.sh` exits **1** before and **0** after, so the writer and the
+  judge are independently verified rather than agreeing by construction.
+- **Three planted defects**, because a check that cannot fail is not a check:
+  the write skipped (`if false`) takes **5** of 12 red; the script printing the
+  value it set takes **1**; the hasher returning the plaintext unhashed takes
+  **2** — and that last one is the composition under test, a bad hash written
+  by the writer stopped by the gate rather than by the writer.
+- One test was found too weak by the first plant and strengthened:
+  `test_the_plaintext_is_never_printed` passed while step 1c did nothing at
+  all, which is a fixture that disables the feature it checks. It now asserts
+  the hash was actually written and differs from the mangled one before
+  asserting what did not reach the output.
+- `tests/test_deploy_config.py::TestTheBoxsSecretsAreSetByAScriptAndNotByHand::test_the_file_claude_md_names_exists`
+  fails if either the sentence or the file goes away. **A rule that names a
+  tool is a claim that the tool exists**, and the honest resolution was to
+  write the file rather than delete the sentence.

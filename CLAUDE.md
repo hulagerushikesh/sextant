@@ -35,8 +35,19 @@ because each one was learned the expensive way.
 ## Secrets
 
 - `GEMINI_API_KEY` is the only key the code reads. `.env` is gitignored.
-- Never type credentials. On the VM the owner runs `set-secrets.sh`; the
-  gate password and key are never seen by the agent.
+- Never type credentials. The owner runs `deploy/set-secrets.sh`, which
+  **since 2026-10-31 exists**: this line named it from go-live and nobody had
+  written it, so the documented way to set a secret on the box was a file that
+  was not there and the real way was a hand-edit in vi. Values arrive on
+  **stdin**, never argv (`ps` publishes argv on both machines). A password is
+  given as `BASIC_AUTH_PASS[_2|_3]` and hashed **on the box** by the caddy
+  image the edge is built from, so the bcrypt hash is born where it is used and
+  no hash crosses a shell. A ready-made `BASIC_AUTH_HASH` is **refused** —
+  accepting one reopens the path that mangled slot 2. `trip.sh` step 1c runs it
+  when `SEXTANT_SECRETS_FILE` points at a file of `KEY=VALUE` lines, and
+  derives `SEXTANT_TRIP_AUTH`/`_2` from that same file so a password is stated
+  once rather than twice. The script does not judge what it wrote: step 2's
+  `gate-slots.sh` does, immediately afterwards.
 - `deploy/env.example` is placeholders only; keep it that way, the repo is
   public.
 - Gemini billing is AI Studio **prepay** with a ₹500/month cap: a 402
@@ -399,6 +410,19 @@ because each one was learned the expensive way.
   serve and all 57 trip tests stopped at step 2. Padded to a real bcrypt's 60
   and pinned at that length, because the next person to shorten it would get
   57 failures and no explanation.
+- **A documented file that does not exist documents a hand-edit.** The sequel
+  to item 36, same day. The `Secrets` rule above has said "the owner runs
+  `set-secrets.sh`" since go-live, and `trip.sh` step 3 protects a file by that
+  name from the wipe it does before every deploy — `! -name set-secrets.sh`.
+  Both of those were written by someone who believed the file was there. It
+  never was, in any commit. So the only way to put a secret on that box was to
+  open `.env` in vi over ssh, which is how slot 2's hash lost its `$` signs,
+  and *also* why rotating the leaked model key kept being deferred: a hand-edit
+  needs the box up, and a box up while waiting for a human is the
+  2026-09-28 ₹703 failure. The two open halves of milestone 21 item 3 were one
+  missing file. **A rule that names a tool is a claim that the tool exists**,
+  and the honest resolution is to write the file, not to delete the sentence —
+  `test_the_file_claude_md_names_exists` now fails if either goes away.
 - **Use `deploy/trip.sh`, not a sequence of gcloud commands.** It starts the
   box, deploys, verifies and parks — and parking is an `EXIT` trap, so it also
   happens on failure and on Ctrl-C. A checklist is what failed on 2026-09-28;
