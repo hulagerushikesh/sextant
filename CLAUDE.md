@@ -368,6 +368,37 @@ because each one was learned the expensive way.
   that one copy; `start` verifies ssh for real and stops the box if it never
   answers. **A door check that exists in one of two scripts is a door check in
   neither.**
+- **And the check that did exist was in neither path.** The sequel, 2026-10-31.
+  `deploy.sh`'s preflight has validated every `basic_auth` slot since
+  2026-10-12 -- pairing, `$2a$` prefix, length -- with its own comment saying a
+  mangled hash *"rejects every password"* and *"it refuses after the build,
+  which is the one thing this script exists to prevent."* `trip.sh` step 4 is
+  `compose up -d --build` straight over ssh, so it never called it. Step 2 had
+  a hand-rolled substitute that counted *non-empty* hashes and printed
+  `basic_auth users: 2`, then `safe to build`. Both sentences were true. The
+  gate they describe served nothing: slot 2 had sat unread in the box's `.env`
+  because the deployed 0.8.1 Caddyfile had no slot to read it with, the
+  three-slot Caddyfile reached it for the first time, and Caddy crash-looped
+  on `base64-decoding password: illegal base64 data at input byte 5` -- byte
+  5, not byte 0, which is how you know the `$` signs were gone rather than the
+  encoding wrong. **A ten-minute build to discover something readable for ₹0
+  before the meter started.** The rule is `deploy/gate-slots.sh` now and both
+  doors run it: the trip ships it over ssh (so no hash leaves the box) and
+  makes an unparseable slot a hard stop *before* step 3, and the preflight
+  sends it down the same pipe as its own body and calls it with what its
+  `.env` reader already found, so there is one rule and no second reader.
+  Only the slot rule is shared, on purpose: the preflight's DNS arm fails when
+  `SITE_ADDRESS` resolves to nothing, which is a legitimate trip, so gating
+  the build on the whole preflight would refuse to deploy a box that deploys
+  fine. **A check in a script nothing calls is not a check**, and counting
+  the things a rule would have judged is not the rule.
+- **A fixture has to be something the real check accepts.** The trip harness's
+  sentinel hash was `$2a$14$sentinelhashdonotprint` -- 30 characters, a value
+  the gate refuses. It had never mattered, because nothing in the trip parsed
+  it. The moment step 2 did, that fixture described a box that could not
+  serve and all 57 trip tests stopped at step 2. Padded to a real bcrypt's 60
+  and pinned at that length, because the next person to shorten it would get
+  57 failures and no explanation.
 - **Use `deploy/trip.sh`, not a sequence of gcloud commands.** It starts the
   box, deploys, verifies and parks — and parking is an `EXIT` trap, so it also
   happens on failure and on Ctrl-C. A checklist is what failed on 2026-09-28;

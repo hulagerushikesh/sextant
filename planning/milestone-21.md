@@ -3081,3 +3081,98 @@ moving the name's release to *after* the address fails
   dangling direction is the dangerous one.
 - **A skip can still answer the question.** Reading where the name points
   costs nothing and is worth printing even when the trip is not managing it.
+
+## Item 36 — the trip never called the one check written to stop it building
+
+Found by item 3's trip failing, not by reading the scripts.
+
+**What happened.** The 2026-10-31 trip deployed cleanly — tree shipped, both
+images built, api `Healthy`, a forged `X-Sextant-User` refused (403) against a
+live box for the first time — and then step 5 reported
+`caddy is not Up: agenticrag-caddy-1 Restarting (1)`. Caddy's own log, read
+off the box before the park took it:
+
+```
+Error: loading initial config: ... provision http.authentication.providers.http_basic:
+base64-decoding password: illegal base64 data at input byte 5
+```
+
+Byte **5**, not byte 0, and that is the whole diagnosis. A real bcrypt hash
+begins `$`, which is not a base64 character, so a mangled *encoding* fails at
+byte 0. Failing at byte 5 means what Caddy received began with five valid
+base64 characters — the `$2a$12$` prefix was gone. `CLAUDE.md` has recorded
+since the gate was built that compose eats `$` in an `env_file` unless
+`format: raw` is set, and it *is* set, on both services. So the value in the
+box's `.env` was already mangled when it was pasted.
+
+**Why it surfaced now, after weeks of serving.** The box ran a 0.8.1 image
+whose Caddyfile had no slot 2. `BASIC_AUTH_USER_2` and `BASIC_AUTH_HASH_2` had
+been sitting in its `.env` unread — present, counted, never parsed. This trip
+shipped the three-slot Caddyfile, which read them for the first time.
+
+**The defect, which is not the hash.** `deploy/deploy.sh`'s preflight has
+validated every gate slot since 2026-10-12 — pairing, `$2a$` prefix, length —
+and its comment says exactly what today cost:
+
+> If compose or an editor ate the `$` signs this is where it shows, not on the
+> first login attempt. … it refuses after the build, which is the one thing
+> this script exists to prevent.
+
+`trip.sh` step 4 is `compose up -d --build` straight over ssh. It does not go
+through `deploy.sh up`, so **the preflight was never in the path of the script
+that does the building.** In its place, step 2 had:
+
+```sh
+slots=$(ssh "$REMOTE" "grep -cE '^BASIC_AUTH_HASH(_[23])?=..*' $APP_DIR/.env || true")
+echo "   basic_auth users: $slots (two are needed to prove isolation end to end)"
+```
+
+A count of *non-empty* hashes, then `safe to build`. Both sentences were true.
+The gate they describe served nothing. This is item 5–10's shape at one more
+remove: not a verdict printed and discarded, and not a check nobody can run,
+but a check that existed, passed review, and sat in a script the expensive
+path never invoked. **A check in a script nothing calls is not a check**, and
+counting the things a rule would have judged is not the rule.
+
+**The fix.** `deploy/gate-slots.sh` holds the rule — `gate_bcrypt` for shape,
+`gate_slot_values` for the three slots' pairing — and both doors run that one
+copy, the answer `ssh_door` already got when `trip.sh` and `deploy.sh` both
+needed the door checked:
+
+- `trip.sh` step 2 ships the file over ssh to `bash -s`, so the hash is judged
+  on the box and only lengths and verdicts come back. An unparseable or
+  half-filled slot is a **hard stop before step 3** — nothing synced, nothing
+  built — printing the `caddy hash-password` command and *paste it verbatim*.
+- the preflight sends the same file down the same pipe as its own body, with
+  `GATE_SLOTS_LIB=1` so it only defines, and calls `gate_slot_values` with
+  the six values its `.env` reader already holds. One rule, and no second
+  reader of one file — the mistake `_FORWARDED_ENV` and the preflight's own
+  key list each made once.
+
+**Only the slot rule is shared, and that is a decision.** Making the trip run
+the whole preflight was the smaller change and would have been wrong: its DNS
+arm is `bad "$s resolves to '${seen:-nothing}' ... fix DNS before starting
+Caddy"`, and a trip with `CF_*` unset is a legitimate trip the script
+explicitly supports (step 1b skips and says where the name points). Gating the
+build on the full preflight would refuse to deploy a box that deploys fine.
+The reason is in `gate-slots.sh`, next to what it does not do.
+
+**And the harness was describing a box that could not serve.** The sentinel
+hash was `$2a$14$sentinelhashdonotprint` — 30 characters, a value the real gate
+refuses. It had never mattered because nothing in the trip parsed it; the
+moment step 2 did, all 57 trip tests stopped at step 2. Padded to a real
+bcrypt's 60 and pinned at that length with the reason, because the next person
+to shorten it would otherwise get 57 failures and no explanation. **A fixture
+has to be something the real check accepts.**
+
+**Measured.** 9 tests. Four assert a failure (mangled, truncated, user with no
+hash, and that none of it reaches step 3), one asserts the *passing* verdict is
+printed — because the other four would all pass against a check that silently
+did nothing, which is the trap this harness has hit before with a dead ssh
+stub. One asserts no hash is printed, one pins the fixture's 60 characters, and
+two pin that the rule has exactly one home in `deploy/` and that both doors
+call it. The hard stop neutered to `if false`, 6 of the 9 go red, including the
+dead-check guard. Gate green: 851 Python + 52 frontend, mypy clean on 69 files.
+
+**Cost.** ₹0 to fix. ₹1 of VM time to discover, and the ten minutes of build
+that preceded it are the thing this item removes from every future trip.

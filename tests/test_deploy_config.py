@@ -128,10 +128,18 @@ TRIP = DEPLOY / "trip.sh"
 
 # Recognisable strings so "did a secret leak into the output" is a substring
 # search rather than a judgement call.
+#
+# The hash is padded to a real bcrypt's 60 characters, and that is load-bearing
+# rather than tidiness: step 2 now runs deploy/gate-slots.sh on the box and a
+# slot it cannot parse stops the trip before the build. The old 30-character
+# sentinel was a value the gate would have refused, so this fixture described a
+# box that could not serve -- and every trip test below would have been
+# asserting about a run that stopped at step 2. **A fixture has to be something
+# the real check accepts**, or the harness tests a state the product rejects.
 SENTINELS = {
     "SEXTANT_PROXY_SECRET": "sentinel0proxy0secret0do0not0print",
     "GEMINI_API_KEY": "AIzaSENTINELMODELKEYdonotprint",
-    "BASIC_AUTH_HASH": "$2a$14$sentinelhashdonotprint",
+    "BASIC_AUTH_HASH": "$2a$14$" + "sentinelhashdonotprint".ljust(53, "x"),
 }
 
 GOOD_ENV = "\n".join(
@@ -3350,3 +3358,109 @@ class TestEveryDeployTimeVariableReachesThePreflight:
         assert "SITE_ADDRESS" in captured, captured
         assert "PREFLIGHT" not in captured, captured
         assert len(captured) <= 20, f"this is matching more than the key list: {captured}"
+
+
+class TestTheGateSlotsAreCheckedBeforeTheBuild:
+    """`deploy.sh`'s preflight has validated every gate slot since 2026-10-12,
+    and `trip.sh` -- the script that does the twenty-minute build -- never
+    called it. Step 4 is `compose up -d --build` straight over ssh, so the one
+    check standing between a misconfigured box and that build was not in the
+    path. Step 2 counted non-empty hashes instead and printed
+    `basic_auth users: 2`.
+
+    On 2026-10-31 that sentence was true and the gate it describes served
+    nothing: slot 2 had sat unread in the box's `.env` because the deployed
+    0.8.1 Caddyfile had no slot to read it with, the three-slot Caddyfile
+    reached it for the first time, and Caddy crash-looped on `base64-decoding
+    password: illegal base64 data at input byte 5`. Ten minutes of build to
+    discover something readable for Rs0 before the meter started.
+
+    The rule now lives in `deploy/gate-slots.sh` and both doors run it.
+    """
+
+    _MANGLED = "ubyPq5Z.abcdefghijklmnopqrstuvwxyz0123456789ABCDEF"
+
+    def _env(self, **slot):
+        env = GOOD_ENV
+        for name, value in slot.items():
+            old = f"{name}={SENTINELS['BASIC_AUTH_HASH']}"
+            assert old in env, old
+            env = env.replace(old, f"{name}={value}")
+        return env
+
+    def test_a_mangled_hash_stops_the_trip(self, tmp_path):
+        """The 2026-10-31 failure itself: the $ signs eaten, so what Caddy
+        gets is not a bcrypt hash at all."""
+        code, out = _run_trip(tmp_path, self._env(BASIC_AUTH_HASH_2=self._MANGLED))
+        assert "BASIC_AUTH_HASH_2 doesn't start with $2a$" in out
+        assert code != 0
+
+    def test_a_mangled_hash_stops_it_BEFORE_anything_is_built(self, tmp_path):
+        """The whole point is the order. A check that fires after the build has
+        not saved the build, and the build is the expensive half."""
+        _, out = _run_trip(tmp_path, self._env(BASIC_AUTH_HASH_2=self._MANGLED))
+        assert "shipping the working tree" not in out
+        assert "4 - build and start" not in out
+        assert "safe to build" not in out
+
+    def test_a_truncated_hash_stops_the_trip(self, tmp_path):
+        """A hash that starts right and ends short -- the paste that lost its
+        tail. Caddy refuses this too, and the prefix arm alone would pass it."""
+        code, out = _run_trip(tmp_path, self._env(BASIC_AUTH_HASH_2="$2a$14$tooshort"))
+        assert "BASIC_AUTH_HASH_2 is only" in out
+        assert code != 0
+
+    def test_a_user_with_no_hash_stops_the_trip(self, tmp_path):
+        """Caddy refuses to START on a half-filled slot, so this is not a
+        degraded box either -- it is a box that serves nothing."""
+        code, out = _run_trip(tmp_path, self._env(BASIC_AUTH_HASH_2=""))
+        assert "BASIC_AUTH_USER_2 is set but BASIC_AUTH_HASH_2 is empty" in out
+        assert code != 0
+
+    def test_the_check_actually_runs_on_a_good_box(self, tmp_path):
+        """The stub answers `bash -s` by running it for real, and a stub that
+        answered nothing would be indistinguishable from one that answered
+        correctly to every test above -- all four assert a failure. This one
+        asserts the passing verdict is printed, so a dead check fails here.
+        """
+        code, out = _run_trip(tmp_path, GOOD_ENV)
+        assert "BASIC_AUTH_HASH looks like bcrypt (60 chars)" in out
+        assert "gate slot 3 unused (both halves empty)" in out
+        assert code == 0
+
+    def test_no_hash_is_printed_by_the_check(self, tmp_path):
+        """Lengths and verdicts only. The check runs on the box precisely so
+        the value never crosses back."""
+        _, out = _run_trip(tmp_path, GOOD_ENV)
+        assert SENTINELS["BASIC_AUTH_HASH"] not in out
+
+    def test_the_fixture_is_a_hash_the_real_gate_would_accept(self, tmp_path):
+        """The sentinel was 30 characters until this item. A fixture the
+        product refuses describes a box that cannot serve, and every trip test
+        in this module would have been asserting about a run that stopped at
+        step 2."""
+        h = SENTINELS["BASIC_AUTH_HASH"]
+        assert len(h) == 60, len(h)
+        assert h.startswith("$2a$")
+
+    def test_the_gate_rule_has_exactly_one_home(self):
+        """`billing_line`, `_FORWARDED_ENV` and the preflight's key list are
+        all the same lesson: the second place that needs an answer calls the
+        first one, it does not copy it. A second bcrypt rule in deploy/ would
+        be right the day it is written and behind the other one afterwards."""
+        rule = DEPLOY / "gate-slots.sh"
+        assert "'$2'[aby]" in rule.read_text()
+        others = [
+            p
+            for p in DEPLOY.glob("*.sh")
+            if p != rule and "'$2'[aby]" in p.read_text()
+        ]
+        assert others == [], f"a second copy of the bcrypt rule: {others}"
+
+    def test_both_doors_run_the_shared_rule(self):
+        """trip.sh ships it over ssh; deploy.sh's preflight sends it down the
+        same pipe as its own body and calls it with what it already read."""
+        assert "gate-slots.sh" in (DEPLOY / "trip.sh").read_text()
+        deploy = (DEPLOY / "deploy.sh").read_text()
+        assert "cat deploy/gate-slots.sh" in deploy
+        assert "gate_slot_values" in deploy

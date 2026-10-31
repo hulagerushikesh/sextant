@@ -276,7 +276,13 @@ case "$CMD" in
     # DATA_DIR exists only so this script can be run off the VM, which until
     # 2026-10-12 nothing ever had -- a check nobody can execute is a check
     # nobody has read. The box never passes it; the default is the mount.
-    ssh "$REMOTE" APP_DIR="$APP_DIR" DATA_DIR="${DATA_DIR:-/data/chroma}" 'bash -s' <<'PREFLIGHT'
+    # gate-slots.sh goes down the same pipe, ahead of this body: the gate rule
+    # has two callers (here and trip.sh) and therefore lives in one file.
+    # GATE_SLOTS_LIB stops it running itself -- here it only defines, and the
+    # slot loop below calls it with what this script's own .env reader found.
+    cat deploy/gate-slots.sh - <<'PREFLIGHT' \
+      | ssh "$REMOTE" APP_DIR="$APP_DIR" DATA_DIR="${DATA_DIR:-/data/chroma}" \
+            GATE_SLOTS_LIB=1 'bash -s'
 set -uo pipefail
 fail=0
 say()  { printf '   %-6s %s\n' "$1" "$2"; }
@@ -315,45 +321,13 @@ for k in SITE_ADDRESS PUBLIC_URL ACME_EMAIL GEMINI_API_KEY; do
   [ -n "$v" ] && ok "$k set" || bad "$k is empty in .env"
 done
 
-# A bcrypt hash is $2a$14$<53 chars>. If compose or an editor ate the $ signs
-# this is where it shows, not on the first login attempt. A function, because
-# the Caddyfile has three slots and this used to be run against one of them.
-bcrypt() {   # bcrypt <name> <value>
-  case "$2" in
-    '$2'[aby]'$'*) [ ${#2} -ge 59 ] \
-        && ok "$1 looks like bcrypt (${#2} chars)" \
-        || bad "$1 is only ${#2} chars -- truncated, re-paste it" ;;
-    *)  bad "$1 doesn't start with \$2a\$ -- it was mangled or quoted" ;;
-  esac
-}
-
-# The gate, slot by slot. Caddy refuses to START on a user with no hash, so a
-# half-filled slot is not a degraded box, it is a box that serves nothing --
-# and it refuses after the build, which is the one thing this script exists to
-# prevent. env.example ships slots 2 and 3 with both halves empty, and the
-# Caddyfile drops those lines before parsing, so unused is reported as fine:
-# a check that fails on the documented default is a check people learn to
-# ignore. No name and no hash is ever printed, only lengths.
-for n in '' _2 _3; do
-  eval "u=\${v_BASIC_AUTH_USER$n-}"; eval "h=\${v_BASIC_AUTH_HASH$n-}"
-  if [ -z "$u" ] && [ -z "$h" ]; then
-    if [ -z "$n" ]; then
-      bad "BASIC_AUTH_USER and BASIC_AUTH_HASH are both empty -- nobody could log in"
-    else
-      ok "gate slot ${n#_} unused (both halves empty)"
-    fi
-    continue
-  fi
-  if [ -z "$u" ]; then
-    bad "BASIC_AUTH_HASH$n is set but BASIC_AUTH_USER$n is empty -- Caddy will refuse to start"
-  elif [ -z "$h" ]; then
-    bad "BASIC_AUTH_USER$n is set but BASIC_AUTH_HASH$n is empty -- Caddy will refuse to start"
-    say "" "  docker run --rm caddy caddy hash-password --plaintext 'pw'"
-  else
-    ok "BASIC_AUTH_USER$n set"
-    bcrypt "BASIC_AUTH_HASH$n" "$h"
-  fi
-done
+# The gate, slot by slot -- the rule itself is deploy/gate-slots.sh, which
+# trip.sh also runs, because a slot Caddy cannot parse is a box that serves
+# nothing and it refuses only after the build. This script reads .env already,
+# so it hands over what it read rather than reading it twice.
+gate_slot_values "${v_BASIC_AUTH_USER-}"   "${v_BASIC_AUTH_HASH-}" \
+                 "${v_BASIC_AUTH_USER_2-}" "${v_BASIC_AUTH_HASH_2-}" \
+                 "${v_BASIC_AUTH_USER_3-}" "${v_BASIC_AUTH_HASH_3-}"
 
 # Caddy has no conditionals: `header_up X-Sextant-User {http.auth.user.id}`
 # goes out on every proxied request whether or not the app can verify where it

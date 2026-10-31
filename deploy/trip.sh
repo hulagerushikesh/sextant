@@ -476,6 +476,21 @@ if [ "$DEPLOY" = 1 ]; then
   # because each one silently changes what the trip can prove: isolation needs
   # two names at the gate, answers need a key, and a share needs configuring
   # once there is more than one person to share between.
+  # The gate, by the one rule deploy.sh's preflight uses -- shipped over ssh to
+  # `bash -s`, so no name and no hash ever leaves the box. A slot Caddy cannot
+  # parse is a HARD stop, because it is not a degraded box: Caddy refuses to
+  # start and the site serves nothing. Counting non-empty hashes is what this
+  # used to do, and on 2026-10-31 `basic_auth users: 2` was a true sentence
+  # about a gate that served nothing -- slot 2 had sat unread in .env until a
+  # three-slot Caddyfile reached it, and the answer cost a ten-minute build to
+  # discover. Free here, before the meter spends anything on a build.
+  if ! ssh "$REMOTE" GATE_SLOTS_DIR="\$HOME/$APP_DIR" 'bash -s' \
+       < "$(dirname "${BASH_SOURCE[0]}")/gate-slots.sh"; then
+    echo "   a gate slot would stop Caddy. Nothing was built; fix it on the box:" >&2
+    echo "   ssh $REMOTE \"cd $APP_DIR && docker run --rm caddy caddy hash-password --plaintext 'pw'\"" >&2
+    echo "   then re-paste that \$2a\$... line into .env VERBATIM -- no quotes, no escaping." >&2
+    exit 1
+  fi
   slots=$(ssh "$REMOTE" "grep -cE '^BASIC_AUTH_HASH(_[23])?=..*' $APP_DIR/.env || true")
   echo "   basic_auth users: $slots (two are needed to prove isolation end to end)"
   if ssh "$REMOTE" "grep -q '^GEMINI_API_KEY=..*' $APP_DIR/.env"; then
