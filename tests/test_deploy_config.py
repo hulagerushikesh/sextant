@@ -214,6 +214,11 @@ case "$cmd" in
   *"logs api"*)                echo "${FAKE_LOG_LINE-no stale names}" ;;
   *"/stats"*)                  echo "$FAKE_STATS" ;;
   *"/health"*)                 echo "$FAKE_HEALTH" ;;
+  # Step 1c: both calls are run for real against the fixture box, so these
+  # tests exercise `deploy/set-secrets.sh` itself rather than a canned answer.
+  # The install arrives with the script on stdin; the run arrives with the
+  # operator's secrets on stdin.
+  *set-secrets.sh*)            HOME="$PWD" bash -c "$cmd" ;;
   *grep*|*"sed -n"*)           bash -c "$cmd" ;;
   *)                           echo "UNHANDLED: $cmd" >&2; exit 97 ;;
 esac
@@ -465,6 +470,19 @@ exec /usr/bin/tar "${args[@]}"
 """
 
 
+# `caddy hash-password` stands in as python3: the real one needs the caddy
+# image, and a stub written against a platform tool is how the `stat` stub
+# passed 17/17 locally and read a tmpfs report as permission bits on CI.
+# 60 characters with a `$2a$14$` prefix is the shape the real one prints, and
+# `gate-slots.sh` is what decides whether that shape is acceptable.
+_HASHER_STUB = """#!/usr/bin/env bash
+exec python3 -c '
+import hashlib, sys
+pw = sys.stdin.read()
+print("$2a$14$" + hashlib.sha256(pw.encode()).hexdigest()[:53])
+'
+"""
+
 def _run_trip(
     tmp_path, env_text, args=(), vm_state="RUNNING", gnu_tar=False, **extra_env
 ):
@@ -476,6 +494,7 @@ def _run_trip(
         ("gcloud", _GCLOUD_STUB),
         ("curl", _CURL_STUB),
         ("dig", _DIG_STUB),
+        ("caddy-hash", _HASHER_STUB),
     ]
     if gnu_tar:
         stubs.append(("tar", _GNU_TAR_STUB))
@@ -509,6 +528,7 @@ def _run_trip(
         "PATH": f"{bin_dir}:{os.environ['PATH']}",
         "FAKE_BOX": str(box.parent),
         "FAKE_STATE": str(state),
+        "SET_SECRETS_HASHER": str(bin_dir / "caddy-hash"),
         # The DNS wait is a second of nothing in a test, not a minute.
         "VM_DNS_TRIES": "2",
         "VM_DNS_SLEEP": "0",
@@ -3464,3 +3484,210 @@ class TestTheGateSlotsAreCheckedBeforeTheBuild:
         deploy = (DEPLOY / "deploy.sh").read_text()
         assert "cat deploy/gate-slots.sh" in deploy
         assert "gate_slot_values" in deploy
+
+
+class TestTheBoxsSecretsAreSetByAScriptAndNotByHand:
+    """`CLAUDE.md` has told every reader since go-live that "on the VM the
+    owner runs `set-secrets.sh`", and `trip.sh` step 3 preserves a file by
+    that name across every deploy (`! -name set-secrets.sh` in the wipe).
+    **The file had never been written.** So the documented way to put a secret
+    on this box was a file that did not exist, and the real way was a hand-edit
+    in vi.
+
+    On 2026-10-31 that hand-edit is what cost the build: slot 2's bcrypt hash
+    reached `.env` with its `$` signs eaten and Caddy crash-looped on
+    `base64-decoding password: illegal base64 data at input byte 5` -- byte 5,
+    not byte 0, so the `$2a$12$` prefix was already gone when Caddy read it.
+
+    The script exists now and runs ON the box: plaintexts arrive on stdin
+    (never argv, which `ps` publishes), the hash is generated where it will be
+    used, and there is no transit left to mangle it in. It does not judge what
+    it wrote -- step 2's `gate-slots.sh` does, immediately afterwards.
+    """
+
+    _MANGLED = "ubyPq5Z.abcdefghijklmnopqrstuvwxyz0123456789ABCDEF"
+    _PASSWORD = "plaintext0that0must0never0be0printed"
+
+    def _box_env(self, tmp_path):
+        return (tmp_path / "box" / "agenticrag" / ".env").read_text()
+
+    def _secrets(self, tmp_path, body):
+        f = tmp_path / "operator-secrets.env"
+        f.write_text(body)
+        return str(f)
+
+    def _broken_env(self):
+        """The box as it actually was on 2026-10-31: slot 2 filled on one side
+        with a hash whose `$` signs are gone."""
+        return GOOD_ENV.replace(
+            f"BASIC_AUTH_HASH_2={SENTINELS['BASIC_AUTH_HASH']}",
+            f"BASIC_AUTH_HASH_2={self._MANGLED}",
+        )
+
+    def test_the_file_claude_md_names_exists(self):
+        """The claim and the file, checked against each other. Writing the
+        file is the honest resolution; deleting the sentence would have been
+        the other one."""
+        script = DEPLOY / "set-secrets.sh"
+        assert script.is_file(), "CLAUDE.md names a script that does not exist"
+        assert os.access(script, os.X_OK), "it is documented as something you run"
+        claude = (ROOT / "CLAUDE.md").read_text()
+        assert "set-secrets.sh" in claude
+
+    def test_without_a_secrets_file_the_box_is_not_touched(self, tmp_path):
+        """Most trips change no secret. Unset is a skip that says what it did
+        not do -- the shape step 1b already uses -- not a prompt and not a
+        failure."""
+        before = self._broken_env()
+        code, out = _run_trip(tmp_path, before, args=("--no-deploy",))
+        assert "SEXTANT_SECRETS_FILE unset" in out
+        assert "not changing the box's .env" in out
+        assert self._box_env(tmp_path) == before, "a skip wrote to .env"
+        assert code == 0
+
+    def test_a_mangled_hash_is_replaced_and_the_gate_then_passes(self, tmp_path):
+        """End to end on the real failure: the box starts in the state that
+        crash-looped Caddy, and the trip gets past the gate check that would
+        otherwise have stopped it."""
+        secrets = self._secrets(
+            tmp_path,
+            f"BASIC_AUTH_USER_2=grace\nBASIC_AUTH_PASS_2={self._PASSWORD}\n",
+        )
+        code, out = _run_trip(tmp_path, self._broken_env(), SEXTANT_SECRETS_FILE=secrets)
+        assert "hashed" in out and "BASIC_AUTH_PASS_2 -> BASIC_AUTH_HASH_2" in out
+        # The judge, not the writer, is what says the slot is acceptable.
+        assert "BASIC_AUTH_HASH_2 looks like bcrypt (60 chars)" in out
+        assert "safe to build" in out
+        written = self._box_env(tmp_path)
+        assert self._MANGLED not in written, "the mangled hash survived"
+        line = [
+            row
+            for row in written.splitlines()
+            if row.startswith("BASIC_AUTH_HASH_2=")
+        ]
+        assert len(line) == 1, line
+        assert line[0].startswith("BASIC_AUTH_HASH_2=$2a$"), line[0]
+        assert code == 0
+
+    def test_the_plaintext_is_never_printed(self, tmp_path):
+        """The password crosses two machines in this step. The only thing that
+        may come back is a length and a verdict."""
+        secrets = self._secrets(
+            tmp_path,
+            f"BASIC_AUTH_USER_2=grace\nBASIC_AUTH_PASS_2={self._PASSWORD}\n",
+        )
+        _, out = _run_trip(tmp_path, self._broken_env(), SEXTANT_SECRETS_FILE=secrets)
+        assert self._PASSWORD not in out
+        # Nor the hash it became: `gate-slots.sh` prints lengths for the same
+        # reason, and a hash in a terminal scrollback is a hash in a log.
+        hash_line = [
+            row
+            for row in self._box_env(tmp_path).splitlines()
+            if row.startswith("BASIC_AUTH_HASH_2=")
+        ][0]
+        fresh = hash_line.split("=", 1)[1]
+        # Assert the write happened before asserting what it did not print:
+        # without this the test passes when step 1c does nothing at all, which
+        # is a fixture that disables the feature it is checking.
+        assert fresh.startswith("$2a$") and len(fresh) == 60, hash_line
+        assert fresh != self._MANGLED
+        assert fresh not in out
+
+    def test_a_hash_pasted_instead_of_a_password_is_refused(self, tmp_path):
+        """Accepting a ready-made hash would reopen the exact path that
+        mangled slot 2: a `$2a$...` string retyped through two shells. The
+        refusal names the key to use instead."""
+        secrets = self._secrets(tmp_path, "BASIC_AUTH_HASH_2=$2a$14$whatever\n")
+        code, out = _run_trip(
+            tmp_path, self._broken_env(), SEXTANT_SECRETS_FILE=secrets
+        )
+        assert "give BASIC_AUTH_HASH_2 as BASIC_AUTH_PASS_2" in out
+        assert "4 - build and start" not in out, "it built on a refused secret"
+        assert code != 0
+
+    def test_a_key_the_script_does_not_set_is_refused(self, tmp_path):
+        """An allow-list, for the reason writes are an allow-list everywhere
+        else here: a typo'd name appended as a new line is indistinguishable
+        from a setting that does nothing."""
+        secrets = self._secrets(tmp_path, "SEXTANT_WHATEVER=1\n")
+        code, out = _run_trip(tmp_path, GOOD_ENV, SEXTANT_SECRETS_FILE=secrets)
+        assert "SEXTANT_WHATEVER is not a secret this script sets" in out
+        assert "4 - build and start" not in out
+        assert code != 0
+
+    def test_an_unreadable_secrets_file_stops_the_trip(self, tmp_path):
+        """Named and missing is a typo, not a decision to change nothing --
+        the skip above is what "change nothing" looks like."""
+        code, out = _run_trip(
+            tmp_path, GOOD_ENV, SEXTANT_SECRETS_FILE=str(tmp_path / "nope.env")
+        )
+        assert "cannot read" in out
+        assert "4 - build and start" not in out
+        assert code != 0
+
+    def test_the_gate_credentials_come_from_the_same_file(self, tmp_path):
+        """Steps 6 and 7 log in with the plaintext the operator has just
+        stated here. Making them state it twice is a chance to state it
+        differently, and the symptom would be a 401 at step 6 read as a fault
+        in the hash step 1c had just written."""
+        secrets = self._secrets(
+            tmp_path,
+            "BASIC_AUTH_USER=ada\nBASIC_AUTH_PASS=pw-one\n"
+            "BASIC_AUTH_USER_2=grace\nBASIC_AUTH_PASS_2=pw-two\n",
+        )
+        _, out = _run_trip(tmp_path, self._broken_env(), SEXTANT_SECRETS_FILE=secrets)
+        assert "step 6 will log in as the first gate user" in out
+        assert "step 7 will prove isolation with the second user" in out
+        # And the proof that it took effect: those steps skip when unset.
+        assert "SEXTANT_TRIP_AUTH unset" not in out
+        assert "SEXTANT_TRIP_AUTH_2 unset" not in out
+
+    def test_an_exported_credential_wins_over_the_file(self, tmp_path):
+        """The operator may be testing a password the file does not carry.
+        Deriving is a default, not an override."""
+        secrets = self._secrets(
+            tmp_path, "BASIC_AUTH_USER=ada\nBASIC_AUTH_PASS=pw-one\n"
+        )
+        _, out = _run_trip(
+            tmp_path,
+            self._broken_env(),
+            SEXTANT_SECRETS_FILE=secrets,
+            SEXTANT_TRIP_AUTH="someone:else",
+        )
+        assert "step 6 will log in as the first gate user" not in out
+
+    def test_the_script_is_shipped_on_every_trip(self, tmp_path):
+        """Step 3 preserves `set-secrets.sh` across the wipe, so a copy left on
+        the box would outlive the tree it came from -- the `_FORWARDED_ENV`
+        shape, in a file on another machine. It is sent every time."""
+        secrets = self._secrets(tmp_path, "GEMINI_API_KEY=AIzaNEWKEYdonotprint\n")
+        _run_trip(tmp_path, GOOD_ENV, SEXTANT_SECRETS_FILE=secrets)
+        shipped = tmp_path / "box" / "agenticrag" / "set-secrets.sh"
+        assert shipped.is_file(), "the box never received the script"
+        assert shipped.read_text() == (DEPLOY / "set-secrets.sh").read_text()
+
+    def test_the_writer_does_not_carry_the_rule_that_judges_it(self):
+        """The other direction of `test_the_gate_rule_has_exactly_one_home`.
+        A fixer that validated its own output would be a second reader of a
+        rule with one home, and a check whose subject is the thing that wrote
+        it."""
+        script = (DEPLOY / "set-secrets.sh").read_text()
+        assert "'$2'[aby]" not in script
+        assert "gate-slots.sh" in script, "it should say who does judge it"
+        trip = (DEPLOY / "trip.sh").read_text()
+        assert trip.index("1c - the box's secrets") < trip.index(
+            "gate-slots.sh"
+        ), "the gate check must run after the write, not before"
+
+    def test_the_model_key_can_be_rotated_without_a_hand_edit(self, tmp_path):
+        """The other half of what kept the box on a leaked key: rotating it
+        meant editing `.env` on a running box, which is a turn that ends with
+        the meter on. 2026-09-28 cost Rs703 that way."""
+        secrets = self._secrets(tmp_path, "GEMINI_API_KEY=AIzaROTATEDdonotprint\n")
+        code, out = _run_trip(tmp_path, GOOD_ENV, SEXTANT_SECRETS_FILE=secrets)
+        assert "AIzaROTATEDdonotprint" not in out, "the new key was printed"
+        written = self._box_env(tmp_path)
+        assert "GEMINI_API_KEY=AIzaROTATEDdonotprint" in written
+        assert SENTINELS["GEMINI_API_KEY"] not in written, "the old key survived"
+        assert "model key set" in out
+        assert code == 0

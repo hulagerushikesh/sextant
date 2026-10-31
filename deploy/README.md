@@ -265,6 +265,43 @@ trip actually requires.
 
 ## B4 · Secrets on the box
 
+**Use [`set-secrets.sh`](set-secrets.sh), not an editor.** Write a file of
+`KEY=VALUE` lines on your own machine, keep it out of the repo, and let the
+trip carry it:
+
+```bash
+cat > ~/sextant-secrets.env <<'EOF'
+BASIC_AUTH_USER=ada
+BASIC_AUTH_PASS=the-first-password
+BASIC_AUTH_USER_2=grace
+BASIC_AUTH_PASS_2=the-second-password
+GEMINI_API_KEY=AIza...
+EOF
+chmod 600 ~/sextant-secrets.env
+
+SEXTANT_SECRETS_FILE=~/sextant-secrets.env ./deploy/trip.sh
+```
+
+Step 1c pipes that file over ssh **on stdin** (never argv — `ps` publishes
+argv on both machines), hashes each `BASIC_AUTH_PASS*` **on the box** with the
+caddy image the edge is built from, writes `.env` in place with a dated backup,
+and prints only key names and lengths. Then step 2 judges the result with
+[`gate-slots.sh`](gate-slots.sh) and refuses to build on a slot Caddy could
+not parse. It also derives `SEXTANT_TRIP_AUTH` / `_2` from the same file, so
+steps 6 and 7 log in with the password you just set without you stating it
+twice.
+
+A ready-made `BASIC_AUTH_HASH` is **refused**: pasting a `$2a$...` string
+through two shells is exactly how slot 2 arrived on the box with its `$` signs
+eaten, which crash-looped Caddy after a ten-minute build on 2026-10-31
+(`illegal base64 data at input byte 5` — byte 5, so the prefix was already
+gone). Give the password and let the box hash it.
+
+The hand-written path below still works and is what the box was built with.
+It is the fallback, not the recommendation — it needs the VM up while you
+type, and a box up while waiting for a human is the ₹703 failure of
+2026-09-28.
+
 ```bash
 # on the VM
 mkdir -p ~/agenticrag && cd ~/agenticrag
