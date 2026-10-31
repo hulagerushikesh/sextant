@@ -15,7 +15,7 @@ product.
 Operational runbooks stay next to what they operate: [`../deploy/README.md`](../deploy/README.md)
 (GCP + Caddy), [`../sextant/eval/README.md`](../sextant/eval/README.md) (golden set + metrics).
 
-## Status (2026-10-06)
+## Status (2026-10-31)
 
 | Phase | What | State |
 | --- | --- | --- |
@@ -32,11 +32,17 @@ Operational runbooks stay next to what they operate: [`../deploy/README.md`](../
 | 20 | What a corpus belongs to: the upload collision, one-collection-vs-one-each, identity, the listing leak | **Done** 2026-10-06, ₹0 across all four — uploads namespaced by owner (0.8.2); **A, one collection filtered**, decided on a measurement that passed and could not have failed (`../learning/multi-corpus.md`); identity forwarded by Caddy and refused without proof (0.8.3); every tool result scoped to the asker (0.8.4). See `milestone-20.md` |
 | 21 | What else assumed there was one person | **Items 1–2 done** 2026-10-06, ₹0 — the rule behind both scope holes (0.8.5): `trim()` recognises an *id* wherever one appears, and writes are an allow-list where reads are a deny-list. Then two ceilings (0.8.6): the limiter keys on a name only when the proxy vouched for it, and a per-owner share sits under the global cap rather than replacing it. Then an unplanned item 4 (0.8.7): every HTTP route is pinned on one side of the scope boundary, because all three defects above were routes and only the tool list was pinned. Then an item 5: `trip.sh` read the box's state back after parking and only printed it, so an offline run ended `RUNNING` with exit 0 — it compares now, and a box or an address left billing takes the 0 away. Then an item 6: every check in the trip ran inside the box behind Caddy, so the trip that deploys the gate had never gone through it — step 6 now runs from the operator's machine against the public URL. Then item 7: the pre-registered success criterion itself — two users, one filename, from the public URL — now run by the script, with the probe documents removed in the EXIT trap; then item 8, because that step judged an upload by its status code and `/upload` answers 200 with `"success": false`. Item 3 (the VM trip carrying 0.8.2–0.8.7 plus the key rotation) open. See `milestone-21.md` |
 
-Numbers that describe the system today: 531 tests, mypy clean (62 files), two
-golden sets (65 questions / 58 chunks; 39 page-labelled / 1,608 chunks), hit@1
-0.94 and 0.93 for the full pipeline, ~$0.0015/query on
-`gemini-3.1-flash-lite`, 22 docs / 1,660 chunks in the local store. Package is
-`sextant` 0.8.7; the deployed box is still on 0.8.1. The repo has been public
+Numbers that describe the system today (2026-10-31): 851 Python + 52 frontend
+tests, mypy clean (69 files), two golden sets (65 questions / 58 chunks; 39
+page-labelled / 1,608 chunks), hit@1 0.94 and 0.93 for the full pipeline,
+~$0.0015/query on `gemini-3.1-flash-lite`, 22 docs / 1,660 chunks in the local
+store. Package is `sextant` 0.9.0, on PyPI as `sextant-kb` since 2026-10-24.
+**The box now runs this tree** (deployed 2026-10-31, ₹1): the api is healthy
+and scoped, 79 chunks / 21 documents, and a forged `X-Sextant-User` is refused
+— but **Caddy is down**, so nothing is being served. Slot 2's bcrypt hash was
+mangled in the box's `.env` and a three-slot Caddyfile read it for the first
+time; `agenticrag.hulage.in` also still resolves to nothing. One trip closes
+both, and item 36 makes the hash a ₹0 stop rather than a post-build one. The repo has been public
 since 2026-09-20 (MIT).
 
 ## Cost position
