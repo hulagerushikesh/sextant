@@ -3558,6 +3558,8 @@ class TestTheBoxsSecretsAreSetByAScriptAndNotByHand:
         # The judge, not the writer, is what says the slot is acceptable.
         assert "BASIC_AUTH_HASH_2 looks like bcrypt (60 chars)" in out
         assert "safe to build" in out
+        # stdin is the preferred route; --plaintext would have said so.
+        assert "via --plaintext" not in out
         written = self._box_env(tmp_path)
         assert self._MANGLED not in written, "the mangled hash survived"
         line = [
@@ -3678,6 +3680,42 @@ class TestTheBoxsSecretsAreSetByAScriptAndNotByHand:
         assert trip.index("1c - the box's secrets") < trip.index(
             "gate-slots.sh"
         ), "the gate check must run after the write, not before"
+
+    def test_a_caddy_that_will_not_read_stdin_still_hashes(self, tmp_path):
+        """Whether `caddy hash-password` reads a pipe is a property of the
+        build on that box, and this laptop cannot pull the image to find out.
+        So the script tries stdin and falls back to `--plaintext` rather than
+        assuming -- and the fallback is exercised here, because an untested
+        fallback is the rung of a ladder that is never reached.
+
+        The fallback is second, not first, because `--plaintext` puts the
+        password in the box's process list for the life of the container.
+        """
+        hasher = tmp_path / "plaintext-only"
+        hasher.write_text(
+            "#!/usr/bin/env bash\n"
+            "# A caddy that prompts on a terminal and reads nothing from a\n"
+            "# pipe: it answers only when handed --plaintext.\n"
+            'if [ "${1-}" != "--plaintext" ]; then exit 1; fi\n'
+            "python3 -c 'import hashlib,sys;"
+            'print("$2a$14$" + hashlib.sha256(sys.argv[1].encode()).hexdigest()[:53])\''
+            ' "$2"\n'
+        )
+        hasher.chmod(hasher.stat().st_mode | stat.S_IEXEC)
+        secrets = self._secrets(
+            tmp_path,
+            f"BASIC_AUTH_USER_2=grace\nBASIC_AUTH_PASS_2={self._PASSWORD}\n",
+        )
+        code, out = _run_trip(
+            tmp_path,
+            self._broken_env(),
+            SEXTANT_SECRETS_FILE=secrets,
+            SET_SECRETS_HASHER=str(hasher),
+        )
+        assert "hashed via --plaintext" in out, out[-3000:]
+        assert "BASIC_AUTH_HASH_2 looks like bcrypt (60 chars)" in out
+        assert self._PASSWORD not in out, "the fallback leaked the plaintext"
+        assert code == 0
 
     def test_the_model_key_can_be_rotated_without_a_hand_edit(self, tmp_path):
         """The other half of what kept the box on a leaked key: rotating it

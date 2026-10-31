@@ -3276,18 +3276,28 @@ that is only verifying must not need the operator's password file.
 
 ### Measurements
 
-- `deploy/set-secrets.sh`: 161 lines. `trip.sh` grew step 1c, 52 lines.
-- Tests: **863 Python** (851 + 12) + 52 frontend; mypy clean (69 files); ruff
+- `deploy/set-secrets.sh`: 172 lines. `trip.sh` grew step 1c, 52 lines.
+- Tests: **864 Python** (851 + 13) + 52 frontend; mypy clean (69 files); ruff
   clean; frontend build clean.
 - Run against a fixture `.env` holding the box's real 2026-10-31 state — slot 2
   filled on one side with a hash whose `$` signs are gone —
   `gate-slots.sh` exits **1** before and **0** after, so the writer and the
   judge are independently verified rather than agreeing by construction.
-- **Three planted defects**, because a check that cannot fail is not a check:
-  the write skipped (`if false`) takes **5** of 12 red; the script printing the
+- **Four planted defects**, because a check that cannot fail is not a check:
+  the write skipped (`if false`) takes **5** of 13 red; the script printing the
   value it set takes **1**; the hasher returning the plaintext unhashed takes
-  **2** — and that last one is the composition under test, a bad hash written
-  by the writer stopped by the gate rather than by the writer.
+  **2** — that one is the composition under test, a bad hash written by the
+  writer stopped by the gate rather than by the writer — and removing the
+  `--plaintext` fallback takes **1**.
+- **Whether `caddy hash-password` reads a pipe was an assumption, so it was
+  removed rather than trusted.** This laptop cannot pull the image to find out,
+  and being wrong would have cost the trip: stdin is tried first and
+  `--plaintext` is the fallback, which is second because it puts the password
+  in the box's process list for the life of the container. The test for "did
+  that work" is the exit status and a non-empty answer, deliberately **not** the
+  bcrypt shape — that rule has one home, and a second copy here is what item 36
+  was about. A stub that answers only to `--plaintext` exercises the fallback,
+  because an untested fallback is the rung of a ladder that is never reached.
 - One test was found too weak by the first plant and strengthened:
   `test_the_plaintext_is_never_printed` passed while step 1c did nothing at
   all, which is a fixture that disables the feature it checks. It now asserts

@@ -104,11 +104,21 @@ for key in $order; do
     *) continue ;;
   esac
   hash_key="${key/PASS/HASH}"
-  if ! hash=$(val_of "$key" | $HASHER 2>/dev/null); then
-    die "$HASHER failed -- is docker running on this box?"
+  # Two ways to reach the hasher, because which one works is a property of the
+  # caddy build on this box and not something to assume from a laptop. Stdin
+  # first: `--plaintext` puts the password in this box's process list for the
+  # life of the container, so it is the fallback and not the default.
+  #
+  # The test for "did that work" is the exit status and a non-empty answer --
+  # deliberately NOT the bcrypt shape. The shape rule has one home, in
+  # gate-slots.sh, and a second copy here is the thing item 36 was about.
+  hash=$(val_of "$key" | $HASHER 2>/dev/null) || hash=""
+  if [ -z "$hash" ]; then
+    hash=$($HASHER --plaintext "$(val_of "$key")" 2>/dev/null) || hash=""
+    [ -n "$hash" ] && say "note" "$key hashed via --plaintext (this caddy does not read stdin)"
   fi
   hash=${hash%$'\n'}
-  [ -n "$hash" ] || die "the hasher returned nothing for $key"
+  [ -n "$hash" ] || die "the hasher produced nothing for $key -- is docker running on this box?"
   printf -v "want_$hash_key" '%s' "$hash"
   order="$order $hash_key"
   unset "want_$key"
