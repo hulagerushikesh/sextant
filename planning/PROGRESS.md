@@ -5,6 +5,50 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-03 — identity, proved from outside the box (≈₹2)
+
+Milestone 21 closes — 37 items, all 37 shipped — on the trip it was
+waiting for. One
+non-interactive command, no pause, about twenty minutes of VM time, and
+the box parked itself through its own `EXIT` trap.
+
+Two steps ran against a live box for the first time since they were
+written on 2026-10-06. **Step 6, the gate:** no credentials 401, wrong
+password 401, a real user 200, a forged `X-Sextant-Proxy-Auth`
+overwritten 200 — the row that matters, because `header_up` is a *set*
+and a 403 there would mean Caddy appended and the header is worthless —
+a self-named caller 401, a second user 200. **Step 7, isolation:** two
+gated users uploaded a file of the *same name* through the public URL,
+each saw their own and not the other's, each survived the other's write,
+and the store ended with two probe documents under two distinct owners.
+The forged-name check ran between the two uploads, where it can still
+fail.
+
+That is the pre-registered rule for the milestone's one paid item, met
+in full. Everything 0.8.2 through 0.9.0 built — namespaced uploads, a
+trusted proxy-set name, scoped tool results, an allow-list on writes, a
+per-owner rate bucket and spend share — had until today been true in
+tests only.
+
+Three things made the trip possible that were not possible a week ago:
+`deploy/set-secrets.sh` (item 37) put the secrets in over **stdin** and
+hashed them **on the box**, so the hand-edit that ate slot 2's `$` signs
+on 2026-10-31 had no part in it; `deploy/gate-slots.sh` (item 36) read
+the result back as real bcrypt *before* the ten-minute build; and step
+1b pointed `agenticrag.hulage.in` at the box and released it again on
+the park, so the one check that needs the public name no longer needs a
+human editing DNS inside the window.
+
+**Milestone 19 item 4 closes with it.** The `GEMINI_API_KEY` exposed in
+a screenshot on 2026-09-23 is replaced everywhere it was. Open 41 days,
+and the reason was structural: installing a key meant a hand-edit, a
+hand-edit meant the box up, and a box up while waiting for a human is
+the ₹703 failure this project is named after in its own rules.
+
+One artifact is recorded as unexplained rather than explained away: four
+compose warnings naming fragments of generated secret strings as unset
+variables. Nothing downstream moved.
+
 ## 2026-10-24 — what the split emptied: the image and the links (₹0)
 
 Preflight for the deploy trip, before the meter started. The trip rebuilds

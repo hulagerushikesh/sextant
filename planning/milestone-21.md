@@ -343,6 +343,50 @@ name and both survive; each sees their own and not the other's; and a
 client-supplied `X-Sextant-User` is refused. Anything less and identity shipped
 as a configuration file nobody exercised.
 
+### What happened — two trips, ₹3, and the rule met on the second
+
+**Trip one, 2026-10-31, ₹1.** The tree went on the box and everything behind
+the edge came up: `status=healthy mcp=True model=True budget_usd=0.6
+durable=True`, 79 chunks / 21 documents / 21 summaries, no pre-rename names, no
+pre-0.8.2 `upload:<stem>` ids, and a forged `X-Sextant-User` refused with a 403
+by a running box for the first time — 0.8.3's middleware had never been
+exercised anywhere but a test. The gate itself did not come up: Caddy
+crash-looped on `base64-decoding password: illegal base64 data at input byte
+5`, which is slot 2's hash with its `$` signs eaten by the hand-edit that put
+it there. Steps 6 and 7 therefore could not have passed whatever was exported,
+and step 1b skipped for want of `CF_*`, so the name still pointed at nothing.
+Item 37 came out of that trip, and removed the hand-edit.
+
+**Trip two, 2026-11-03, ≈20 min, ≈₹2.** One non-interactive command, no pause,
+no `--keep-up`. Every remaining half, in the order the script does them:
+
+| Step | Result |
+| --- | --- |
+| 1b, the public name | `agenticrag.hulage.in` pointed at the box's address and read back, **by the script** rather than by a human inside the twenty minutes the box is up (the address itself is not written down: this repository is public) |
+| 1c, the box's secrets | both gate passwords and the rotated `GEMINI_API_KEY` in over stdin. That caddy does not read stdin for `hash-password`, so the script took its `--plaintext` fallback **and said so** — both hashed on the box either way, so no hash crossed a shell |
+| 2, the slot rule | `BASIC_AUTH_HASH looks like bcrypt (60 chars)`, and the same for slot 2. The exact check that stopped trip one |
+| 5, verify | both containers `Up`, store at its floor, no stale env names, an unvouched `X-Sextant-User` refused |
+| 6, the gate from outside | no credentials 401, wrong password 401, a real user 200, **a forged proof overwritten 200**, a self-named caller 401, a second user 200 — the first time this step has run against a live box since it was written on 2026-10-06 |
+| 7, isolation from outside | both users uploaded a file of the same name; each saw their own and not the other's; the forged-name check ran *between* the two uploads; two probe documents in the store under two distinct owners |
+| the trap | probes removed, corpus back to 21 documents, DNS record deleted **before** the address was released, `TERMINATED`, 0 reserved addresses |
+
+**The pre-registered rule is met.** Two different `basic_auth` users each
+uploaded a file of the same name and both survived, each saw their own and not
+the other's, and a client-supplied name was refused — proved from outside the
+box, through the gate, at the public name, by the script that deployed it.
+
+Milestone 19 item 4 closes with it: the exposed key is replaced everywhere it
+was. It had been open 41 days, and the reason was structural rather than
+neglect — installing a key meant a hand-edit, a hand-edit meant the box up, and
+a box up while waiting for a human is the 2026-09-28 ₹703 failure.
+
+**One artifact, unexplained and written down as unexplained.** Step 5 printed
+four compose warnings naming fragments of generated secret strings as unset
+variables — the `format: raw` side effect this repository already documents,
+reaching a `$`-bearing value it had not reached before. Nothing downstream was
+affected: containers healthy, gate and isolation both passed. A plausible guess
+here would become true forever, so there is none.
+
 ## Not in this milestone
 
 - **A user deleting their own upload.** `sextant-forget` is an operator
