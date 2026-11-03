@@ -121,6 +121,17 @@ DOTENV_PATH = (repo_root() or PACKAGE_ROOT) / ".env"
 # `.env` cannot unseal itself.
 SEALED = PREFIX + "ENV_SEALED"
 
+# The second name a parent sets for a child it launched, and the same shape of
+# handshake: it says *I know who is asking, and I will decide whether they may*.
+# The knowledge-base server registers `kb_forget` only when it is set, so a
+# third-party mount of `sextant-kb` -- somebody's Claude Desktop, pointed at the
+# published console script -- does not get a tool that deletes a corpus. The
+# capability and the authorisation stay in different processes: the child can
+# remove a document and has no notion of an owner, and the parent knows the
+# owner and holds no store. Read off `os.environ` like the seal, because a
+# `.env` next to a wheel must not be able to turn it on.
+REMOVAL_TOOL = PREFIX + "REMOVAL_TOOL"
+
 if not os.environ.get(SEALED):
     load_dotenv(DOTENV_PATH)
 

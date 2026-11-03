@@ -161,6 +161,31 @@ class DocumentResponse(BaseModel):
     error: str | None = None
 
 
+class DocumentSummary(BaseModel):
+    """One document as its owner sees it in the listing.
+
+    `yours` is the server's answer to "may I remove this?", not the browser's
+    guess at it: it is `identity.writable_by`, the same call the delete route
+    enforces, so the control the UI draws and the refusal it would get cannot
+    disagree.
+    """
+
+    id: str
+    title: str
+    category: str | None = None
+    chunks: int
+    overview: str | None = None
+    yours: bool
+
+
+class RemovalResponse(BaseModel):
+    success: bool
+    message: str
+    chunks_removed: int
+    collection_size: int
+    error: str | None = None
+
+
 # -- app -------------------------------------------------------------------
 
 @asynccontextmanager
@@ -544,6 +569,105 @@ async def ingest_documents(request: DocumentRequest, http_request: Request):
         success=result.get("success", False),
         message=result.get("message", ""),
         documents_added=result.get("documents_added", 0),
+        collection_size=result.get("collection_size", 0),
+        error=result.get("error"),
+    )
+
+
+@app.get("/documents")
+async def list_documents(http_request: Request):
+    """What the asker has in the corpus, and which of it is theirs to remove.
+
+    Added with the delete below, because it is what makes it usable: the UI
+    knew how many documents it could see and never which ones, so "remove the
+    file I uploaded by mistake" had nothing to point at.
+
+    `yours` is computed here rather than in the browser. The browser knows the
+    client id it generated; behind the gate the owner is the name Caddy
+    vouched for instead, so a prefix test in the UI would be wrong for exactly
+    the deployment that has more than one person in it. The server is the only
+    thing that knows, and it is the thing that will refuse -- an affordance
+    that cannot work is worse than none.
+
+    Rate limited and scoped like `/stats`, and for the same reason: this is the
+    full listing that `/stats` already walks.
+    """
+    _rate_limit(http_request)
+    owner = http_request.state.owner
+    try:
+        listing = await scoped(host, owner).call("kb_list", {})
+    except ToolUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+
+    documents = listing.get("documents")
+    if not isinstance(documents, list):
+        # Same arm as `_scoped_stats`: a store that cannot be listed is
+        # reported as empty rather than as the whole store.
+        return {"count": 0, "documents": [], "error": listing.get("error")}
+
+    def summarise(entry: dict[str, Any]) -> DocumentSummary:
+        # `document_id` is what the listing calls it and `id` is what a caller
+        # who built the entry by hand would; read both rather than trusting one
+        # shape, the way `trim` does.
+        document_id = str(entry.get("document_id") or entry.get("id") or "")
+        return DocumentSummary(
+            id=document_id,
+            title=str(entry.get("title") or ""),
+            category=entry.get("category"),
+            chunks=int(entry.get("chunks") or 0),
+            overview=entry.get("overview"),
+            yours=identity.writable_by(owner, document_id),
+        )
+
+    return {
+        "count": len(documents),
+        "documents": [summarise(e) for e in documents if isinstance(e, dict)],
+    }
+
+
+@app.delete("/documents/{document_id:path}", response_model=RemovalResponse)
+async def forget_document(document_id: str, http_request: Request):
+    """Remove one of the caller's own documents, via the MCP `kb_forget` tool.
+
+    The way back out. Until now a person could put a document in and not take
+    it back: `sextant-forget` runs on the box, and re-uploading replaces rather
+    than removes, so undoing an upload meant asking the operator to start a
+    parked VM. The authorisation is the one that already exists --
+    `identity.writable_by`, the allow-list `/ingest` uses -- because replacing
+    a document and deleting it are the same power: a write is a delete first.
+
+    So a caller may remove ids beginning `upload:<their own name>:` and nothing
+    else, an authenticated caller cannot touch the unnamespaced shared corpus,
+    and the refusal happens before the store does anything. A document that is
+    not there is a 404 rather than a cheerful 200: `/upload` answering 200 with
+    `success: false` is already written down as a shape that reads as a tick.
+
+    `{document_id:path}` because an id is a colon-joined name and a stem that
+    may itself contain a slash; FastAPI would otherwise split one into two
+    unmatched segments and answer 404 for a document that exists.
+    """
+    _rate_limit(http_request)
+
+    try:
+        result = await scoped(host, http_request.state.owner).call(
+            "kb_forget", {"document_id": document_id}
+        )
+    except ForbiddenWrite as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    except ToolUnavailable as e:
+        return RemovalResponse(
+            success=False, message="", chunks_removed=0, collection_size=0, error=str(e)
+        )
+
+    if result.get("found") is False:
+        raise HTTPException(
+            status_code=404, detail=result.get("message") or f"No document {document_id!r}"
+        )
+
+    return RemovalResponse(
+        success=result.get("success", False),
+        message=result.get("message", ""),
+        chunks_removed=result.get("chunks_removed", 0),
         collection_size=result.get("collection_size", 0),
         error=result.get("error"),
     )

@@ -103,6 +103,38 @@ export interface Stats {
   storage_path?: string
 }
 
+/**
+ * One document in the listing, as `/documents` sends it.
+ *
+ * `yours` is the server's answer to "may I remove this?" and the only thing
+ * the remove control may be drawn from. This browser knows the client id it
+ * generated; behind the gate the owner is the name the proxy vouched for
+ * instead, so testing the id's prefix here would be wrong for exactly the
+ * deployment that has more than one person in it.
+ */
+export interface DocumentSummary {
+  id: string
+  title: string
+  category?: string | null
+  chunks: number
+  overview?: string | null
+  yours: boolean
+}
+
+export interface DocumentListing {
+  count: number
+  documents: DocumentSummary[]
+  error?: string | null
+}
+
+export interface Removal {
+  success: boolean
+  message: string
+  chunks_removed: number
+  collection_size: number
+  error?: string | null
+}
+
 export interface DoneFrame {
   sources: Source[]
   usage: Usage

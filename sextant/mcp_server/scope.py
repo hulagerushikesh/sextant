@@ -69,6 +69,15 @@ A tool this module cannot classify is refused rather than guessed at, and
 `tests/test_scope.py`, so a tool added later fails a test instead of silently
 defaulting to either behaviour. That is the only honest way to keep a list.
 
+And classifying a tool as a write turned out to be only half a decision. The
+other half is which of its *arguments* name a document, which `_guard` used to
+answer for one shape -- a `documents` list -- while reading as though it
+answered for all of them. `kb_forget` states a `document_id` instead, so it
+would have walked straight past: not denied, not noticed, because the loop
+finds no `documents` key and falls off the end. `_WRITE_ARGUMENTS` declares a
+reader per write tool and a write tool without one is refused, which is the
+same fail-closed rule applied one level down.
+
 ## What is deliberately not scoped
 
 `collection_size` riding along on a search result. It is a count of the whole
@@ -95,6 +104,7 @@ read every other tenant's uploads by deleting one header.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from sextant.mcp_server.identity import DEFAULT_OWNER, visible_to, writable_by
@@ -109,7 +119,46 @@ COUNT_FIELDS = frozenset({"count", "total", "total_found", "documents", "matches
 # server in tests, because an unclassified tool is refused and a test failure is
 # a better way to find that out than a 500 in production.
 READ_TOOLS = frozenset({"kb_search", "kb_list", "kb_stats", "kb_ann_benchmark", "kb_ann_compare"})
-WRITE_TOOLS = frozenset({"kb_ingest"})
+WRITE_TOOLS = frozenset({"kb_ingest", "kb_forget"})
+
+
+def _ingest_ids(arguments: dict[str, Any]) -> list[str]:
+    """The ids `kb_ingest` would write, stated or defaulted.
+
+    The same default `_add_documents_sync` applies, so an id left off is judged
+    as the shared id it would actually be stored under rather than waved through
+    for being absent.
+    """
+    ids = []
+    for i, document in enumerate(arguments.get("documents") or []):
+        stated = document.get("id") if isinstance(document, dict) else None
+        ids.append(str(stated or f"doc_{i}"))
+    return ids
+
+
+def _forget_ids(arguments: dict[str, Any]) -> list[str]:
+    """The one id `kb_forget` would remove.
+
+    An absent id is returned as the empty string rather than as nothing: a
+    removal that names no document is not a removal this module may wave
+    through, and `writable_by` refuses it.
+    """
+    return [str(arguments.get("document_id") or "")]
+
+
+# What each write tool's arguments say it will touch. A table and not a chain of
+# `if`s, because the hole this closes is a *missing* arm: `_guard` used to read
+# `arguments["documents"]` and nothing else, so the second write tool -- whose
+# id arrives as `document_id` -- would have walked straight past it. Not denied,
+# not noticed, because the loop finds no `documents` key and falls off the end.
+# That is `trim()`'s 0.8.5 lesson one module over: deny by default only denies
+# the shapes it recognises, and a guard that reads as general while being
+# specific is worse than an enumerated list, because nobody re-checks it. A
+# write tool absent from this table is refused the way an unclassified tool is.
+_WRITE_ARGUMENTS: dict[str, Callable[[dict[str, Any]], list[str]]] = {
+    "kb_ingest": _ingest_ids,
+    "kb_forget": _forget_ids,
+}
 
 
 class ForbiddenWrite(Exception):
@@ -226,12 +275,14 @@ class ScopedHost:
                 f"{name} is neither a read nor a write as far as scope.py knows, so it "
                 "is refused. Classify it in READ_TOOLS or WRITE_TOOLS."
             )
-        for i, document in enumerate(arguments.get("documents") or []):
-            stated = document.get("id") if isinstance(document, dict) else None
-            # The same default `_add_documents_sync` applies, so an id left off
-            # is judged as the shared id it would actually be stored under
-            # rather than waved through for being absent.
-            document_id = str(stated or f"doc_{i}")
+        reader = _WRITE_ARGUMENTS.get(name)
+        if reader is None:
+            raise ForbiddenWrite(
+                f"{name} is a write whose arguments scope.py cannot read, so it is "
+                "refused rather than guessed at. Give it an entry in _WRITE_ARGUMENTS "
+                "that returns every document id the call would touch."
+            )
+        for document_id in reader(arguments):
             if not writable_by(self._owner, document_id):
                 raise ForbiddenWrite(
                     f"'{document_id}' is not {self._owner}'s to write: re-using an id "

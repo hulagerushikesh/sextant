@@ -159,7 +159,13 @@ def kb_server() -> StdioServerParameters:
         command=sys.executable,
         args=["-m", "sextant.vector_db.server"],
         cwd=str(REPO_ROOT) if REPO_ROOT else None,
-        env={settings.SEALED: "1", **forwarded},
+        # Two names this process decides for its child rather than passes on.
+        # The seal stops it reading a `.env` behind the allowlist; the removal
+        # flag turns on `kb_forget`, which a published mount of `sextant-kb`
+        # must not have -- see `settings.REMOVAL_TOOL`. Both are set here, after
+        # `forwarded`, so a variable of the same name in the parent's
+        # environment cannot overwrite either one.
+        env={**forwarded, settings.SEALED: "1", settings.REMOVAL_TOOL: "1"},
     )
 
 

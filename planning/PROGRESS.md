@@ -5,6 +5,77 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-03 — the way back out (milestone 22 item 1, ₹0)
+
+A person can take their own document out of the corpus. Until today they
+could put one in and not remove it: `sextant-forget` runs on the box and
+re-uploading replaces rather than removes, so undoing an upload meant
+asking the operator to start a parked VM.
+
+The authorisation is the one that already existed. `identity.writable_by`
+answers "may this caller replace this id?", and replacing a document is
+deleting it first — so a delete needed no new rule, only an honest name
+for the power `/ingest` has had since 0.8.5. A caller may remove ids
+beginning `upload:<their own name>:`, an authenticated caller cannot
+touch the unnamespaced shared corpus, and the refusal happens before the
+store is asked to do anything.
+
+Two decisions behind it are worth more than the feature.
+
+**The delete had to reach the process that owns the store, and that
+process is published.** Chroma is single-writer and the API holds no
+`KnowledgeBase`, so the removal happens in the MCP subprocess — which
+means `kb_forget` is an MCP tool, and `sextant-kb` is on PyPI. An
+unconditional tool there hands every client that mounts this server the
+ability to delete a corpus: somebody's Claude Desktop, deleting their own
+notes because they asked a question about them. `remove_document`'s own
+docstring is the rule — *"search my notes" must not carry "delete my
+notes" with it* — and `READABLE_TOOLS` only protects this project's
+model. So the tool is registered only when the launcher sets
+`SEXTANT_REMOVAL_TOOL`, the same handshake the environment seal already
+uses. The capability and the authorisation now sit in different
+processes: the child deletes and has no notion of an owner, the parent
+knows the owner and holds no store. Pinned by launching an interpreter
+and reading the registered tool list both ways, because a conditional is
+wrong at exactly the moment nobody is reading the file.
+
+**Classifying a tool as a write was only half a decision.**
+`ScopedHost._guard` is the single place that refuses a write it should
+not perform, and it read `arguments["documents"]` — so `kb_forget`, whose
+id arrives as `document_id`, would have walked straight past it. Not
+denied, not noticed: the loop finds no `documents` key and falls off the
+end. That is `trim()`'s 0.8.5 lesson one module over — **deny by default
+only denies the shapes it recognises** — and the fix is a declared reader
+per write tool, with a write tool that has none refused the way an
+unclassified tool is. Planted and watched fail.
+
+One thing the plan did not have, found by building it: **there was no way
+to list the documents you have.** `/stats` reports counts and nothing
+reported which documents, because nothing had needed to. A delete route
+alone would have been an endpoint only curl could use. `GET /documents`
+is the same scoped walk `/stats` already does, and each entry carries
+`yours` — `writable_by`, answered on the server. The browser knows the
+client id it generated; behind the gate the owner is the name Caddy
+vouched for, so a UI testing the id's prefix would be right on this
+laptop and wrong on the only deployment with more than one person in it.
+The thing that will refuse the delete is the thing that says whether to
+offer it.
+
+A missing document is a 404, not a 200 with `success: false` — the shape
+`/upload` is already written down for. `remove_document` reports `found`
+so that decision is read off a field rather than matched out of a
+sentence the file is free to reword.
+
+Found while bumping to 0.9.1: **a stale `sextant_kb.egg-info` in the
+checkout shadows the installed distribution's metadata**, so
+`sextant.__version__` — which is what an MCP client displays for this
+server and what `/docs` prints — answered 0.9.0 from build residue after
+the version had changed. The third instance of a number with two homes,
+and the first where the second home is a directory nobody edits. Deleted;
+it regenerates from a build and is gitignored.
+
+Not deployed: this rides the next trip. 58 frontend tests, up from 52.
+
 ## 2026-11-03 — identity, proved from outside the box (≈₹2)
 
 Milestone 21 closes — 37 items, all 37 shipped — on the trip it was

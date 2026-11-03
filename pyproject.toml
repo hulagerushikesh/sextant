@@ -1,6 +1,6 @@
 [project]
 name = "sextant-kb"
-version = "0.9.0"
+version = "0.9.1"
 description = "A knowledge base that is a real MCP server: measured retrieval over your own documents, in any MCP client"
 requires-python = ">=3.11"
 license = "MIT"

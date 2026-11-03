@@ -224,6 +224,126 @@ class TestIngest:
         ).status_code == 200
 
 
+class TestForget:
+    """The way back out, milestone 22 item 1.
+
+    A person could put a document in and not take it back: `sextant-forget`
+    runs on the box and re-uploading replaces rather than removes, so undoing
+    an upload meant asking the operator to start a parked VM. The authorisation
+    is the one that already existed -- replacing a document and deleting it are
+    the same power, because a write is a delete first.
+    """
+
+    REMOVED = {
+        "success": True,
+        "found": True,
+        "message": "Removed upload:ada:notes and its 3 chunk(s)",
+        "chunks_removed": 3,
+        "collection_size": 40,
+    }
+
+    def test_an_owner_removes_their_own_upload(self, client, host):
+        host.results["kb_forget"] = self.REMOVED
+        response = client.delete(
+            "/documents/upload:ada:notes", headers={CLIENT_HEADER: "ada"}
+        )
+        assert response.status_code == 200
+        assert response.json()["chunks_removed"] == 3
+        assert host.calls[0] == ("kb_forget", {"document_id": "upload:ada:notes"})
+
+    def test_a_caller_cannot_remove_another_owners_upload(self, client, host):
+        host.results["kb_forget"] = self.REMOVED
+        before = len(host.calls)
+        response = client.delete(
+            "/documents/upload:ada:notes", headers={CLIENT_HEADER: "grace"}
+        )
+        assert response.status_code == 403
+        assert len(host.calls) == before, "refused after the store was touched"
+
+    def test_an_authenticated_caller_cannot_remove_the_shared_corpus(self, client, host):
+        host.results["kb_forget"] = self.REMOVED
+        response = client.delete("/documents/handbook", headers={CLIENT_HEADER: "grace"})
+        assert response.status_code == 403
+        assert "upload:grace:" in response.json()["detail"]
+
+    def test_a_document_that_is_not_there_is_a_404_not_a_cheerful_200(self, client, host):
+        # `/upload` answering 200 with `success: false` is already written down
+        # as a shape that reads as a tick. A delete that deleted nothing is the
+        # same lie with less to show for it.
+        host.results["kb_forget"] = {
+            "success": False,
+            "found": False,
+            "message": "No document 'upload:ada:gone' in the collection",
+            "chunks_removed": 0,
+            "collection_size": 40,
+        }
+        response = client.delete(
+            "/documents/upload:ada:gone", headers={CLIENT_HEADER: "ada"}
+        )
+        assert response.status_code == 404
+        assert "upload:ada:gone" in response.json()["detail"]
+
+    def test_an_id_with_a_slash_in_its_stem_still_resolves(self, client, host):
+        # `{document_id:path}`: an id is colon-joined and its stem can carry a
+        # slash, which a plain path parameter would split into two segments and
+        # answer 404 for a document that exists.
+        host.results["kb_forget"] = {**self.REMOVED, "message": "Removed"}
+        response = client.delete(
+            "/documents/upload:ada:notes/2024", headers={CLIENT_HEADER: "ada"}
+        )
+        assert response.status_code == 200
+        assert host.calls[0][1] == {"document_id": "upload:ada:notes/2024"}
+
+    def test_a_tool_failure_becomes_a_body_error_not_a_500(self, client, host):
+        response = client.delete(
+            "/documents/upload:ada:notes", headers={CLIENT_HEADER: "ada"}
+        )
+        body = response.json()
+        assert body["success"] is False and body["error"]
+
+
+class TestTheListingSaysWhatIsYours:
+    """`/documents`, added with the delete because it is what makes it usable.
+
+    The UI knew how many documents it could see and never which ones, so
+    "remove the file I uploaded by mistake" had nothing to point at.
+    """
+
+    LISTING = {
+        "count": 2,
+        "documents": [
+            {"document_id": "upload:ada:notes", "title": "Notes", "chunks": 3},
+            {"document_id": "handbook", "title": "Handbook", "chunks": 9},
+        ],
+    }
+
+    def test_the_server_decides_which_entries_are_removable(self, client, host):
+        # Not the browser. It knows the client id it generated; behind the gate
+        # the owner is the name Caddy vouched for, so a prefix test in the UI
+        # would be wrong for exactly the deployment with more than one person
+        # in it.
+        host.results["kb_list"] = self.LISTING
+        body = client.get("/documents", headers={CLIENT_HEADER: "ada"}).json()
+        assert {d["id"]: d["yours"] for d in body["documents"]} == {
+            "upload:ada:notes": True,
+            "handbook": False,
+        }
+
+    def test_an_unidentified_caller_owns_the_shared_corpus(self, client, host):
+        # `shared` is curl, the CLI and a browser with no storage, and it owns
+        # the unnamespaced documents -- the same asymmetry `/ingest` has.
+        host.results["kb_list"] = self.LISTING
+        body = client.get("/documents").json()
+        assert {d["id"]: d["yours"] for d in body["documents"]}["handbook"] is True
+
+    def test_a_store_that_cannot_be_listed_reads_as_empty(self, client, host):
+        # Same arm as the scoped stats: reporting the whole store instead would
+        # be the leak the scope exists to close.
+        host.results["kb_list"] = {"status": "unavailable", "error": "no store"}
+        body = client.get("/documents", headers={CLIENT_HEADER: "ada"}).json()
+        assert body["count"] == 0 and body["documents"] == [] and body["error"]
+
+
 class TestIndexLab:
     """`/ann/*` answers with the asker's own neighbours.
 

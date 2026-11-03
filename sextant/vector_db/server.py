@@ -7,6 +7,11 @@ Exposes the ChromaDB store in `vector_search.py` as six MCP tools over stdio:
 FastAPI app, and it is meant to be mounted by any MCP client -- Claude Desktop,
 MCP Inspector, or the agent in `sextant/mcp_server/main.py`.
 
+A seventh, `kb_forget`, is registered only when the launcher sets
+`SEXTANT_REMOVAL_TOOL` -- see `_register_removal`. A mount that did not ask for
+it cannot delete anything, which is the point: this server is published, and
+deleting is the one tool whose availability has to be somebody's decision.
+
 Its environment is whatever the client gave it and nothing else. Mounted by the
 agent it arrives sealed (`mcp_host.kb_server`), so `sextant.settings` does not
 read the repository's `.env` here: the host's allowlist is the whole of what
@@ -28,13 +33,14 @@ graph will corrupt the protocol stream.
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from typing import Annotated, Any, Literal
 
 from mcp.server import MCPServer
 from pydantic import Field
 
-from sextant import __version__
+from sextant import __version__, settings
 
 # Preload FAISS before the embedder import below pulls in PyTorch. faiss-cpu and
 # torch each bundle an OpenMP runtime, and on macOS whichever initialises *second*
@@ -257,6 +263,62 @@ async def kb_ann_compare(
         return await _store().ann_compare(query, k=k, hnsw=hnsw, ivfpq=ivfpq)
     except KnowledgeBaseUnavailable as e:
         return {"error": str(e)}
+
+
+async def kb_forget(
+    document_id: Annotated[
+        str, Field(description="Id of the document to remove, as kb_list reports it.")
+    ],
+) -> dict[str, Any]:
+    """Remove a document from the collection.
+
+    Defined unconditionally and *registered* conditionally -- see
+    `_register_removal` for why, and `scope.WRITE_TOOLS` for what refuses a
+    document that is not the caller's. Declaring it here rather than inside
+    that function keeps it visible to
+    `test_every_tool_the_server_exposes_is_classified`, which reads this
+    module's names: a tool that only exists in one environment would otherwise
+    be a tool the classification pin cannot see.
+    """
+    try:
+        return await _store().remove_document(document_id)
+    except KnowledgeBaseUnavailable as e:
+        return {"success": False, "error": str(e), "chunks_removed": 0}
+
+
+def _register_removal() -> None:
+    """Offer `kb_forget` only when the launcher asked for it.
+
+    `remove_document`'s docstring is the reason this is a branch and not a
+    decorator: *"search my notes" must not carry "delete my notes" with it.*
+    `sextant-kb` is published, so an unconditional tool here hands every client
+    that mounts this server -- and the model behind it -- the ability to delete
+    somebody's corpus. `READABLE_TOOLS` in `agent.py` withholds writes from
+    *this* project's model and says nothing about anyone else's client.
+
+    So the tool exists when `SEXTANT_REMOVAL_TOOL` is set, which
+    `mcp_host.kb_server` sets for the child it launches and a Claude Desktop
+    config does not. The parent knows who is asking and refuses a document that
+    is not theirs (`ScopedHost._guard`); this process does the deleting and has
+    no notion of an owner at all. Registration is at import, because a tool list
+    that changes while a client is connected is a tool list nobody can trust.
+    """
+    if not os.environ.get(settings.REMOVAL_TOOL):
+        return
+
+    mcp.tool(
+        description=(
+            "Delete one document and every chunk of it, overview included. The "
+            "caller states the document id; re-ingesting the same id replaces "
+            "rather than appends, so this is for taking a document out, not for "
+            "updating one. Reports how many chunks went and the collection size "
+            "afterwards, and found=false when there is no such document rather "
+            "than treating a no-op as a removal."
+        )
+    )(kb_forget)
+
+
+_register_removal()
 
 
 def main() -> None:

@@ -11,12 +11,21 @@ from typing import Any, cast
 
 import pytest
 
+from sextant import settings
 from sextant.vector_db.vector_search import (
     DISTANCE_SPACE,
     PERSIST_DIR_ENV,
     KnowledgeBase,
     KnowledgeBaseUnavailable,
 )
+
+# What the parent decides for the child rather than passes on: the seal, so the
+# child cannot read a `.env` behind the forwarding allowlist, and the removal
+# flag, so `kb_forget` exists for this project's own subprocess and not for a
+# published mount of `sextant-kb`. Named once because three tests below assert
+# on the whole dictionary and a name added to the launcher should change one
+# line, not three.
+LAUNCHER_SET = {settings.SEALED: "1", settings.REMOVAL_TOOL: "1"}
 
 
 class TestScoresMeanWhatTheySay:
@@ -130,14 +139,13 @@ class TestTheStoreOverrideReachesTheServer:
             monkeypatch.delenv(name, raising=False)
 
     def test_the_launch_parameters_carry_the_override(self, monkeypatch):
-        from sextant import settings
         from sextant.mcp_server.mcp_host import kb_server
 
         self._quiet(monkeypatch)
         monkeypatch.setenv(PERSIST_DIR_ENV, "/tmp/somewhere")
         assert kb_server().env == {
-            settings.SEALED: "1",
             PERSIST_DIR_ENV: "/tmp/somewhere",
+            **LAUNCHER_SET,
         }
 
     def test_no_override_still_forces_the_seal(self, monkeypatch):
@@ -153,11 +161,10 @@ class TestTheStoreOverrideReachesTheServer:
         See `TestTheChildCannotGoBehindTheAllowlist`, which launches the
         child rather than reading this dictionary.
         """
-        from sextant import settings
         from sextant.mcp_server.mcp_host import kb_server
 
         self._quiet(monkeypatch)
-        assert kb_server().env == {settings.SEALED: "1"}
+        assert kb_server().env == LAUNCHER_SET
 
     def test_every_retrieval_knob_crosses_the_process_boundary(self, monkeypatch):
         """A knob the KB reads but the host does not forward is a silent no-op
@@ -180,9 +187,12 @@ class TestTheStoreOverrideReachesTheServer:
             expected[name] = value
 
         assert len(expected) == 7, "seven knobs; update this count deliberately"
-        # The seal is not a knob: it is how the child is told that this
-        # dictionary is the whole of its environment.
-        assert kb_server().env == {settings.SEALED: "1", **expected}
+        # Neither name the launcher sets is a knob. The seal is how the child is
+        # told that this dictionary is the whole of its environment, and the
+        # removal flag is how it is told that the thing launching it knows who
+        # is asking. Both are decisions of this process about that one, which is
+        # why they are asserted apart from the forwarded set.
+        assert kb_server().env == {**expected, **LAUNCHER_SET}
 
 
 class TestLongDocumentsAreReachable:
