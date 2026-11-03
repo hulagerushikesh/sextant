@@ -6,9 +6,17 @@
  * That file is gone, and so is the repo split the old header named, so there
  * is nothing left to be a port *of*. `mcp_server/main.py` is the contract.
  */
-import { mockCompare, mockHealth, mockStats, mockStream, mockSweep } from './mock'
+import { mockCompare, mockDocuments, mockHealth, mockStats, mockStream, mockSweep } from './mock'
 import { clientId } from './storage'
-import type { CompareResult, Health, Stats, StreamHandlers, SweepResult } from './types'
+import type {
+  CompareResult,
+  DocumentListing,
+  Health,
+  Removal,
+  Stats,
+  StreamHandlers,
+  SweepResult,
+} from './types'
 
 export const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:8000'
 export const MOCK = import.meta.env.VITE_MOCK === '1'
@@ -121,6 +129,50 @@ export async function uploadFiles(files: File[]): Promise<{ success: boolean; me
   const response = await fetch(`${SERVER_URL}/upload`, {
     method: 'POST',
     body: form,
+    headers: sent(),
+  })
+  if (!response.ok) throw new Error(await describeFailure(response))
+  return response.json()
+}
+
+/**
+ * What this caller has in the corpus, and which of it is theirs to remove.
+ *
+ * Returns the listing or null, the same shape `fetchStats` uses: the card
+ * beside it already distinguishes "loading" from "unreachable", and a thrown
+ * error here would take the upload box down with the list.
+ */
+export async function fetchDocuments(): Promise<DocumentListing | null> {
+  if (MOCK) return new Promise((r) => setTimeout(() => r(mockDocuments), 400))
+  try {
+    const response = await fetch(`${SERVER_URL}/documents`, { headers: sent() })
+    return response.ok ? response.json() : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Remove one of this caller's own documents.
+ *
+ * Throws rather than returning a flag, because the caller asked for something
+ * destructive and a silent no-op is the worst of the three outcomes: a 403
+ * means the server disagrees about whose document this is, and a 404 means it
+ * was already gone. Both are sentences worth showing.
+ */
+export async function forgetDocument(id: string): Promise<Removal> {
+  if (MOCK) {
+    await new Promise((r) => setTimeout(r, 400))
+    return {
+      success: true,
+      // Not "Removed". Nothing was, and a person acts on this one.
+      message: `Mock: pretended to remove ${id}. Nothing was deleted.`,
+      chunks_removed: 0,
+      collection_size: mockStats.collection_size,
+    }
+  }
+  const response = await fetch(`${SERVER_URL}/documents/${encodeURI(id)}`, {
+    method: 'DELETE',
     headers: sent(),
   })
   if (!response.ok) throw new Error(await describeFailure(response))

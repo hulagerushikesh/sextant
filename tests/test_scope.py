@@ -272,6 +272,56 @@ class TestWrites:
         exposed = {name for name in dir(server) if name.startswith("kb_")}
         assert exposed == READ_TOOLS | WRITE_TOOLS
 
+    async def test_a_write_whose_arguments_cannot_be_read_is_refused(self):
+        """The hole opening `kb_forget` made, pinned.
+
+        `_guard` read `arguments["documents"]` and nothing else, so a second
+        write tool -- whose id arrives as `document_id` -- walked past it: not
+        denied, not noticed, because the loop finds no `documents` key and
+        falls off the end. Classifying a tool as a write is therefore only half
+        a decision; the other half is saying which of its arguments name a
+        document. Planted here as a write with no reader.
+        """
+        from sextant.mcp_server import scope
+
+        host = ScopedHost(FakeInner({"kb_overwrite": {"ok": True}}), "ada")
+        with pytest.raises(ForbiddenWrite) as refused:
+            with pytest.MonkeyPatch.context() as patch:
+                patch.setattr(scope, "WRITE_TOOLS", scope.WRITE_TOOLS | {"kb_overwrite"})
+                await host.call("kb_overwrite", {"document_id": "upload:grace:notes"})
+        assert "_WRITE_ARGUMENTS" in str(refused.value)
+
+    async def test_a_removal_of_another_owners_document_is_refused(self):
+        host = ScopedHost(FakeInner({"kb_forget": {"success": True}}), "ada")
+        with pytest.raises(ForbiddenWrite):
+            await host.call("kb_forget", {"document_id": "upload:grace:notes"})
+
+    async def test_a_removal_reaches_the_store_only_for_your_own(self):
+        inner = FakeInner({"kb_forget": {"success": True, "found": True, "chunks_removed": 3}})
+        host = ScopedHost(inner, "ada")
+        assert (await host.call("kb_forget", {"document_id": "upload:ada:notes"}))["found"]
+        assert inner.calls == ["kb_forget"]
+
+    async def test_an_authenticated_caller_cannot_remove_the_shared_corpus(self):
+        """The CLI-ingested corpus has no namespace and is not theirs.
+
+        `writable_by`'s existing asymmetry, not a rule invented for deletes:
+        `shared` owns the unnamespaced documents and an authenticated name does
+        not inherit them. Which matters more for removal than for ingest --
+        overwriting `handbook` is recoverable by re-ingesting it, and deleting
+        it on a parked box is not.
+        """
+        inner = FakeInner({"kb_forget": {"success": True}})
+        with pytest.raises(ForbiddenWrite):
+            await ScopedHost(inner, "ada").call("kb_forget", {"document_id": "handbook"})
+        assert inner.calls == [], "refused after the store was touched"
+
+    async def test_a_removal_naming_no_document_is_refused(self):
+        # `_forget_ids` returns the empty string rather than nothing, so an
+        # absent id is judged rather than skipped past.
+        with pytest.raises(ForbiddenWrite):
+            await ScopedHost(FakeInner({"kb_forget": {}}), "ada").call("kb_forget", {})
+
 
 class FakeInner:
     """The process-global host, with canned results."""
@@ -405,6 +455,85 @@ class TestAgainstARealStore:
         assert "upload:ada" in json.dumps(trim(whole, "ada"))
 
 
+class TestAPublishedMountCannotDelete:
+    """`kb_forget` exists for this project's own subprocess and nobody else's.
+
+    `sextant-kb` is on PyPI, so a tool declared here unconditionally is a tool
+    every client that mounts this server hands to its model -- somebody's
+    Claude Desktop, pointed at the console script, able to delete their corpus
+    because they asked a question about it. `remove_document`'s own docstring
+    is the rule: *"search my notes" must not carry "delete my notes" with it.*
+    `agent.READABLE_TOOLS` withholds writes from **this** project's model and
+    says nothing about anyone else's client.
+
+    So the capability and the authorisation live in different processes. The
+    child can remove a document and has no notion of an owner; the parent knows
+    the owner, refuses a document that is not theirs, and sets
+    `SEXTANT_REMOVAL_TOOL` for the child it launched.
+
+    Pinned by launching a real interpreter and reading the registered tool
+    list, not by reading the source: registration happens at import, and a
+    conditional that is wrong is wrong at exactly the moment nobody is looking
+    at the file. `TestTheChildCannotGoBehindTheAllowlist` is the precedent --
+    nine tests comparing names in files all passed while the thing they
+    describe was not happening.
+    """
+
+    PROBE = (
+        "import asyncio, os;"
+        "from sextant import settings;"
+        "from sextant.vector_db import server;"
+        "names = lambda: ' '.join(sorted(t.name for t in asyncio.run(server.mcp.list_tools())));"
+        "print('bare:', names());"
+        "os.environ[settings.REMOVAL_TOOL] = '1';"
+        "server._register_removal();"
+        "print('asked:', names())"
+    )
+
+    @staticmethod
+    def _lines() -> dict[str, set[str]]:
+        import os
+        import subprocess
+        import sys
+
+        env = {k: v for k, v in os.environ.items() if k != "SEXTANT_REMOVAL_TOOL"}
+        result = subprocess.run(
+            [sys.executable, "-c", TestAPublishedMountCannotDelete.PROBE],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        assert result.returncode == 0, result.stderr
+        out = {}
+        for line in result.stdout.splitlines():
+            if ":" in line:
+                label, _, names = line.partition(":")
+                out[label.strip()] = set(names.split())
+        assert {"bare", "asked"} <= set(out), result.stdout
+        return out
+
+    def test_a_mount_that_did_not_ask_gets_no_removal_tool(self):
+        listed = self._lines()
+        assert "kb_forget" not in listed["bare"]
+        # And the rest of the server is unchanged by the condition: a mount
+        # that cannot delete must still be able to search.
+        assert listed["bare"] == set(READ_TOOLS) | {"kb_ingest"}
+
+    def test_the_launcher_turning_it_on_is_what_adds_it(self):
+        listed = self._lines()
+        assert listed["asked"] - listed["bare"] == {"kb_forget"}
+        assert listed["asked"] == set(READ_TOOLS | WRITE_TOOLS)
+
+    def test_the_launcher_sets_it(self):
+        # The other half of the handshake, read off the parameters the host
+        # builds. Without this the two tests above would pass while nothing
+        # ever turned the tool on.
+        from sextant import settings
+        from sextant.mcp_server.mcp_host import kb_server
+
+        assert (kb_server().env or {}).get(settings.REMOVAL_TOOL) == "1"
+
+
 class TestEveryRouteIsOnOneSideOfTheBoundary:
     """The tool list is pinned; the route list was not, and that is where both
     defects actually were.
@@ -435,6 +564,12 @@ class TestEveryRouteIsOnOneSideOfTheBoundary:
         "/upload",
         "/query",
         "/query/stream",
+        # A delete is a write, and `writable_by` is the same allow-list
+        # `/ingest` crosses: re-using an id already replaced a document, so
+        # removing one is not a new power, only an honest name for it. The
+        # listing beside it is the full scoped walk `/stats` already does.
+        "/documents",
+        "/documents/{document_id:path}",
     }
     # Routes that cannot: liveness, the box's own numbers, and the tool
     # schemas. None of these reads a document.

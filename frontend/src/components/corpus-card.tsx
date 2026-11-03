@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { FileUp, RefreshCw } from 'lucide-react'
+import { FileUp, RefreshCw, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { uploadFiles } from '@/lib/api'
-import type { Stats } from '@/lib/types'
+import { fetchDocuments, forgetDocument, uploadFiles } from '@/lib/api'
+import type { DocumentSummary, Stats } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -14,9 +14,21 @@ export function CorpusCard({ corpus, supported, onRefresh, pickRef }: { corpus: 
   const { status, stats } = corpus
   const [dragging, setDragging] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [documents, setDocuments] = useState<DocumentSummary[] | null>(null)
+  // The id waiting on a second click. A destructive control in a list of
+  // similar rows gets one, and asking in the row rather than in a modal keeps
+  // what is about to go next to the question about it.
+  const [confirming, setConfirming] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { pickRef.current = () => inputRef.current?.click() }, [pickRef])
+
+  const reload = useCallback(async () => {
+    const listing = await fetchDocuments()
+    setDocuments(listing?.documents ?? null)
+  }, [])
+
+  useEffect(() => { void reload() }, [reload])
 
   const accept = useCallback(async (list: FileList | null) => {
     const files = Array.from(list || [])
@@ -27,12 +39,29 @@ export function CorpusCard({ corpus, supported, onRefresh, pickRef }: { corpus: 
       if (r.success) toast.success(r.message || 'Indexed')
       else toast.error(r.error || 'Upload failed')
       await onRefresh()
+      await reload()
     } catch (e) {
       toast.error((e as Error).message)
     } finally {
       setBusy(false)
     }
-  }, [onRefresh])
+  }, [onRefresh, reload])
+
+  const forget = useCallback(async (doc: DocumentSummary) => {
+    setConfirming(null)
+    try {
+      const r = await forgetDocument(doc.id)
+      // The server's own sentence, which carries the chunk count. A cheerful
+      // "Removed" of our own would survive a reply that said otherwise.
+      toast.success(r.message || `Removed ${doc.title}`)
+    } catch (e) {
+      // A 403 means the server disagrees about whose document this is and a
+      // 404 that it was already gone -- both worth reading, neither a crash.
+      toast.error((e as Error).message)
+    }
+    await onRefresh()
+    await reload()
+  }, [onRefresh, reload])
 
   return (
     <div className="flex flex-col gap-3">
@@ -44,8 +73,42 @@ export function CorpusCard({ corpus, supported, onRefresh, pickRef }: { corpus: 
             <span className="text-foreground font-medium">{stats?.documents ?? 0}</span> documents · <span className="text-foreground font-medium">{(stats?.collection_size ?? 0).toLocaleString()}</span> chunks
           </p>
         )}
-        <Button variant="ghost" size="icon-xs" onClick={() => onRefresh()} aria-label="Refresh corpus figures"><RefreshCw /></Button>
+        <Button variant="ghost" size="icon-xs" onClick={() => { void onRefresh(); void reload() }} aria-label="Refresh corpus figures"><RefreshCw /></Button>
       </div>
+
+      {!!documents?.length && (
+        <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
+          {documents.map((doc) => (
+            <li key={doc.id} className="flex items-center gap-2 px-2.5 py-1.5">
+              <span className="min-w-0 flex-1 truncate text-[12.5px] text-foreground" title={doc.title || doc.id}>
+                {doc.title || doc.id}
+              </span>
+              <span className="font-mono text-[10.5px] text-muted-foreground tabular">{doc.chunks}</span>
+              {/* Drawn from `yours`, which is the server's own answer to "may I
+                  remove this?" -- never from the id's prefix, which is wrong
+                  behind the gate, where the owner is the name the proxy
+                  vouched for rather than this browser's client id. */}
+              {doc.yours && (
+                confirming === doc.id ? (
+                  <span className="flex items-center gap-1">
+                    <Button variant="destructive" size="xs" onClick={() => void forget(doc)}>Remove</Button>
+                    <Button variant="ghost" size="xs" onClick={() => setConfirming(null)}>Cancel</Button>
+                  </span>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => setConfirming(doc.id)}
+                    aria-label={`Remove ${doc.title || doc.id}`}
+                  >
+                    <X />
+                  </Button>
+                )
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
 
       <div
         onDragOver={(e) => { e.preventDefault(); setDragging(true) }}

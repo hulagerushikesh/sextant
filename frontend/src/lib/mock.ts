@@ -3,7 +3,15 @@
  * agent server running. Enabled by `VITE_MOCK=1` (default in `npm run dev`
  * until the real backend is pointed at via VITE_SERVER_URL).
  */
-import type { CompareResult, Health, Source, Stats, StreamHandlers, SweepResult } from './types'
+import type {
+  CompareResult,
+  DocumentListing,
+  Health,
+  Source,
+  Stats,
+  StreamHandlers,
+  SweepResult,
+} from './types'
 
 const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
@@ -38,6 +46,21 @@ export const mockStats: Stats = {
   embedding_model: 'all-MiniLM-L6-v2',
   reranker: 'cross-encoder/ms-marco-MiniLM-L-6-v2',
   chunking: { target_tokens: 200, overlap_tokens: 40 },
+}
+
+/**
+ * A listing with both kinds of row in it, on purpose: one this caller owns and
+ * one shared, so design work on the remove control sees the case where the
+ * control must not be drawn. A construct exercised only by the real server is
+ * a construct shipped unseen.
+ */
+export const mockDocuments: DocumentListing = {
+  count: 3,
+  documents: [
+    { id: 'upload:b9xk2:quarterly-notes', title: 'Quarterly notes', chunks: 12, yours: true },
+    { id: 'upload:b9xk2:kalman-primer', title: 'A Kalman filter primer', chunks: 31, yours: true },
+    { id: 'instructgpt', title: 'Training language models to follow instructions', chunks: 86, yours: false },
+  ],
 }
 
 const SOURCES: Source[] = [

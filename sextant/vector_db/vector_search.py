@@ -698,8 +698,14 @@ class KnowledgeBase:
         stored = self.collection.get(where={"document_id": document_id})
         ids = stored.get("ids") or []
         if not ids:
+            # `found` so a caller can tell "there was no such document" from
+            # "the removal failed" without matching this sentence, which is
+            # free to be reworded. The HTTP route turns it into a 404, and a
+            # decision recovered by string-matching prose would be a second
+            # decision made somewhere the first one cannot see.
             return {
                 "success": False,
+                "found": False,
                 "message": f"No document {document_id!r} in the collection",
                 "chunks_removed": 0,
                 "collection_size": self.collection.count(),
@@ -708,6 +714,7 @@ class KnowledgeBase:
         self._invalidate_index()
         return {
             "success": True,
+            "found": True,
             "message": f"Removed {document_id} and its {len(ids)} chunk(s)",
             "chunks_removed": len(ids),
             "collection_size": self.collection.count(),

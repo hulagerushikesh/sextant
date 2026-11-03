@@ -675,7 +675,28 @@ lifetime rather than per day.
   chunks first. Without that an upsert replaces `<doc>#<n>` one for one and a
   document that now makes fewer chunks leaves the surplus embedded and
   searchable (measured: 11 → 1 left ten stale chunks holding the top hits).
-  Removal is a command, never an MCP tool — the model gets read tools only.
+- **Removal is a tool the launcher turns on, not one the server always has.**
+  Since 0.9.1 a person can delete their own upload, so the delete had to reach
+  the process that owns the store — Chroma is single-writer and the API process
+  holds no `KnowledgeBase`. `kb_forget` is therefore an MCP tool, registered
+  **only** when `SEXTANT_REMOVAL_TOOL` is set, which `mcp_host.kb_server` sets
+  for the child it launches and a third-party mount of the published
+  `sextant-kb` does not: an unconditional tool here would hand every client
+  that mounts this server — somebody's Claude Desktop — the ability to delete
+  their corpus because they asked a question about it. `READABLE_TOOLS` in
+  `agent.py` withholds writes from *this* project's model and says nothing
+  about anyone else's client. Pinned by launching an interpreter and reading
+  the registered tool list, both ways. The capability and the authorisation sit
+  in different processes: the child deletes and has no notion of an owner, the
+  parent knows the owner and holds no store.
+- **A write tool needs a declared argument reader, or it is refused.**
+  `ScopedHost._guard` read `arguments["documents"]` and nothing else, so the
+  second write tool — whose id arrives as `document_id` — would have walked
+  straight past it: not denied, not noticed, because the loop finds no
+  `documents` key and falls off the end. `scope._WRITE_ARGUMENTS` maps each
+  write tool to the ids it would touch and a write tool absent from it is
+  refused the way an unclassified tool is. `trim()`'s 0.8.5 lesson one module
+  over: **deny by default only denies the shapes it recognises.**
 - Uploads are stored as `upload:<owner>:<stem>` since 0.8.2, not
   `upload:<stem>`. The owner comes from the `X-Sextant-Client` header the
   frontend sends (a random per-browser id in localStorage), or `shared` when

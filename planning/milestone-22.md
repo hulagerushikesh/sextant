@@ -93,6 +93,27 @@ subprocess rather than a mock:
 Failing 2, 3 or 5 is a leak and the item does not ship. Failing 4 is a lie
 and the item does not ship.
 
+### One thing the design did not have, found by building it
+
+**There was no way to list the documents you have.** `/stats` reports counts —
+scoped counts, since 0.8.4 — and nothing reported *which* documents, because
+until now nothing needed to: the agent reads the corpus through a tool and the
+UI only ever printed a number under "documents". So "remove the file I uploaded
+by mistake" had nothing to point at, and a delete route on its own would have
+been an endpoint only curl could use.
+
+`GET /documents` is therefore part of this item rather than a follow-on. It is
+the full scoped listing — the same walk `/stats` already does to recompute its
+counts, so it is scoped and rate limited for the same reason — and each entry
+carries `yours`, which is `identity.writable_by` answered **on the server**.
+
+That last part is the decision worth recording. The browser knows the client id
+it generated and nothing else; behind the gate the owner is the name Caddy
+vouched for instead, so a UI that tested the id's prefix itself would draw the
+control correctly on this laptop and wrongly on the only deployment that has
+more than one person in it. The thing that will refuse the delete is the thing
+that says whether to offer it.
+
 ### What a person sees
 
 The browser is the only client that has an owner of its own, so the

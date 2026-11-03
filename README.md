@@ -396,6 +396,19 @@ Or post a document that is already text:
 curl -sX POST http://localhost:8000/ingest -H 'Content-Type: application/json' -d '{"documents":[{"id":"d1","title":"Kalman Filter","content":"A Kalman filter estimates hidden state from noisy measurements.","source":"notes.md","page":3}]}'
 ```
 
+Or take one back out. `sextant-forget` on the box is the operator's version of
+this; over HTTP a caller may remove only documents in their own namespace, and
+an id that is not theirs is a 403 rather than a quiet no-op:
+
+```bash
+curl -s http://localhost:8000/documents
+curl -sX DELETE http://localhost:8000/documents/upload:shared:survey
+```
+
+The listing says which rows are yours to remove, because the server is the only
+thing that knows: behind the gate your name is the one the proxy vouched for,
+not the client id your browser made up.
+
 Watch the agent work, tool calls and all:
 
 ```bash
@@ -501,6 +514,16 @@ people actually have, were refused with a note to go and run a terminal command.
 and hands the knowledge base text plus a list of page and section spans. It is
 data over the protocol, not a path: a `kb_ingest_file` tool would give every
 client that mounts the server the ability to read arbitrary local files.
+
+**And they can be taken back out, by the person who put them in.** The delete
+has to happen where the store is, which is the knowledge-base subprocess — so
+`kb_forget` is an MCP tool, and this server is published. An unconditional tool
+would hand every client that mounts it the ability to delete a corpus, so it is
+registered only when the launcher asks (`SEXTANT_REMOVAL_TOOL`, set for the
+child this project starts and not by a Claude Desktop config). The authorisation
+stays in the parent, where the owner is known: the same allow-list `/ingest`
+crosses, because re-using an id already replaced a document and a write is a
+delete first.
 
 **Conversations live in the browser.** localStorage, thirty of them, evicting
 oldest-first when the quota complains. The trade is stated rather than hidden:
