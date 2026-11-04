@@ -153,6 +153,32 @@ export async function fetchDocuments(): Promise<DocumentListing | null> {
 }
 
 /**
+ * A document id as the `{document_id:path}` segment run it is.
+ *
+ * `encodeURI` was wrong here, and wrong in the direction that removes the
+ * wrong file. It leaves `#` and `?` alone because in a URL *it* is writing
+ * those are punctuation — but an id is data, and the half of it a person
+ * controls is whatever they named their file. `budget#2.txt` is stored as
+ * `upload:<them>:budget#2`, and `encodeURI` built
+ * `DELETE /documents/upload:<them>:budget#2`, where the `#` opens a fragment
+ * no browser transmits. The server was therefore asked to remove
+ * `upload:<them>:budget`: a 404 about a document plainly on the screen if
+ * they have no such file, and a **200 removing a different one of their
+ * files** if they do — the one action in this client that cannot be undone,
+ * reported as having worked. `?` truncates the same way into a query string.
+ *
+ * Measured rather than assumed, because the other candidates are not defects:
+ * a space, `&` and `+` cross a path untouched, and a lone `%` is *repaired*
+ * to `%25` by the URL parser `fetch` runs before sending, so `100%2e` arrives
+ * as `100%2e` and not as `100.`. Two characters, both of which end a path.
+ *
+ * Slashes stay slashes. The route is `{document_id:path}` precisely because a
+ * stem may contain one, so `/` is this id's only punctuation and every other
+ * character is escaped.
+ */
+const asPath = (id: string) => id.split('/').map(encodeURIComponent).join('/')
+
+/**
  * Remove one of this caller's own documents.
  *
  * Throws rather than returning a flag, because the caller asked for something
@@ -171,7 +197,7 @@ export async function forgetDocument(id: string): Promise<Removal> {
       collection_size: mockStats.collection_size,
     }
   }
-  const response = await fetch(`${SERVER_URL}/documents/${encodeURI(id)}`, {
+  const response = await fetch(`${SERVER_URL}/documents/${asPath(id)}`, {
     method: 'DELETE',
     headers: sent(),
   })

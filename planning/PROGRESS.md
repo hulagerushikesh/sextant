@@ -5,6 +5,47 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-04 — the character that ended the path (milestone 22 item 1, ₹0)
+
+Item 1's delete met every clause of its own rule against a real store
+and the real browser. Every id in that evidence was a stem nobody has to
+escape: `notes`, `gone`, `handbook`. The half of an id a person actually
+controls is `Path(name).stem` of the file they dropped on the box, and it
+was never varied.
+
+`lib/api.ts` sent the id with `encodeURI`, which escapes a URL you are
+*composing* and therefore leaves `#` and `?` alone — in that URL they are
+punctuation; in an id they are data, and both end a path. So
+`budget#2.txt`, stored as `upload:<them>:budget#2`, asked the server to
+remove `upload:<them>:budget`. If they have no such file that is a 404
+about a document plainly on the screen. **If they also uploaded
+`budget.txt`, it is a 200 with a chunk count and the wrong file gone** —
+authorised, because both ids are theirs, which is exactly what the write
+guard exists to permit. The one action in this client that cannot be
+undone, reporting success for a file nobody named.
+
+Measured rather than reasoned about, and that changed the answer twice: a
+space, `&` and `+` cross a path untouched, and a lone `%` is *repaired*
+to `%25` by the URL parser `fetch` runs before sending. Two characters,
+not five. On the server side `TestClient` unquotes the path twice where
+uvicorn unquotes once, so the `%` row read as broken in the harness and
+correct against a real server — pinned as a test, so nobody double-
+encodes the client to satisfy the harness.
+
+One line to fix (escape per segment, so `/` stays the separator the
+`{document_id:path}` route needs). Three checks: the browser's behaviour
+in `frontend/src/lib/api.test.ts`, which is **the first test `lib/api.ts`
+has ever had** in the one file every request goes through; the server's
+acceptance of the escaped form; and a drift guard that fails if
+`encodeURI` returns to any shipped frontend file. Replaying the one line
+fails three vitest tests and two python tests.
+
+Milestone 21 item 25's shape — *a warning may not be responsive* — asked
+of a value instead of an element: the affordance worked for every
+filename the people who built it happened to type. 899 python tests and
+70 frontend tests. This advances no clause of item 2's rule; it fixes a
+defect item 1 shipped.
+
 ## 2026-11-04 — the other three copies of that list (milestone 22 item 2, ₹0)
 
 Pinning the Caddyfile against `main.py` closed the pair that had just

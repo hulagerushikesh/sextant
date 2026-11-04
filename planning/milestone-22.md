@@ -145,6 +145,53 @@ be made by reading the file.
 
 The corpus was restored to its 22 documents and 1,660 chunks afterwards.
 
+### The character that ended the path — ₹0
+
+Every id in that table is a stem nobody has to think about: `notes`, `gone`,
+`handbook`. The rule was met and the evidence is real, and **the one half of
+an id a person actually controls was never varied in it.** An upload is stored
+as `upload:<owner>:<stem>` where the stem is `Path(name).stem` of the file
+they dropped on the box — unsanitised, and correctly so, because it is their
+filename.
+
+`lib/api.ts` sent that id with `encodeURI`, which is the function for escaping
+a URL you are *composing*: it leaves `#` and `?` alone because in that URL
+they are punctuation. In an id they are data, and both of them end a path.
+
+| They uploaded | Stored as | The server was asked to remove | What happened |
+| --- | --- | --- | --- |
+| `budget#2.txt` | `upload:<them>:budget#2` | `upload:<them>:budget` | **404** about a document on the screen — if they have no `budget.txt` |
+| `budget#2.txt`, and `budget.txt` | both | `upload:<them>:budget` | **200 with a chunk count, and the wrong file gone.** Both ids are theirs, so the guard authorises it |
+| `report?v2.txt` | `upload:<them>:report?v2` | `upload:<them>:report` | the same, through a query string instead of a fragment |
+
+The second row is the whole finding. The guard cannot help — it exists to stop
+you touching *somebody else's* document, and this is one of yours. The delete
+is the single action in this client that cannot be undone, and it was
+reporting success while removing a file nobody named.
+
+Measured rather than reasoned about, which changed the answer twice. A space,
+`&` and `+` cross a path untouched. A lone `%` is *repaired* to `%25` by the
+URL parser `fetch` runs before sending, so `100%2e` arrives intact and the
+obvious third suspect is not a defect at all. **Two characters, both of which
+end a path.** And on the server side, `TestClient` unquotes the path twice
+where uvicorn unquotes once — so the `%` row read as broken in the test
+harness and correct against a real server on `:8123`. That difference is now
+a test of its own, because the next person to read `100.` off the harness
+would "fix" the client by double-encoding it.
+
+The fix is one line (escape per segment, so `/` stays the separator the
+`{document_id:path}` route needs) and the checks are in three places: the
+browser's behaviour in `frontend/src/lib/api.test.ts` — which is the **first
+test `lib/api.ts` has ever had**, in the one file every request goes through —
+the server's acceptance of the escaped form in `test_api.py`, and a drift
+guard that fails if `encodeURI` returns to any shipped frontend file. Replayed
+both ways: restoring the one line fails three vitest tests and two python
+tests.
+
+This is milestone 21 item 25's shape — *a warning may not be responsive* —
+asked of a value instead of an element: **the affordance worked for every
+filename the people who built it happened to type.**
+
 ## 2 · Deploy it and prove the delete through the gate — ≈₹2
 
 Item 1 met every clause of its own rule, against a real store and a real

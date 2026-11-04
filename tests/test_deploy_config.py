@@ -4032,6 +4032,75 @@ class TestEveryPathTheBrowserCallsIsServed:
         assert not self._is_served("/documents/a/b/c".replace("documents", "docs"))
 
 
+class TestTheIdInAPathIsEscapedAsData:
+    """A path being routed is not the same claim as the path being right.
+
+    The three classes above check that every path the browser asks for exists
+    and is proxied. They say nothing about the one path with a value in it:
+    `DELETE /documents/<id>`, where the id is colon-joined and its stem is
+    whatever a person named their file.
+
+    `encodeURI` is the function for escaping a URL you are composing, so it
+    leaves `#` and `?` alone -- they are that URL's own punctuation. In an id
+    they are data, and both of them end a path: `budget#2.txt` is stored as
+    `upload:<them>:budget#2` and the server was asked to remove
+    `upload:<them>:budget`. A 404 about a document plainly on the screen if
+    they have no such file, and a **200 removing a different one of their
+    files** if they do -- authorised, because both ids are theirs.
+
+    The behaviour is tested where it runs, in `frontend/src/lib/api.test.ts`
+    and in `test_api.py::TestForget`. This is the drift guard: the mistake is
+    one character of difference between two real functions, in a file no
+    Python test would otherwise read.
+    """
+
+    #: Escapes a URL; wrong for a value inside one.
+    WRONG = re.compile(r"\bencodeURI\s*\(")
+
+    @classmethod
+    def _uses(cls, *, tests: bool) -> list[str]:
+        return sorted(
+            f"{path.relative_to(FRONTEND)}:{n}"
+            for path in FRONTEND.rglob("*.ts*")
+            if (".test." in path.name) is tests
+            for n, line in enumerate(path.read_text().splitlines(), 1)
+            if cls.WRONG.search(line)
+        )
+
+    def test_no_shipped_frontend_file_escapes_a_value_with_encode_uri(self):
+        offenders = self._uses(tests=False)
+        assert not offenders, (
+            "encodeURI leaves `#` and `?` unescaped, so an id containing "
+            "either is truncated in transit and the delete removes whatever "
+            f"the shortened id names: {offenders}"
+        )
+
+    def test_the_only_remaining_use_is_the_test_that_demonstrates_the_defect(self):
+        """The exemption above is by filename, and an exemption by name is a
+        hole shaped like whatever is behind it. So the hole is measured: the
+        one file allowed to call the wrong function is the one whose job is to
+        show what it does, and if the defect is ever demonstrated somewhere
+        else -- or stops being demonstrated at all -- this says so."""
+        assert {use.split(":")[0] for use in self._uses(tests=True)} == {
+            "lib/api.test.ts"
+        }, self._uses(tests=True)
+
+    def test_the_delete_escapes_the_id_per_segment(self, api_client):
+        # Per segment, not whole: the route is `{document_id:path}` because a
+        # stem may contain a slash, so escaping the slash too would trade a
+        # wrong delete for an unroutable URL.
+        assert "id.split('/').map(encodeURIComponent).join('/')" in api_client
+        assert "${asPath(id)}" in api_client
+
+    def test_the_scan_would_notice_the_defect_coming_back(self):
+        assert self.WRONG.search("fetch(`${SERVER_URL}/documents/${encodeURI(id)}`)")
+        assert self.WRONG.search("const u = encodeURI (x)")
+        # The right function contains the wrong one's name as a prefix, which
+        # is the whole reason this is a word-boundary regex and not `in`.
+        assert not self.WRONG.search("id.split('/').map(encodeURIComponent)")
+        assert not self.WRONG.search("decodeURIComponent(parsed.pathname)")
+
+
 class TestEveryPathTheTripProbesIsProxied:
     """The fourth description of the same paths, and the one that bills.
 

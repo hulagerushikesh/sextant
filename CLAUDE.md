@@ -855,6 +855,27 @@ lifetime rather than per day.
   produce the identical answer behind the gate** -- `index.html` with a 200,
   parsed as an empty result -- so "the server returned nothing" is a routing
   report until proven otherwise.
+- **A value inside a URL is escaped as data, not as a URL** (2026-11-04). The
+  delete sends the document id in the path, and `lib/api.ts` escaped it with
+  `encodeURI` — the function for a URL you are *composing*, which leaves `#`
+  and `?` alone because there they are punctuation. In an id they are data and
+  both end a path. An upload's id is `upload:<owner>:<stem>` where the stem is
+  `Path(name).stem` of the file a person dropped on the box, so `budget#2.txt`
+  asked the server to remove `upload:<them>:budget`: a **404 about a document
+  plainly on the screen**, or, if they also uploaded `budget.txt`, a **200
+  with a chunk count and the wrong file gone** — authorised, because both ids
+  are theirs, which is what the write guard exists to permit. `asPath()`
+  escapes per segment so `/` stays the separator `{document_id:path}` needs.
+  Three things worth keeping: **the list of hostile characters was two, not
+  five** — a space, `&` and `+` cross a path untouched and a lone `%` is
+  repaired to `%25` by the URL parser `fetch` runs, so measure before writing
+  the list down; **`TestClient` unquotes the path twice and uvicorn unquotes
+  once**, so a `%` result read off the python harness is the harness, pinned
+  by `test_this_client_decodes_the_path_twice_and_the_real_one_does_not`; and
+  item 1's pre-registered rule was *met* by evidence in which **every id was a
+  stem nobody has to escape**, which is milestone 21 item 25's *a warning may
+  not be responsive* asked of a value — the affordance worked for every
+  filename the people who built it happened to type.
 - `deploy/trip.sh` **checks the gate from outside the box** (step 6, since
   2026-10-06). Every other check in it runs through `docker exec` at
   `localhost:8000`, which is behind Caddy -- so the trip that deploys the gate
