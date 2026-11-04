@@ -16,6 +16,7 @@ currently costs somebody a ₹2 trip.
 | # | Step | Needs | Cost | State |
 | --- | --- | --- | --- | --- |
 | 1 | A person deletes their own upload: `kb_forget` on the knowledge-base server, turned on by the launcher and absent from a third-party mount; a declared argument reader per write tool so the guard cannot be walked past; one scoped, rate-limited route; the affordance on the owner's own uploads only | — | ₹0 to build, rides the next trip | **shipped** 2026-11-03 (0.9.1) — every clause of the pre-registered rule met, and proved against a real store and the real UI, not mocks: the owner's own delete returns the chunk count and the collection shrinks; another owner's id and the shared corpus are refused 403 *before* anything is removed; a missing id is a 404 carrying `found: false` rather than a cheerful success; and an interpreter launched without the launcher's flag does not list `kb_forget` at all. Building it found one thing the design did not have — nothing listed documents, only counted them — so `GET /documents` is part of the item, with `yours` decided on the server. Opening the tool also opened a hole in the write guard (a second write tool's id arrives under a different name), closed in the same item by a declared argument reader per write tool, fail-closed, with the defect planted in a test |
+| 2 | Deploy 0.9.1 and prove the delete *through the gate*: a trip step that uploads as `ada`, removes it, and reads the store back; then asks `ada` to remove `grace`'s and checks the 403 and that grace's chunks are still there | VM up; owner's approval | ≈₹2 (one trip) | **planned** — item 1 is proved against a local store and the real UI, which is every clause of its own rule, but every lesson in this repo says a check that has only ever run on this laptop is a check whose environment was never the question. Step 7 already uploads the same filename as both gate users and removes its probes afterwards; the delete is the one write path it does not exercise, and it is the write path that cannot be undone |
 
 ## Done — Milestone 21 ([`milestone-21.md`](milestone-21.md))
 
@@ -104,7 +105,14 @@ A `kb_search(corpus=…)` in a discovered schema lets a sentence inside an
 uploaded PDF read another person's corpus. Isolation is enforced below the
 tool boundary — pinned into the KB subprocess at spawn.
 
-## Open — Milestone 19 ([`milestone-19.md`](milestone-19.md))
+## Done — Milestone 19 ([`milestone-19.md`](milestone-19.md))
+
+Closed 2026-11-03 by milestone 21 item 3's trip, which carried item 4 — the
+key rotation that had been the one thing holding this section open. The
+heading said **Open** until 2026-11-04, three weeks after item 4 was the only
+unshipped row and a day after it shipped: *a queue is read by its headings*,
+and a heading that disagrees with every row under it is the milestone-17
+miscount in the other direction.
 
 | # | Step | Needs | Cost | State |
 | --- | --- | --- | --- | --- |
