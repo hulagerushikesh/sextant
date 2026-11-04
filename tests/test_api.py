@@ -294,6 +294,71 @@ class TestForget:
         assert response.status_code == 200
         assert host.calls[0][1] == {"document_id": "upload:ada:notes/2024"}
 
+    def test_an_escaped_stem_that_would_end_a_path_arrives_whole(self, client, host):
+        # The server half of a defect whose browser half is in
+        # `frontend/src/lib/api.test.ts`. The stem is whatever a person named
+        # their file, and `#` and `?` end a URL path -- so this route has to
+        # accept them escaped, or escaping them in the client would trade a
+        # wrong delete for a 404. Nothing on the TypeScript side can make this
+        # claim: it is about what Starlette hands the handler.
+        host.results["kb_forget"] = {**self.REMOVED, "message": "Removed"}
+        for wanted, escaped in (
+            ("upload:ada:budget#2", "/documents/upload%3Aada%3Abudget%232"),
+            ("upload:ada:report?v2", "/documents/upload%3Aada%3Areport%3Fv2"),
+            ("upload:ada:notes v1", "/documents/upload%3Aada%3Anotes%20v1"),
+            # A stem with a literal `%` is deliberately not here; see
+            # `test_this_client_decodes_the_path_twice_and_the_real_one_does_not`.
+            # Escaped per segment, so the `:path` route still resolves.
+            ("upload:ada:notes/2024", "/documents/upload%3Aada%3Anotes/2024"),
+        ):
+            host.calls.clear()
+            response = client.delete(escaped, headers={CLIENT_HEADER: "ada"})
+            assert response.status_code == 200, (wanted, response.text)
+            assert host.calls[0][1] == {"document_id": wanted}
+
+    def test_this_client_decodes_the_path_twice_and_the_real_one_does_not(
+        self, client, host
+    ):
+        """The harness, pinned, because reading a `%` result off it is a trap.
+
+        `TestClient` builds the ASGI `path` from an httpx URL that is already
+        unquoted once and then unquotes it again, so `%252e` reaches the
+        handler as `.` here. Uvicorn unquotes once: measured against a real
+        server on 2026-11-04 --
+
+            uvicorn, DELETE /documents/upload%3Aada%3A100%252e
+              -> document_id == 'upload:ada:100%2e'   (correct)
+            TestClient, the same request
+              -> document_id == 'upload:ada:100.'     (this harness)
+
+        So the browser escaping a `%` *is* right, and a test that asserted
+        `100.` would be asserting the harness and would send the next person
+        to double-encode in the client to satisfy it. This test exists to fail
+        if the harness is ever fixed, so that note can be deleted rather than
+        quietly becoming false.
+        """
+        host.results["kb_forget"] = {**self.REMOVED, "message": "Removed"}
+        response = client.delete(
+            "/documents/upload%3Aada%3A100%252e", headers={CLIENT_HEADER: "ada"}
+        )
+        assert response.status_code == 200
+        assert host.calls[0][1] == {"document_id": "upload:ada:100."}
+
+    def test_the_unescaped_form_is_the_one_that_removed_the_wrong_file(
+        self, client, host
+    ):
+        # Anti-vacuity for the test above, and the actual shape of the failure.
+        # Sent the way the client used to send it, the `#` never reaches the
+        # server -- so this route is asked about, authorises, and removes a
+        # document the person did not name, and answers 200 with a chunk count.
+        # Both ids are theirs, which is exactly why the guard cannot help here.
+        host.results["kb_forget"] = {**self.REMOVED, "message": "Removed"}
+        response = client.delete(
+            "/documents/upload:ada:budget#2", headers={CLIENT_HEADER: "ada"}
+        )
+        assert response.status_code == 200
+        assert host.calls[0][1] == {"document_id": "upload:ada:budget"}
+
     def test_a_tool_failure_becomes_a_body_error_not_a_500(self, client, host):
         response = client.delete(
             "/documents/upload:ada:notes", headers={CLIENT_HEADER: "ada"}
