@@ -187,6 +187,50 @@ Failing 2 is a leak and the deployment is rolled back. Failing 4 or 5 is the
 
 **This costs money and does not start without the owner saying so.**
 
+### What the trip found — 2026-11-04, ₹2, clause 1 unmet
+
+The trip ran. The box deployed, step 6 answered all six of the gate's
+questions correctly, and step 7's eight original isolation rows all held: both
+gate users uploaded the same filename, each saw their own and not the other's,
+and a forged name was overwritten. Then the new delete proof stopped before it
+asked anything:
+
+```
+/documents named no owned probe for one of the users -- the
+delete is unproven and nothing was removed through the gate.
+```
+
+The delete was never exercised, so clauses 1, 2 and 3 are unmet and the item
+does not ship. Clauses 4 and 5 held: both probes were removed, the DNS record
+was released before the address it pointed at, and the box is `TERMINATED`
+with no reserved address.
+
+**The cause was not the delete, and it is the reason the item is a trip.**
+`deploy/Caddyfile` routes a hand-written list of paths to the app container
+and sends everything else to the static UI. Item 1 added `GET /documents` and
+`DELETE /documents/<id>`; the list stayed at the seven paths it had. Behind
+the gate both new routes fell through and answered with `index.html`, so the
+listing parsed as no documents at all.
+
+Three things were true at once while that shipped: the python suite was green,
+`test_scope.py` pinned `/documents` as a route reaching the corpus, and the
+browser affordance worked against the local API. None of them has a proxy in
+front of it. The consequence is worse than the failed check — **item 1's
+affordance was broken for every user of the only deployment that has users**,
+and nothing but a trip to a real box could have said so. The frontend linter
+on item 1's first push was the same lesson at the smallest possible scale; this
+is the same lesson at the scale that matters.
+
+The fix is the check, not the route. The Caddyfile carried a comment asking
+whoever added a route to keep the list in step, and a comment is not a check.
+`TestEveryAppRouteIsProxied` now computes main.py's routes and fails until the
+proxy routes each one, with `/` named as the one path the UI serves on purpose
+— the same rule `test_scope.py` applies on the app side, applied to the proxy.
+A route added without a proxy entry now fails the gate here rather than on a
+box twelve minutes and ₹2 away.
+
+Clause 1 still needs a box. The next trip is what proves the delete.
+
 ## Not in this milestone
 
 - **An operator deleting somebody else's upload through the API.**

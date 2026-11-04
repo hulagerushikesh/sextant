@@ -5,6 +5,34 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-04 — the trip that found the route nobody routed (milestone 22 item 2, ₹2)
+
+The trip went to prove the delete through the gate and proved something
+else instead. 0.9.1 deployed, the gate answered all six of step 6
+correctly, and step 7's eight isolation rows all held. Then the new
+delete proof stopped before it asked anything: `/documents` named no
+owned probe for either user, so nothing was removed and clauses 1–3 of
+the pre-registered rule are unmet. The item does not ship.
+
+The cause was the proxy, not the delete. `deploy/Caddyfile` routes a
+hand-written list of paths to the app and sends everything else to the
+static UI; 0.9.1 added `/documents` and `/documents/<id>` and did not add
+them to the list, so behind the gate both answered with `index.html`.
+The python suite was green, `test_scope.py` pinned the route, and the
+browser worked against the local API — none of which has a proxy in
+front of it. So **item 1's delete affordance was broken for every user
+of the only deployment that has users**, and only a real box could say
+so. The frontend linter on item 1's first push was this same lesson at
+its smallest; this is it at the size that counts.
+
+Fixed by routing both paths and by `TestEveryAppRouteIsProxied`, which
+computes main.py's routes and fails until Caddy routes each one — the
+Caddyfile's comment asking for exactly that was not a check. 886 python
+tests, up from 883. The trip's own cleanup held throughout: both probes
+removed, the DNS record released before the address, box `TERMINATED`
+with no reserved address, 12 minutes, ~₹2. The delete through the gate
+is still unproven and needs one more trip.
+
 ## 2026-11-03 — the way back out (milestone 22 item 1, ₹0)
 
 A person can take their own document out of the corpus. Until today they
