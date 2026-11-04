@@ -823,6 +823,19 @@ lifetime rather than per day.
   reading the log: the first user's probe is gone through the gate by the time
   the trap runs, so the cleanup normally removes **one** document and two only
   on a run that failed before the delete.
+- **A new HTTP route needs a line in `deploy/Caddyfile` or it does not exist
+  behind the gate** (learned the expensive way, 2026-11-04). Caddy routes a
+  list of paths to the app container and sends everything else to the static
+  UI, so an unrouted route answers **`index.html`, not 404** -- it reads as a
+  frontend bug. 0.9.1 added `/documents` and `/documents/<id>`, the list was
+  not updated, and item 1's delete affordance was broken for every gated user
+  while the python suite was green, `test_scope.py` pinned the route, and the
+  browser worked locally: **none of those has a proxy in front of it.**
+  `TestEveryAppRouteIsProxied` now computes main.py's routes and fails until
+  Caddy routes each one, with `/` named as the one path the UI serves on
+  purpose. The general rule this is the second instance of: a check that has
+  only ever run on this laptop has not been run in the environment that has
+  users.
 - `deploy/trip.sh` **checks the gate from outside the box** (step 6, since
   2026-10-06). Every other check in it runs through `docker exec` at
   `localhost:8000`, which is behind Caddy -- so the trip that deploys the gate

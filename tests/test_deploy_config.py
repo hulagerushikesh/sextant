@@ -3828,3 +3828,102 @@ class TestTheBoxsSecretsAreSetByAScriptAndNotByHand:
         assert SENTINELS["GEMINI_API_KEY"] not in written, "the old key survived"
         assert "model key set" in out
         assert code == 0
+
+
+class TestEveryAppRouteIsProxied:
+    """The proxy's path list, computed rather than remembered.
+
+    The Caddyfile routes a hand-written list of paths to the app and sends
+    everything else to the static UI. That list carried a comment asking
+    whoever added a route to keep it in step, and a comment is not a check:
+    0.9.1 added `GET /documents` and `DELETE /documents/<id>`, the list stayed
+    at seven entries, and the request that should have listed a person's own
+    uploads was answered with `index.html` instead.
+
+    What makes that worth a test rather than a fix is where it was found. The
+    whole python suite was green, `test_scope.py` pinned the route as reaching
+    the corpus, and the browser worked against the local API -- because none
+    of those have a proxy in front of them. It took a 12-minute trip to a real
+    box to discover that the route existed everywhere except the one place
+    that has users. So the rule is the same one `test_scope.py` already
+    applies on the app side, now applied to the proxy: add a route to main.py
+    and this fails until Caddy knows where to send it.
+    """
+
+    MAIN = ROOT / "sextant" / "mcp_server" / "main.py"
+
+    #: Served by the React app on purpose, not by the API. `/` is the UI's own
+    #: index; proxying it would hand the single-page app's entry to FastAPI.
+    NOT_PROXIED = {"/"}
+
+    @classmethod
+    def _app_routes(cls) -> set[str]:
+        """Every path main.py declares, with path parameters filled in.
+
+        A parameter is substituted with something containing a `/`, because
+        `{document_id:path}` accepts one and a pattern that only matches a
+        single segment would be a different bug with the same symptom.
+        """
+        found = re.findall(
+            r"@app\.(?:get|post|put|patch|delete)\(\s*\"([^\"]+)\"",
+            cls.MAIN.read_text(),
+        )
+        return {re.sub(r"\{[^}]+\}", "a/b", path) for path in found}
+
+    @staticmethod
+    def _caddy_patterns() -> list[str]:
+        text = (DEPLOY / "Caddyfile").read_text()
+        line = next(
+            (
+                ln
+                for ln in text.splitlines()
+                if ln.split("#", 1)[0].strip().startswith("@api path ")
+            ),
+            None,
+        )
+        assert line is not None, "cannot find the `@api path` matcher"
+        return line.split("#", 1)[0].strip()[len("@api path ") :].split()
+
+    @classmethod
+    def _matches(cls, path: str) -> bool:
+        """Caddy's `path` matcher: exact, with `*` standing for any run of
+        characters -- slashes included, which is why `/ann/*` reaches
+        `/ann/benchmark`."""
+        for pattern in cls._caddy_patterns():
+            regex = "".join(
+                ".*" if part == "*" else re.escape(part)
+                for part in re.split(r"(\*)", pattern)
+            )
+            if re.fullmatch(regex, path):
+                return True
+        return False
+
+    def test_every_route_the_app_serves_is_routed_to_it(self):
+        unreachable = sorted(
+            path
+            for path in self._app_routes() - self.NOT_PROXIED
+            if not self._matches(path)
+        )
+        assert not unreachable, (
+            f"main.py serves {unreachable} and the Caddyfile does not route "
+            "them to the api container, so behind the gate they answer with "
+            "the static UI's index.html instead of the app"
+        )
+
+    def test_the_delete_and_its_listing_are_both_routed(self):
+        """The two the trip went looking for, named rather than counted: the
+        failure was that `/documents` was absent while six siblings were
+        present, so a test that only counts would have passed throughout."""
+        assert self._matches("/documents")
+        assert self._matches("/documents/upload:ada:notes")
+        assert self._matches("/documents/a/b")
+
+    def test_the_scan_is_looking_at_something(self):
+        """An empty route set is a subset of everything, and a matcher that
+        matched everything would make the check above vacuous."""
+        routes = self._app_routes()
+        assert "/documents" in routes, routes
+        assert "/upload" in routes, routes
+        assert len(routes) >= 10, routes
+        assert not self._matches("/definitely-not-a-route")
+        assert not self._matches("/documentsabc")

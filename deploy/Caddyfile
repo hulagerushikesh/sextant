@@ -34,10 +34,14 @@
 		{$BASIC_AUTH_USER_3} {$BASIC_AUTH_HASH_3}
 	}
 
-	# The app server's HTTP surface. Keep this list in step with main.py's
-	# routes: a path that isn't matched here falls through to the static UI
-	# and 404s as index.html, which looks like a frontend bug, not a routing one.
-	@api path /query* /health /ingest /upload /stats /tools /ann/*
+	# The app server's HTTP surface. This list is no longer kept in step by
+	# hand: `TestEveryAppRouteIsProxied` computes main.py's routes and fails
+	# until each one is matched here. It is a check because the comment that
+	# used to ask for it was not one -- 0.9.1 added /documents, the list stayed
+	# as it was, and the trip that went to prove the delete found the route
+	# falling through to the static UI. A path that isn't matched here returns
+	# index.html, which reads as a frontend bug rather than a routing one.
+	@api path /query* /health /ingest /upload /stats /tools /ann/* /documents /documents/*
 	handle @api {
 		reverse_proxy api:8000 {
 			# Who authenticated, named by the thing that did the authenticating.
