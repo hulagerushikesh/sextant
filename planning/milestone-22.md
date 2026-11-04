@@ -315,6 +315,45 @@ directions. Planting a frontend call to a route that does not exist fails two.
 This does not advance clause 1. It lowers the chance that the next ₹2 is spent
 discovering a fifth copy of the same mistake.
 
+### What the second trip proved — 2026-11-04, ₹2, every clause met
+
+The second trip ran for 11 minutes and cost about ₹2. The box came up, the
+public name was pointed at it, step 6 answered all six of the gate's
+questions, and step 7 asked the delete rows the first trip never reached —
+through `PUBLIC_URL`, with Caddy in the path, as the two real gate users:
+
+| Clause | What the trip printed |
+| --- | --- |
+| 1 · a person removes their own document | `removing their own  200 with a chunk count`, `the store is smaller by that many  80`, `it is gone from their listing  21` |
+| 2 · removing somebody else's is refused, and theirs survives | `removing the other user's document  403`, `and theirs is still there  22`, `and still in the store  2`, `the other user is untouched  22` |
+| 3 · an id that is not there is 404 | `removing one that is not there  404` |
+| 4 · every probe gone before the box is parked | `removing upload:grace:sextant-trip-probe`, `the corpus is back to what it was`, trip exit 0 |
+| 5 · parked by the trap | `agenticrag.hulage.in has no A record now`, `agenticrag is TERMINATED; reserved addresses: 0` |
+
+**The item ships.** The thing worth saying about it is that the route the
+first trip could not reach is the one the proxy fix opened: `/documents` and
+`/documents/<id>` answered the app rather than `index.html`, and the whole
+delete sequence followed from that single Caddyfile line. The ₹2 was spent
+proving a path that a comment had been asking somebody to maintain.
+
+Two honest limits on the clause-2 row. The rule as written said grace's
+document must *still answer a search* after ada's refused delete; what the
+trip asserts is that grace's listing is unchanged and the probe id is still
+there in the store read back directly. That is the same claim about the data
+and a weaker one about retrieval — no query was issued. And the refusal is
+`403` from `identity.writable_by` before the store is touched, which is the
+row step 7 already proved for a forged write; the delete reuses the guard
+rather than adding one.
+
+The escaping fix found earlier the same day was **not** exercised by this
+trip. `PROBE_STEM` is `sextant-trip-probe`, a name nobody has to escape, so
+the ids the trip deleted are exactly the shape that always worked. Giving the
+probe a `#` is the obvious next move and was deliberately not made before a
+paid run: it would have risked spending ₹2 discovering a harness problem
+instead of the delete. The escaping is proved by 12 frontend tests and 4
+server tests, on this laptop, against no proxy — which is precisely the kind
+of claim this milestone exists to distrust.
+
 ## Not in this milestone
 
 - **An operator deleting somebody else's upload through the API.**

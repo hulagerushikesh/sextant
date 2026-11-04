@@ -5,6 +5,34 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-04 — the delete, proved through the gate (milestone 22 item 2, ₹2)
+
+**Milestone 22 ships.** The second trip ran 11 minutes for about ₹2 and
+asked the rows the first one never reached: through the public name, with
+Caddy in the path, as the two real gate users, removing your own document
+answered 200 with a chunk count, the store read back 80 chunks smaller,
+and the listing no longer carried it. Removing the other user's document
+was 403 and theirs was untouched. A missing id was 404. Both probes were
+removed and the box parked itself — `TERMINATED`, no reserved address, no
+DNS record.
+
+What cost the first ₹2 is what the second one spent its first second on:
+`/documents` and `/documents/<id>` now reach the app instead of answering
+`index.html`, and the entire delete sequence followed from that one
+Caddyfile line. The route a comment had been asking somebody to maintain
+is now computed from `main.py` and checked here for nothing.
+
+Two limits worth writing down. Clause 2 asked that the other user's
+document still answer a search; what the trip asserts is that their
+listing is unchanged and the id is still in the store read back directly
+— the same claim about the data, a weaker one about retrieval. And the
+trip's probe filename is `sextant-trip-probe`, which needs no escaping,
+so the URL-escaping fix found earlier the same day rode along unproven:
+it stands on 12 frontend and 4 server tests on this laptop, with no proxy
+in front of them, which is the kind of claim this milestone exists to
+distrust. Giving the probe a `#` is the next trip's job, not a change to
+make in the hour before a paid run.
+
 ## 2026-11-04 — the character that ended the path (milestone 22 item 1, ₹0)
 
 Item 1's delete met every clause of its own rule against a real store
