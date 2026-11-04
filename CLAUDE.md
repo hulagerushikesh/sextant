@@ -836,6 +836,25 @@ lifetime rather than per day.
   purpose. The general rule this is the second instance of: a check that has
   only ever run on this laptop has not been run in the environment that has
   users.
+- **Four files describe the same set of paths, and all four are now pinned
+  against `main.py`.** The route decorators are the only description that is
+  executable; the other three are text that can fall behind it silently, and
+  the chain is only as good as its weakest pair. `deploy/Caddyfile`'s `@api
+  path` list is `TestEveryAppRouteIsProxied`; `frontend/src/lib/api.ts`'s
+  URLs are `TestEveryPathTheBrowserCallsIsServed`, which also checks them
+  against the proxy, because the two pins either side of Caddy can both pass
+  while the browser's own path is the one falling through; and
+  `deploy/trip.sh`'s `$URL/...` probes are `TestEveryPathTheTripProbesIsProxied`,
+  which is the one that matters most -- steps 6 and 7 are the only checks with
+  a proxy in front of them, so they are the only ones that *can* see this
+  defect, and they see it twelve minutes and ₹2 after the meter started.
+  **Every one of those four lists is readable here for nothing.** Removing
+  `/documents` from the Caddyfile now fails four tests before anything is
+  started, which is `gate-slots.sh`'s rule applied to routing. **A symptom
+  worth recognising: a path that is not routed and a path that does not exist
+  produce the identical answer behind the gate** -- `index.html` with a 200,
+  parsed as an empty result -- so "the server returned nothing" is a routing
+  report until proven otherwise.
 - `deploy/trip.sh` **checks the gate from outside the box** (step 6, since
   2026-10-06). Every other check in it runs through `docker exec` at
   `localhost:8000`, which is behind Caddy -- so the trip that deploys the gate

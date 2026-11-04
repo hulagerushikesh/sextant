@@ -5,6 +5,36 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-04 — the other three copies of that list (milestone 22 item 2, ₹0)
+
+Pinning the Caddyfile against `main.py` closed the pair that had just
+failed, and did not ask how many other hand-written descriptions of
+those paths exist. Four. Only the one that had cost ₹2 was checked.
+
+The browser builds its own URLs in `frontend/src/lib/api.ts`, and that
+copy was unchecked for the reason the header one seam over was: the far
+end is TypeScript, so no python test reads it and `tsc -b` has never
+heard of the server. The failure would be indistinguishable from the one
+that just happened — **a path that is not routed and a path that does
+not exist both answer `index.html` with a 200 behind the gate**, which
+the browser parses as "you have no documents".
+
+The third copy is the one worth having. `deploy/trip.sh` steps 6 and 7
+are the only checks that go through `PUBLIC_URL` rather than `docker
+exec`, which is exactly why they are the only ones that *can* see an
+unrouted path — and why they see it twelve minutes and ₹2 into a trip.
+Every path they ask for is readable on this laptop for nothing. That is
+`gate-slots.sh`'s rule, applied to routing instead of to hashes.
+
+`TestEveryPathTheBrowserCallsIsServed` and
+`TestEveryPathTheTripProbesIsProxied`, both anti-vacuity guarded.
+Verified by replaying the real defect: deleting `/documents` from the
+Caddyfile fails **four tests** in under a second, from three independent
+directions; planting a frontend call to a route that does not exist
+fails two. 892 python tests, up from 886. This advances no clause of the
+pre-registered rule. It lowers the chance the next ₹2 is spent finding a
+fifth copy of one mistake.
+
 ## 2026-11-04 — the trip that found the route nobody routed (milestone 22 item 2, ₹2)
 
 The trip went to prove the delete through the gate and proved something
