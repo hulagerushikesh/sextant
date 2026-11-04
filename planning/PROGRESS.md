@@ -43,7 +43,10 @@ fails three vitest tests and two python tests.
 Milestone 21 item 25's shape — *a warning may not be responsive* — asked
 of a value instead of an element: the affordance worked for every
 filename the people who built it happened to type. 899 python tests and
-70 frontend tests. This advances no clause of item 2's rule; it fixes a
+70 frontend tests. CI was red on the first push and green on the next:
+the new test file tripped the frontend linter, which is the one gate
+command this laptop cannot run, so a brand-new frontend file is the one
+change whose result is unknown until CI answers. This advances no clause of item 2's rule; it fixes a
 defect item 1 shipped.
 
 ## 2026-11-04 — the other three copies of that list (milestone 22 item 2, ₹0)
