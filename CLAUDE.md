@@ -592,7 +592,14 @@ lifetime rather than per day.
   `npm install --save-optional` and a clean reinstall all leave
   `node_modules/@oxlint` absent), and a gate must not claim a check the machine
   cannot run. A new suppression needs a `--` reason or
-  `TestTheFrontendLinterRuns` fails.
+  `TestTheFrontendLinterRuns` fails. **Consequence worth planning for: a new
+  frontend file is the one change whose gate result is unknown until CI runs**,
+  and `denyWarnings` means one warning is a red. It has now cost a second push
+  twice — `d1fc6d7` on `no-unsafe-optional-chaining`, where
+  `(init?.headers as Record<string, string>)[KEY]` indexes a value that may be
+  `undefined`; write `const h = init?.headers as Record<string, string> |
+  undefined` and then `h?.[KEY]`. Read the whole new file for that shape before
+  pushing it.
 - **An oxlint suppression goes on the line the rule reports, and the reason
   goes above it.** Established from three CI runs, not from convention. A
   multi-line reason breaks `-disable-next-line` — the "next line" becomes the

@@ -110,7 +110,8 @@ describe('the id a delete carries', () => {
     expect(seen[0].init?.method).toBe('DELETE')
     // Leave the header off and the server answers as the anonymous `shared`
     // caller, which owns none of this browser's uploads: a 403 on your own file.
-    expect((seen[0].init?.headers as Record<string, string>)[CLIENT_HEADER]).toBeTruthy()
+    const headers = seen[0].init?.headers as Record<string, string> | undefined
+    expect(headers?.[CLIENT_HEADER]).toBeTruthy()
   })
 
   it('throws on a refusal rather than returning a flag', async () => {
