@@ -3927,3 +3927,153 @@ class TestEveryAppRouteIsProxied:
         assert len(routes) >= 10, routes
         assert not self._matches("/definitely-not-a-route")
         assert not self._matches("/documentsabc")
+
+
+class TestEveryPathTheBrowserCallsIsServed:
+    """The last unpinned seam in the production request chain.
+
+    A browser request crosses three hand-written descriptions of the same
+    set of paths: the URL `api.ts` builds, the list `deploy/Caddyfile` routes
+    to the app, and the decorators in `main.py`. Two of those three are now
+    checked against each other -- `TestEveryAppRouteIsProxied`, written the
+    day a trip found `/documents` missing from the proxy's list. This is the
+    third pair, and it is unchecked for the reason
+    `TestTheBrowserSendsWhatTheAppReads` gives about the header one seam
+    over: the far end is TypeScript, so nothing in the python suite reads it
+    and `tsc -b` has never heard of the server.
+
+    The failure mode is the one that cost ₹2. A frontend call to a path
+    `main.py` does not serve is a 404 on this laptop -- and behind the gate
+    it is `index.html` with a 200, because the Caddyfile's fallback hands any
+    unrouted path to the single-page app. So the symptom of calling a route
+    that does not exist is identical to the symptom of a route that exists
+    and is not proxied: the browser parses the UI's own HTML as an answer and
+    reports that the user has no documents.
+
+    The scan is total rather than a list, because
+    `TestTheBrowserSendsWhatTheAppReads` already pins that every `fetch` in
+    the frontend lives in this one file and addresses `SERVER_URL`. If that
+    stops being true, those tests fail before these ones become incomplete.
+    """
+
+    #: `${...}` inside a template literal: an id the caller fills in. Replaced
+    #: with a value that is one path segment, which is the conservative read --
+    #: a server route taking `{id:path}` accepts it, one taking `{id}` also
+    #: does, and nothing is waved through on the strength of a slash.
+    INTERPOLATED = "an-id"
+
+    @classmethod
+    def _browser_paths(cls) -> set[str]:
+        text = API_CLIENT.read_text()
+        found = re.findall(r"\$\{SERVER_URL\}([^`]*)`", text)
+        return {re.sub(r"\$\{[^}]*\}", cls.INTERPOLATED, path) for path in found}
+
+    @staticmethod
+    def _route_regexes() -> list[str]:
+        """main.py's routes as patterns. `{id:path}` takes slashes and `{id}`
+        does not, which is the distinction that makes a colon-joined document
+        id reach the delete instead of 404ing as two unmatched segments."""
+        found = re.findall(
+            r"@app\.(?:get|post|put|patch|delete)\(\s*\"([^\"]+)\"",
+            TestEveryAppRouteIsProxied.MAIN.read_text(),
+        )
+        regexes = []
+        for path in found:
+            pattern = "".join(
+                (".+" if part.endswith(":path}") else "[^/]+")
+                if part.startswith("{")
+                else re.escape(part)
+                for part in re.split(r"(\{[^}]+\})", path)
+            )
+            regexes.append(pattern)
+        return regexes
+
+    @classmethod
+    def _is_served(cls, path: str) -> bool:
+        return any(re.fullmatch(rx, path) for rx in cls._route_regexes())
+
+    def test_every_path_the_browser_asks_for_exists_on_the_server(self):
+        missing = sorted(p for p in self._browser_paths() if not self._is_served(p))
+        assert not missing, (
+            f"api.ts calls {missing} and main.py serves no such route; behind "
+            "the gate that is answered with the static UI's index.html and a "
+            "200, so it reads as the server returning nothing"
+        )
+
+    def test_every_path_the_browser_asks_for_is_also_proxied(self):
+        """The chain end to end. The two pins either side of the proxy are
+        each satisfiable while the browser's own path is the one that falls
+        through, which is precisely what shipped in 0.9.1."""
+        unrouted = sorted(
+            p
+            for p in self._browser_paths()
+            if not TestEveryAppRouteIsProxied._matches(p)
+        )
+        assert not unrouted, (
+            f"the browser calls {unrouted} and the Caddyfile does not route "
+            "them to the api container"
+        )
+
+    def test_the_listing_and_the_delete_are_both_named(self):
+        """Named rather than counted: the 0.9.1 failure was two paths absent
+        while six siblings were present, and a count passes throughout that."""
+        paths = self._browser_paths()
+        assert "/documents" in paths, paths
+        assert f"/documents/{self.INTERPOLATED}" in paths, paths
+
+    def test_the_scan_is_looking_at_something(self):
+        """Anti-vacuity, both halves: an empty set of browser paths satisfies
+        every assertion above, and a route matcher that matched anything would
+        make the first test unfailable."""
+        paths = self._browser_paths()
+        assert len(paths) >= 6, paths
+        assert self._is_served("/query/stream")
+        assert not self._is_served("/spend")
+        assert not self._is_served("/documents/a/b/c".replace("documents", "docs"))
+
+
+class TestEveryPathTheTripProbesIsProxied:
+    """The fourth description of the same paths, and the one that bills.
+
+    Steps 6 and 7 are the only checks in `deploy/trip.sh` that go through
+    `PUBLIC_URL` rather than `docker exec`, which is what makes them the only
+    checks with a proxy in front of them -- and therefore the only ones that
+    can see an unrouted path. That is a good property and an expensive one:
+    the trip discovers the defect twelve minutes and ₹2 after the meter
+    started, which is exactly what happened on 2026-11-04 when
+    `own_probe_id()` asked for `/documents` and parsed `index.html`.
+
+    Every path it asks for is readable here for nothing. This is the rule
+    `gate-slots.sh` already applies to the basic_auth hashes, for the reason
+    written beside it: a ten-minute build to discover something readable for
+    ₹0 before the meter started.
+    """
+
+    @staticmethod
+    def _probe_paths() -> set[str]:
+        text = (DEPLOY / "trip.sh").read_text()
+        found = re.findall(r'"\$URL(/[^"\s]*)"', text)
+        # `$doc_id` is a colon-joined id the step reads back off `/documents`;
+        # substituted with one containing a slash, because `{document_id:path}`
+        # accepts one and the matcher must still reach it if a stem has one.
+        return {re.sub(r"\$\{?\w+\}?", "upload:ada:a/b", path) for path in found}
+
+    def test_every_path_the_trip_asks_for_reaches_the_app(self):
+        unrouted = sorted(
+            p
+            for p in self._probe_paths()
+            if not TestEveryAppRouteIsProxied._matches(p)
+        )
+        assert not unrouted, (
+            f"the trip probes {unrouted} through the public URL and the "
+            "Caddyfile does not route them, so the check costs ₹2 to fail"
+        )
+
+    def test_the_scan_found_the_probes(self):
+        """Anti-vacuity: the regex reads a shell script as text, so a rewrite
+        of how the URL is built would silently empty this."""
+        paths = self._probe_paths()
+        assert "/health" in paths, paths
+        assert "/documents" in paths, paths
+        assert any(p.startswith("/documents/upload:") for p in paths), paths
+        assert len(paths) >= 5, paths

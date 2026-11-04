@@ -231,6 +231,43 @@ box twelve minutes and ₹2 away.
 
 Clause 1 still needs a box. The next trip is what proves the delete.
 
+### The other three copies of that list — ₹0
+
+Pinning the Caddyfile against `main.py` closed the pair that failed. It did
+not ask the obvious next question: **how many other hand-written descriptions
+of these paths are there, and is any of them checked?** Four, and only the one
+that had just cost ₹2.
+
+| Where the paths are written again | Checked before | Now |
+| --- | --- | --- |
+| `deploy/Caddyfile`, the `@api path` list | no | `TestEveryAppRouteIsProxied` |
+| `frontend/src/lib/api.ts`, the URLs the browser builds | no | `TestEveryPathTheBrowserCallsIsServed` |
+| `deploy/trip.sh`, the `$URL/...` probes of steps 6 and 7 | no | `TestEveryPathTheTripProbesIsProxied` |
+| `sextant/mcp_server/main.py`, the decorators | — | the executable one; everything else is compared to it |
+
+The browser's copy is unchecked for the reason
+`TestTheBrowserSendsWhatTheAppReads` already gives about the header one seam
+over: the far end is TypeScript, so no python test reads it and `tsc -b` has
+never heard of the server. And the failure is indistinguishable from the one
+that just happened — **a path that is not routed and a path that does not
+exist both answer `index.html` with a 200 behind the gate.** The browser
+parses the UI's own HTML and reports that you have no documents.
+
+The trip's copy is the one worth having. Steps 6 and 7 are the only checks
+that go through `PUBLIC_URL` instead of `docker exec`, which is exactly why
+they are the only ones that can see an unrouted path — and why they see it
+twelve minutes and ₹2 into a trip. Every path they ask for is readable on this
+laptop for nothing. That is `gate-slots.sh`'s rule, whose own comment is *a
+ten-minute build to discover something readable for ₹0 before the meter
+started*, applied to routing instead of to hashes.
+
+Verified by replaying the real defect: deleting `/documents` from the
+Caddyfile now fails **four tests** in under a second, from three independent
+directions. Planting a frontend call to a route that does not exist fails two.
+
+This does not advance clause 1. It lowers the chance that the next ₹2 is spent
+discovering a fifth copy of the same mistake.
+
 ## Not in this milestone
 
 - **An operator deleting somebody else's upload through the API.**
