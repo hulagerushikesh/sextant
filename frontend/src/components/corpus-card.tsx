@@ -28,6 +28,10 @@ export function CorpusCard({ corpus, supported, onRefresh, pickRef }: { corpus: 
     setDocuments(listing?.documents ?? null)
   }, [])
 
+  // `reload` awaits the server before it sets anything, so this is not a
+  // synchronous setState inside an effect; listing the documents on mount is
+  // what an effect is for. Same judgement as `useCorpus` in App.tsx.
+  // oxlint-disable-next-line react/set-state-in-effect -- the set is post-await
   useEffect(() => { void reload() }, [reload])
 
   const accept = useCallback(async (list: FileList | null) => {

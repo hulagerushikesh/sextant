@@ -123,6 +123,28 @@ feeds both reflect it afterwards. A document you do not own has no such
 control, because the server would refuse it and an affordance that cannot
 work is worse than none.
 
+### How it was proved
+
+Against a real store and the real browser, not mocks — the suite is the
+pre-registered rule, this is the evidence the rule describes something that
+happens. Four requests, in one session against the local API on `:8100` with a
+corpus of 22 documents and 1,660 chunks:
+
+| Request | Answer |
+| --- | --- |
+| the owner's own upload | **200**, carrying the number of chunks taken out, and the collection smaller by exactly that many afterwards |
+| another owner's `upload:<name>:<stem>` | **403**, and the store untouched — the refusal happens before it is asked |
+| an id in the shared corpus | **403**, from an authenticated caller who does not inherit it |
+| an id that is not there | **404**, read off `found`, not matched out of a sentence |
+
+Then the UI: the control is drawn on owned rows and absent from the rest, the
+row is gone after confirming, and the count under "documents" agrees with the
+listing. And an interpreter launched the way a third party would mount the
+published package does not list `kb_forget` at all — the one check that cannot
+be made by reading the file.
+
+The corpus was restored to its 22 documents and 1,660 chunks afterwards.
+
 ## Not in this milestone
 
 - **An operator deleting somebody else's upload through the API.**

@@ -74,7 +74,13 @@ the version had changed. The third instance of a number with two homes,
 and the first where the second home is a directory nobody edits. Deleted;
 it regenerates from a build and is gitignored.
 
-Not deployed: this rides the next trip. 58 frontend tests, up from 52.
+Not deployed: this rides the next trip. 881 python tests, up from 851; 58
+frontend tests, up from 52. CI went red on the first push and not on any
+of them: the frontend linter is the one gate command this machine cannot
+run (npm will not install oxlint's binding here), and the new mount-time
+listing needed the same post-await suppression `useCorpus` already
+carries. Fixed on the next commit — the local gate passing remains a
+different claim.
 
 ## 2026-11-03 — identity, proved from outside the box (≈₹2)
 
