@@ -809,6 +809,20 @@ lifetime rather than per day.
   the EXIT trap before the stop, found by *scanning* for the filename rather
   than rebuilding `upload:<owner>:<stem>`, and anything left behind exits
   non-zero. Needs `SEXTANT_TRIP_AUTH` and `_2`; costs ~$0.006 of summaries.
+- **Step 7 proves the delete too, and the order is the check** (since 0.9.1).
+  The way back out shipped against a local store, where there is only ever one
+  owner -- and the owner a delete is authorised against is the name Caddy
+  vouched for, so the gate is the only environment that can disagree with it.
+  Four answers through the public URL: the other user's id **403** with their
+  document still in the store, an id in the caller's own namespace that is not
+  there **404**, the caller's own **200** with a chunk count, and the
+  collection read off chroma smaller by exactly that many. **The refusal is
+  checked while the other document is still there to be refused, and the
+  delete that cannot be undone goes last** -- the same reason the forged-name
+  check sits between the two uploads. One consequence worth knowing before
+  reading the log: the first user's probe is gone through the gate by the time
+  the trap runs, so the cleanup normally removes **one** document and two only
+  on a run that failed before the delete.
 - `deploy/trip.sh` **checks the gate from outside the box** (step 6, since
   2026-10-06). Every other check in it runs through `docker exec` at
   `localhost:8000`, which is behind Caddy -- so the trip that deploys the gate

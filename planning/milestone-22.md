@@ -145,6 +145,48 @@ be made by reading the file.
 
 The corpus was restored to its 22 documents and 1,660 chunks afterwards.
 
+## 2 · Deploy it and prove the delete through the gate — ≈₹2
+
+Item 1 met every clause of its own rule, against a real store and a real
+subprocess, in the real browser. What it did not do is run anywhere other
+than this laptop — and the recurring lesson in this repository is that the
+environment is the thing that was never the question. The frontend linter is
+the smallest possible instance of it, found on item 1's own first push: a
+check this machine cannot run is a check whose result was unknown. The
+preflight, the BSD `tar`, the `cd ""` stub, the `.env` the sealed child could
+read — every one of them was code that was correct here.
+
+So the item is a trip, and the trip is the proof.
+
+`deploy/trip.sh` step 7 is already the only part that writes: both gate users
+upload a file of the same name through the public URL, each must see their own
+and not the other's, and the probes are removed in the EXIT trap. The delete
+is the one write path it does not exercise, and it is the write path that
+cannot be undone — which is exactly the order this project does things in, not
+the reverse.
+
+### The decision rule, pre-registered
+
+Through `PUBLIC_URL`, with Caddy in the path, as the two real gate users:
+
+1. `ada` uploads, lists, and removes their own document: the removal reports a
+   chunk count, the listing no longer carries it, and the store read back
+   directly is smaller by that many chunks.
+2. `ada` asking to remove `grace`'s id is **403**, and grace's document still
+   answers a search afterwards — the same row step 7 already proves for a
+   forged *write*, now for a delete.
+3. An id that is not there is **404**, not a 200 that says nothing happened.
+4. Every probe is gone before the box is parked, and anything left behind
+   makes the trip exit non-zero — step 7's existing contract, extended to
+   whatever this adds.
+5. The box is `TERMINATED` with no reserved address and no DNS record at the
+   end, by the EXIT trap, whether or not any of the above passed.
+
+Failing 2 is a leak and the deployment is rolled back. Failing 4 or 5 is the
+2026-09-28 failure and is the reason the trap exists.
+
+**This costs money and does not start without the owner saying so.**
+
 ## Not in this milestone
 
 - **An operator deleting somebody else's upload through the API.**

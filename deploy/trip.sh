@@ -893,6 +893,73 @@ if not body.get("success"):
 print("stored %s" % body.get("documents_added", 0))'
 }
 
+# The probe id this asker owns, taken from `GET /documents` -- the server's own
+# answer, and `yours` is the server's own verdict on who may remove it. Read
+# rather than reconstructed for the same reason the cleanup scans the store:
+# `safe_owner()` deciding how a name is spelled must not be able to make this
+# step address the wrong document. Prints nothing when there is no such entry,
+# which is never an id, so a broken read fails the check below rather than
+# deleting something else.
+own_probe_id() {
+  local auth="$1"
+  { curl -s --max-time 60 --config <(printf 'user = "%s"\n' "$auth") \
+      "$URL/documents" 2>/dev/null || true; } \
+    | STEM="$PROBE_STEM" python3 -c 'import json, os, sys
+stem = os.environ["STEM"]
+try:
+    docs = json.load(sys.stdin)["documents"]
+except Exception:
+    docs = []
+for d in docs if isinstance(docs, list) else []:
+    if d.get("yours") and str(d.get("id") or "").endswith(":" + stem):
+        print(d["id"])
+        break'
+}
+
+# DELETE /documents/<id> as one gate user. The whole point is that the three
+# refusals are different sentences: a 403 (not yours), a 404 (not there) and a
+# 200 that removed nothing are the outcomes this item exists to keep apart, so
+# the code is printed for anything but a success and the success carries the
+# chunk count it reported. An id is a colon-joined name; colons are legal in a
+# path segment and `{document_id:path}` on the route is what keeps a stem with
+# a slash in it from becoming two unmatched segments.
+remove_document() {
+  local auth="$1" doc_id="$2" answer code
+  answer=$({ curl -s -w '\n%{http_code}' --max-time 120 -X DELETE \
+      --config <(printf 'user = "%s"\n' "$auth") \
+      "$URL/documents/$doc_id" 2>/dev/null || true; })
+  code=$(printf '%s' "$answer" | tail -1 | tr -d '\r')
+  printf '%s' "$answer" | sed '$d' | CODE="$code" python3 -c 'import json, os, sys
+
+code = os.environ["CODE"] or "000"
+if code != "200":
+    print(code)
+    raise SystemExit
+try:
+    body = json.load(sys.stdin)
+except Exception:
+    print("200 with an unreadable body")
+    raise SystemExit
+if not body.get("success"):
+    print("200 refused: %s" % (body.get("error") or "no reason given"))
+    raise SystemExit
+print("200 chunks=%s" % body.get("chunks_removed", 0))'
+}
+
+# Chunks in the collection, read off chroma rather than asked for over HTTP.
+# `/stats` is scoped and recomputed; this is the store. -1 on any failure.
+store_chunks() {
+  ssh "$REMOTE" "docker exec -i $INSTANCE-api-1 python -" <<'CHUNKS' 2>/dev/null | tr -d '\r'
+import os
+try:
+    import chromadb
+    path = os.environ.get("SEXTANT_CHROMA_DIR", "/data/chroma")
+    print(chromadb.PersistentClient(path=path).get_collection("documents").count())
+except Exception:
+    print(-1)
+CHUNKS
+}
+
 if [ -z "$URL" ] || [ -z "${SEXTANT_TRIP_AUTH:-}" ] || [ -z "${SEXTANT_TRIP_AUTH_2:-}" ]; then
   echo "   needs both gate users exported -- isolation is unproven."
   echo "   this is the half of the criterion that is otherwise done by hand."
@@ -936,6 +1003,59 @@ else
   expect "probe documents in the store" 2 "$found"
   owners=$(probe_ids | awk -F: '{print $2}' | sort -u | wc -l | tr -d ' ')
   expect "owned by distinct names" 2 "$owners"
+
+  # --- the way back out (0.9.1, milestone 22 item 2) ------------------------
+  # Everything above is milestone 21's criterion. The delete shipped in 0.9.1
+  # and was proved against a local store, where there is only ever one owner --
+  # and `writable_by` is answered against the name Caddy vouched for, so the
+  # one environment that can actually disagree with it is this one. The order
+  # is deliberate: the refusal is proved while the other user's document is
+  # still there to be refused, and the owner's own delete comes last, because
+  # it is the only step here that cannot be undone.
+  id_a=$(own_probe_id "$SEXTANT_TRIP_AUTH")
+  id_b=$(own_probe_id "$SEXTANT_TRIP_AUTH_2")
+  if [ -z "$id_a" ] || [ -z "$id_b" ]; then
+    echo "   /documents named no owned probe for one of the users -- the" >&2
+    echo "   delete is unproven and nothing was removed through the gate." >&2
+    GATE_FAILURES=$((GATE_FAILURES + 1))
+  else
+    expect "each user's listing names their own" 2 \
+      "$(printf '%s\n%s\n' "$id_a" "$id_b" | sort -u | wc -l | tr -d ' ')"
+
+    # The row that matters. A write is a delete first, so this is the same
+    # asymmetry /ingest has had since 0.8.5, asked the other way round.
+    expect "removing the other user's document" 403 "$(remove_document "$SEXTANT_TRIP_AUTH" "$id_b")"
+    expect "and theirs is still there"          "$((b0 + 1))" "$(stats_docs "$SEXTANT_TRIP_AUTH_2")"
+    expect "and still in the store"             2 "$(probe_ids | wc -l | tr -d ' ')"
+
+    # An id in the caller's *own* namespace that is not there, built off the
+    # server's own id so the prefix is right: a 403 here would mask the 404
+    # and the check would pass for the wrong reason.
+    expect "removing one that is not there" 404 \
+      "$(remove_document "$SEXTANT_TRIP_AUTH" "${id_a%:*}:$PROBE_STEM-absent")"
+
+    chunks_before=$(store_chunks)
+    verdict=$(remove_document "$SEXTANT_TRIP_AUTH" "$id_a")
+    removed=
+    case "$verdict" in
+      '200 chunks='*) removed="${verdict#200 chunks=}" ;;
+    esac
+    case "$removed" in
+      ''|0|*[!0-9]*) removed= ;;
+    esac
+    # A delete that reports *no* chunks is the `/upload` answering 200 with
+    # `success: false` shape again, so a real count is part of this check
+    # rather than a detail of it -- and the wanted side says what a pass looks
+    # like in words, because the number itself is whatever that document was.
+    expect "removing their own" "200 with a chunk count" \
+      "$(if [ -n "$removed" ]; then echo "200 with a chunk count"; else echo "$verdict"; fi)"
+    if [ -n "$removed" ]; then
+      expect "the store is smaller by that many" "$((chunks_before - removed))" "$(store_chunks)"
+    fi
+    expect "it is gone from their listing" "$a0"        "$(stats_docs "$SEXTANT_TRIP_AUTH")"
+    expect "the other user is untouched"   "$((b0 + 1))" "$(stats_docs "$SEXTANT_TRIP_AUTH_2")"
+    expect "one probe left for the trap"   1 "$(probe_ids | wc -l | tr -d ' ')"
+  fi
 fi
 
 say "done - the trap parks the box next"

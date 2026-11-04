@@ -149,6 +149,22 @@ there are two probe documents under two different owners.
 It only runs when both `SEXTANT_TRIP_AUTH` and `SEXTANT_TRIP_AUTH_2` are
 exported. It costs two summaries (~$0.006) when a model key is configured.
 
+**Since 0.9.1 it also proves the way back out.** The delete shipped against a
+local store, where there is only ever one owner — and the owner a delete is
+checked against is the name Caddy vouched for, so this is the only environment
+that can disagree with it. Through the public URL: each user's `/documents`
+names their own probe, the first user removing the second user's is **403**
+with the second user's document still there and still in the store, an id in
+the caller's own namespace that does not exist is **404**, and then the
+caller's own comes out — with the chunk count it reported, and the collection
+read off chroma smaller by exactly that many.
+
+The order is deliberate. The refusal is checked while the other document is
+still there to be refused, and the delete that cannot be undone goes last. The
+first user's probe is therefore gone through the gate by the time the trap
+runs, which is why the cleanup normally has one document to remove and two on
+a run that failed before it.
+
 **The forged-name check runs between the two uploads, not after.** Once both
 users have uploaded, their counts are the same number, and a check whose two
 sides agree cannot fail — the first draft of this step passed against a proxy

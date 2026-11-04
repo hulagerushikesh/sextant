@@ -188,7 +188,20 @@ case "$cmd" in
   *"sextant-forget"*)          if [ "${FAKE_FORGET_FAILS:-0}" != 1 ]; then
                                  : > "$FAKE_STATE.corpus"
                                fi ;;
-  *"python -"*)                cat >/dev/null; echo "     audit ran" ;;
+  # Two different scripts arrive this way, so the stub reads what it was sent
+  # rather than taking an env marker it would then have to be told to set --
+  # an argument passed only so a stub can recognise itself is the unused
+  # variable that made a docstring read as true in `tenancy.py`.
+  *"python -"*)                sent=$(cat)
+                               case "$sent" in
+                                 # `store_chunks`: the collection's own count,
+                                 # 4 chunks per probe over the base store.
+                                 *".count()"*)
+                                   probes=$(sort -u "$FAKE_STATE.corpus" \
+                                     2>/dev/null | grep -c . || true)
+                                   echo "$(( ${FAKE_BASE_CHUNKS:-79} + 4 * probes ))" ;;
+                                 *) echo "     audit ran" ;;
+                               esac ;;
   *"up -d --build"*)           echo "built" ;;
   # Two containers, because the real box runs two. The stub printed only the
   # api line, so no test could have noticed that Caddy was never checked --
@@ -399,6 +412,10 @@ if [ "${FAKE_HONOURS_NAME:-0}" = 1 ]; then
 fi
 corpus="$FAKE_STATE.corpus"
 base="${FAKE_BASE_DOCS:-21}"
+# Every arm but the delete answers 200; the three answers the delete has to be
+# able to give apart are a status code each, so the code is a variable now
+# rather than a literal at the bottom.
+code=200
 
 case "$URL_PATH" in
   /upload)
@@ -420,13 +437,52 @@ case "$URL_PATH" in
     case "$mine" in ""|0) mine=0 ;; *) mine=1 ;; esac
     body=$(printf '{"collection_size":79,"documents":%s,"summaries":21,' "$((base + mine))")
     body="$body"'"persist_dir":"/data/chroma"}' ;;
+  /documents)
+    # Scoped, like the real listing: the asker is shown their own probe and not
+    # the other user's. `yours` is decided here, from the name the gate
+    # established -- a stub that answered it from the id would be modelling the
+    # bug the server-side decision exists to avoid.
+    if grep -qx "$who" "$corpus" 2>/dev/null; then
+      entry='{"id":"upload:'"$who"':sextant-trip-probe",'
+      entry="$entry"'"title":"probe","chunks":4,"yours":true}'
+      body='{"count":1,"documents":['"$entry"']}'
+    else
+      body='{"count":0,"documents":[]}'
+    fi ;;
+  /documents/*)
+    # DELETE. 403 for somebody else's id, 404 for one that is not there, 200
+    # with a chunk count for the caller's own -- the three outcomes step 7 now
+    # keeps apart, each of them something a wrong box would get wrong
+    # differently.
+    doc_id="${URL_PATH#/documents/}"
+    owner="${doc_id#upload:}"; owner="${owner%%:*}"
+    stem="${doc_id##*:}"
+    if [ "$owner" != "$who" ] && [ "${FAKE_DELETE_ALLOWS_OTHERS:-0}" != 1 ]; then
+      code=403; body='{"detail":"Not yours to remove."}'
+    elif [ "$stem" != sextant-trip-probe ] || ! grep -qx "$owner" "$corpus" 2>/dev/null; then
+      # A delete that removed nothing and says so cheerfully is the
+      # `/upload` 200-with-success-false shape, which is why 4 is a clause of
+      # the rule and not a detail.
+      if [ "${FAKE_DELETE_404_AS_200:-0}" = 1 ]; then
+        code=200
+        body='{"success":true,"message":"Nothing to remove.","chunks_removed":0,'
+        body="$body"'"collection_size":79}'
+      else
+        code=404; body='{"detail":"No document '"$doc_id"'"}'
+      fi
+    else
+      grep -vx "$owner" "$corpus" > "$corpus.tmp" 2>/dev/null || :
+      mv "$corpus.tmp" "$corpus"
+      body='{"success":true,"message":"Removed 4 chunks.","chunks_removed":4,'
+      body="$body"'"collection_size":83}'
+    fi ;;
   *) body="" ;;
 esac
 if [ "$discard_body" = 1 ]; then
-  echo 200
+  echo "$code"
 else
   if [ -n "$body" ]; then echo "$body"; fi
-  if [ "$want_code" = 1 ]; then echo 200; fi
+  if [ "$want_code" = 1 ]; then echo "$code"; fi
 fi
 """
 
@@ -1347,6 +1403,19 @@ class TestTheIsolationIsProvenFromOutside:
             "the first user's copy survived               22",
             "probe documents in the store                 2",
             "owned by distinct names                      2",
+            # 0.9.1's way back out, proved on the one deployment that has two
+            # owners in it. The order is the point: the refusal is checked
+            # while the other user's document is still there to be refused.
+            "each user's listing names their own          2",
+            "removing the other user's document           403",
+            "and theirs is still there                    22",
+            "and still in the store                       2",
+            "removing one that is not there               404",
+            "removing their own                           200 with a chunk count",
+            "the store is smaller by that many            83",
+            "it is gone from their listing                21",
+            "the other user is untouched                  22",
+            "one probe left for the trap                  1",
         ):
             assert line in out, line
         assert code == 0
@@ -1368,6 +1437,29 @@ class TestTheIsolationIsProvenFromOutside:
         assert "naming yourself the other user               got 21, wanted 22" in out
         assert code != 0
 
+    def test_a_box_that_lets_one_user_delete_anothers_is_caught(self, tmp_path):
+        # The row the delete exists to make impossible. A write is a delete
+        # first, so this is `/ingest`'s 0.8.5 asymmetry asked the other way
+        # round -- and it is the one failure where the damage is already done
+        # by the time the check reports it, which is why the refusal is
+        # checked before the owner's own delete and not after.
+        code, out = _run_trip(
+            tmp_path, GOOD_ENV, FAKE_DELETE_ALLOWS_OTHERS="1", **self.AUTH
+        )
+        assert "removing the other user's document           got 200" in out
+        assert code != 0
+
+    def test_a_missing_document_reported_as_a_success_is_caught(self, tmp_path):
+        # `/upload` answering 200 with `success: false` is already written
+        # down as a shape that reads as a tick. A delete that removed nothing
+        # and says it worked is the same lie about the one action that cannot
+        # be checked by looking at what came back.
+        code, out = _run_trip(
+            tmp_path, GOOD_ENV, FAKE_DELETE_404_AS_200="1", **self.AUTH
+        )
+        assert "removing one that is not there               got 200" in out
+        assert code != 0
+
     def test_the_forged_name_is_checked_while_the_two_views_differ(self, tmp_path):
         # It has to run after the first upload and before the second: afterwards
         # both users are at the same count, and a check whose two sides agree
@@ -1386,10 +1478,13 @@ class TestTheIsolationIsProvenFromOutside:
         assert "the corpus is back to what it was" in out
 
     def test_probes_left_behind_are_not_a_successful_trip(self, tmp_path):
-        # Two documents left in the production corpus is not something an exit
+        # A document left in the production corpus is not something an exit
         # code of 0 should be able to say happened -- the same rule as the park.
+        # It is the second user's since 0.9.1: the first user's own probe is
+        # removed *through the gate* by the step itself, which is the delete
+        # being proved, so the trap is left with one.
         code, out = _run_trip(tmp_path, GOOD_ENV, FAKE_FORGET_FAILS="1", **self.AUTH)
-        assert "STILL THERE: upload:ada:sextant-trip-probe" in out
+        assert "STILL THERE: upload:grace:sextant-trip-probe" in out
         assert "probe documents are still in the production corpus" in out
         assert "remove by hand" in out
         assert code != 0
@@ -1406,9 +1501,13 @@ class TestTheIsolationIsProvenFromOutside:
         # The ids are read back off the store rather than rebuilt from the
         # usernames here, so `safe_owner()` spelling a name differently cannot
         # leave documents behind that the trip then reports as gone.
+        # With the delete proved through the gate the trap is handed whatever
+        # the step did not take out itself, which is the second user's -- and
+        # that is the point: the trap scans, so it finds one here and two on
+        # the run where the delete never happened.
         _, out = _run_trip(tmp_path, GOOD_ENV, **self.AUTH)
-        assert "removing upload:ada:sextant-trip-probe" in out
         assert "removing upload:grace:sextant-trip-probe" in out
+        assert "removing upload:ada:sextant-trip-probe" not in out
 
 
 class TestAnUploadIsJudgedByWhatItStored:
