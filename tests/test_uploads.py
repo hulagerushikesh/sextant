@@ -7,6 +7,8 @@ which is exactly the format people have.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from sextant import settings
@@ -41,6 +43,45 @@ class TestSafeName:
     )
     def test_a_name_cannot_escape_the_directory_it_lands_in(self, given, expected):
         assert safe_name(given) == expected
+
+    @pytest.mark.parametrize(
+        "given, stem",
+        [
+            ("budget#2.txt", "budget_2"),
+            ("report?v2.txt", "report_v2"),
+            ("100%2e.txt", "100_2e"),
+            ("a&b.txt", "a_b"),
+            ("a+b.txt", "a_b"),
+            # The one hostile character that does survive, because a space is
+            # legal in `_UNSAFE`'s allow-list. It is also the one a URL escapes
+            # correctly whichever function does the escaping.
+            ("notes v1.txt", "notes v1"),
+        ],
+    )
+    def test_no_url_punctuation_reaches_an_upload_id(self, given, stem):
+        """The reason the browser's URL escaping is hardening, not a bug fix.
+
+        `planning/PROGRESS.md` recorded 2026-11-04 that `budget#2.txt` was
+        stored as `upload:<them>:budget#2`, and the whole account of that day's
+        escaping defect followed from it: the browser sent the id with
+        `encodeURI`, which leaves `#` alone, so the server was supposedly asked
+        to remove `upload:<them>:budget`. The premise was never checked here.
+        `_UNSAFE` is an allow-list of `A-Za-z0-9._ -`, applied by `safe_name`
+        before the id is built and by `safe_owner` to the other half, so
+        **neither half of an upload id can carry a character that ends a URL
+        path.** No uploaded file has ever been reachable by that defect.
+
+        The escaping is still right -- an id is one path segment's worth of
+        data, and `/documents/{document_id:path}` will accept whatever is in
+        the store -- but what it defends is a document whose id was *stated*
+        rather than derived from a filename: `/ingest`, `kb_ingest`, or
+        `sextant-ingest` on the box. This test is here so the next person
+        reading `api.test.ts` finds out which of the two they are looking at
+        without having to re-derive it.
+        """
+        name = safe_name(given)
+        assert Path(name).stem == stem
+        assert to_document(given, MARKDOWN)["id"] == f"upload:{DEFAULT_OWNER}:{stem}"
 
 
 class TestParsing:

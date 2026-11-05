@@ -148,26 +148,47 @@ The corpus was restored to its 22 documents and 1,660 chunks afterwards.
 ### The character that ended the path — ₹0
 
 Every id in that table is a stem nobody has to think about: `notes`, `gone`,
-`handbook`. The rule was met and the evidence is real, and **the one half of
-an id a person actually controls was never varied in it.** An upload is stored
-as `upload:<owner>:<stem>` where the stem is `Path(name).stem` of the file
-they dropped on the box — unsanitised, and correctly so, because it is their
-filename.
+`handbook`. The rule was met and the evidence is real, and the shape of an id
+was never varied in it. An upload is stored as `upload:<owner>:<stem>`.
 
 `lib/api.ts` sent that id with `encodeURI`, which is the function for escaping
 a URL you are *composing*: it leaves `#` and `?` alone because in that URL
 they are punctuation. In an id they are data, and both of them end a path.
 
-| They uploaded | Stored as | The server was asked to remove | What happened |
-| --- | --- | --- | --- |
-| `budget#2.txt` | `upload:<them>:budget#2` | `upload:<them>:budget` | **404** about a document on the screen — if they have no `budget.txt` |
-| `budget#2.txt`, and `budget.txt` | both | `upload:<them>:budget` | **200 with a chunk count, and the wrong file gone.** Both ids are theirs, so the guard authorises it |
-| `report?v2.txt` | `upload:<them>:report?v2` | `upload:<them>:report` | the same, through a query string instead of a fragment |
+| The store held | The server was asked to remove | What happens |
+| --- | --- | --- |
+| `upload:<them>:budget#2` | `upload:<them>:budget` | **404** about a document plainly on the screen — if there is no such id |
+| `upload:<them>:budget#2`, and `upload:<them>:budget` | `upload:<them>:budget` | **200 with a chunk count, and the wrong document gone.** Both ids are theirs, so the guard authorises it |
+| `upload:<them>:report?v2` | `upload:<them>:report` | the same, through a query string instead of a fragment |
 
 The second row is the whole finding. The guard cannot help — it exists to stop
 you touching *somebody else's* document, and this is one of yours. The delete
 is the single action in this client that cannot be undone, and it was
-reporting success while removing a file nobody named.
+reporting success while removing a document nobody named.
+
+**Corrected 2026-11-05 — the first column of that table used to say "They
+uploaded `budget#2.txt`", and that was wrong.** The claim this entry was built
+on was that the stem is the person's filename, unsanitised. It is not:
+`uploads.py` builds the id through `safe_name`, an allow-list of
+`A-Za-z0-9._ -`, and `safe_owner` applies the same regex to the other half, so
+`budget#2.txt` has always been stored as `upload:<them>:budget_2`. **Not one
+uploaded document has ever been reachable by this defect, and the sentence
+below about "every filename the people who built it happened to type" was
+describing a protection, not a gap.** The error was mine and it was a premise
+nobody read the server for; `TestNoUrlPunctuationReachesAnUploadId` in
+`tests/test_uploads.py` now pins the sanitisation so the story cannot drift
+back.
+
+The escaping is still correct, and the reachable case is narrower and worth
+naming: an id the store was *told* rather than given — `/ingest`, `kb_ingest`,
+`sextant-ingest` on the box, none of which sanitise — that the caller may
+write to. A browser with no `localStorage` sends no client name, so the server
+answers it as the anonymous `shared` owner, and `shared` owns the shared
+corpus; on a box with no gate in front, every stated id in that corpus comes
+back `yours`. On the deployed box the gate names every caller, so the only
+`yours` ids there are uploads, and uploads cannot carry the characters. That
+is the honest size of it: hardening on this deployment, a live defect on a
+dev box whose operator ingested a `#`.
 
 Measured rather than reasoned about, which changed the answer twice. A space,
 `&` and `+` cross a path untouched. A lone `%` is *repaired* to `%25` by the
@@ -189,8 +210,11 @@ both ways: restoring the one line fails three vitest tests and two python
 tests.
 
 This is milestone 21 item 25's shape — *a warning may not be responsive* —
-asked of a value instead of an element: **the affordance worked for every
-filename the people who built it happened to type.**
+asked of a value instead of an element: the affordance was tested against one
+shape of id. What the correction above adds is the other half of that lesson,
+and the more expensive one: **a defect's blast radius is a claim like any
+other, and this one was written up for a day without anybody reading the
+thirty lines of server that decide it.**
 
 ## 2 · Deploy it and prove the delete through the gate — ≈₹2
 
@@ -347,12 +371,20 @@ rather than adding one.
 
 The escaping fix found earlier the same day was **not** exercised by this
 trip. `PROBE_STEM` is `sextant-trip-probe`, a name nobody has to escape, so
-the ids the trip deleted are exactly the shape that always worked. Giving the
-probe a `#` is the obvious next move and was deliberately not made before a
-paid run: it would have risked spending ₹2 discovering a harness problem
-instead of the delete. The escaping is proved by 12 frontend tests and 4
-server tests, on this laptop, against no proxy — which is precisely the kind
-of claim this milestone exists to distrust.
+the ids the trip deleted are exactly the shape that always worked. The
+escaping is proved by 12 frontend tests and 4 server tests, on this laptop,
+against no proxy — which is precisely the kind of claim this milestone exists
+to distrust.
+
+**And the follow-up that was queued for it is void, 2026-11-05.** The next
+move recorded here was to give `PROBE_STEM` a `#` so a paid trip would prove
+the escaping through the real Caddy. That trip cannot exist: the probe reaches
+the store through `/upload`, `safe_name` turns the `#` into `_`, and the id
+the trip then deleted would be the same safe shape it deletes today — while
+`probe_ids` matches on the unsanitised stem and would report the probe
+missing, failing the trip on its own cleanup for ₹2. The thing that would
+need to change is not the filename but the ingest path, and no deployment
+exposes a stated id to a gate user. Not queued; recorded as closed.
 
 ## Not in this milestone
 
