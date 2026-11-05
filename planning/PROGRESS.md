@@ -5,6 +5,51 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-05 — the defect that was smaller than its write-up (₹0)
+
+**A correction, and the thing being corrected is yesterday's own record.**
+The 2026-11-04 escaping entry below says an upload's id carries the stem
+of the file a person dropped on the box, "unsanitised, and correctly so,
+because it is their filename" — and the whole account of the defect rests
+on it: `budget#2.txt` stored as `upload:<them>:budget#2`, a `#` that ends
+the path, a delete that removes `budget.txt` and reports success.
+
+The premise is false and it took thirty lines of `uploads.py` to say so.
+`safe_name` is an allow-list — `A-Za-z0-9._ -` — applied before the id is
+built, and `safe_owner` applies the same regex to the other half. So
+`budget#2.txt` has always been stored as `upload:<them>:budget_2`.
+**Every character in that write-up except the space is replaced by `_`
+before an id exists, so no uploaded document has ever been reachable by
+the defect, and the sentence about "every filename the people who built
+it happened to type" was describing the protection it claimed was
+missing.**
+
+What is actually reachable is narrower and still worth the fix: an id the
+store was *told* rather than given — `/ingest`, `kb_ingest`,
+`sextant-ingest` on the box, none of which sanitise — that the caller may
+write to. A browser with no `localStorage` sends no client name, the
+server answers it as the anonymous `shared` owner, and `shared` owns the
+shared corpus, so on a box with no gate every stated id in it comes back
+`yours`. On the deployed box the gate names every caller and the only
+`yours` ids are uploads, which cannot carry the characters. Hardening
+there; a live defect only on a dev box whose operator ingested a `#`.
+
+The escaping stays — an id is one segment's worth of data and the route
+accepts whatever the store holds. What changed is the record, plus six
+parametrised cases in `tests/test_uploads.py` pinning that no URL
+punctuation reaches an upload id, so the claim cannot drift back, and the
+docstring in `api.test.ts`, which was teaching the wrong story to whoever
+reads it next. 905 python tests, 70 frontend.
+
+**And it voids the queued follow-up.** Giving `deploy/trip.sh`'s probe a
+`#` would have proved nothing for ₹2: the probe goes in through
+`/upload`, the `#` becomes `_`, the deleted id is the same safe shape as
+today's — and `probe_ids` matches the unsanitised stem, so the trip would
+have failed its own cleanup and reported a probe left behind on a box it
+had just cleaned. The lesson is the cheap half of yesterday's expensive
+one: **a defect's blast radius is a claim like any other.** The fix was
+checked three ways; the sentence saying who it saved was checked none.
+
 ## 2026-11-04 — the delete, proved through the gate (milestone 22 item 2, ₹2)
 
 **Milestone 22 ships.** The second trip ran 11 minutes for about ₹2 and
@@ -30,24 +75,29 @@ trip's probe filename is `sextant-trip-probe`, which needs no escaping,
 so the URL-escaping fix found earlier the same day rode along unproven:
 it stands on 12 frontend and 4 server tests on this laptop, with no proxy
 in front of them, which is the kind of claim this milestone exists to
-distrust. Giving the probe a `#` is the next trip's job, not a change to
-make in the hour before a paid run.
+distrust. ~~Giving the probe a `#` is the next trip's job~~ — see the
+2026-11-05 entry above: that trip cannot exist, because the probe arrives
+through `/upload` and the server sanitises the `#` away before the id is
+written.
 
 ## 2026-11-04 — the character that ended the path (milestone 22 item 1, ₹0)
 
 Item 1's delete met every clause of its own rule against a real store
 and the real browser. Every id in that evidence was a stem nobody has to
-escape: `notes`, `gone`, `handbook`. The half of an id a person actually
-controls is `Path(name).stem` of the file they dropped on the box, and it
-was never varied.
+escape: `notes`, `gone`, `handbook`. ~~The half of an id a person
+actually controls is `Path(name).stem` of the file they dropped on the
+box~~ — **false, corrected 2026-11-05 above: `safe_name` sanitises the
+stem and `safe_owner` the owner, so this entry's `#` can only reach an id
+that was stated through `/ingest` or the CLI.** The shape of an id was
+never varied in item 1's evidence, which is the part that still holds.
 
 `lib/api.ts` sent the id with `encodeURI`, which escapes a URL you are
 *composing* and therefore leaves `#` and `?` alone — in that URL they are
 punctuation; in an id they are data, and both end a path. So
-`budget#2.txt`, stored as `upload:<them>:budget#2`, asked the server to
-remove `upload:<them>:budget`. If they have no such file that is a 404
-about a document plainly on the screen. **If they also uploaded
-`budget.txt`, it is a 200 with a chunk count and the wrong file gone** —
+a stored `upload:<them>:budget#2` asked the server to remove
+`upload:<them>:budget`. If there is no such id that is a 404 about a
+document plainly on the screen. **If `upload:<them>:budget` is also in
+the store, it is a 200 with a chunk count and the wrong document gone** —
 authorised, because both ids are theirs, which is exactly what the write
 guard exists to permit. The one action in this client that cannot be
 undone, reporting success for a file nobody named.

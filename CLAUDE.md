@@ -674,6 +674,17 @@ lifetime rather than per day.
 
 ## Gotchas that recur
 
+- **An upload's id carries no URL punctuation, and a stated id carries
+  whatever it likes.** `safe_name` (and `safe_owner` on the other half) is an
+  allow-list of `A-Za-z0-9._ -`, so `budget#2.txt` is stored as
+  `upload:<them>:budget_2`. `/ingest`, `kb_forget`'s caller and
+  `sextant-ingest` state ids outright and sanitise nothing. Any claim about
+  what a hostile *filename* does to a store has to go through those thirty
+  lines first — 2026-11-04 shipped a correct URL-escaping fix in `api.ts` with
+  a write-up describing a user-facing data-loss bug that the server had always
+  made unreachable, and the record stood for a day. **A defect's blast radius
+  is a claim like any other: the fix was checked three ways and the sentence
+  saying who it saved was checked none.**
 - Chroma segment goes stale after CLI ingest: restart `:8100` to see new
   chunks. To drop one document: `sextant-forget <id>` (`--list` for the ids,
   `-y` to skip the confirmation). To empty the store:

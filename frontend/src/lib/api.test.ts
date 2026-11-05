@@ -4,15 +4,29 @@
  * `lib/api.ts` is the single file every request to the server goes through —
  * `TestTheBrowserSendsWhatTheAppReads` pins that — and until now not one line
  * of it was executed by a test. The delete is the call where that mattered:
- * the id travels in the URL *path*, half of it is a filename a person chose,
- * and `encodeURI` leaves `#` and `?` alone because to the function writing a
- * URL those are punctuation. To this id they are data.
+ * the id travels in the URL *path*, and `encodeURI` leaves `#` and `?` alone
+ * because to the function writing a URL those are punctuation. To this id
+ * they are data, and both of them end a path.
  *
- * Which makes the failure worse than a refusal. `budget#2.txt` is stored as
- * `upload:<them>:budget#2`; the `#` opened a fragment no browser transmits,
- * so the server was asked to remove `upload:<them>:budget` — a 404 about a
- * document plainly on the screen if they have no such file, and a 200
- * removing a *different* one of their files if they do, reported as success.
+ * **Corrected 2026-11-05, and the correction matters more than the fix.**
+ * This file first said the id's second half is a filename a person chose, so
+ * `budget#2.txt` was stored as `upload:<them>:budget#2` and the delete could
+ * remove a *different* file of theirs and report success. That premise was
+ * wrong and nobody checked it: `uploads.py` builds the id through `safe_name`,
+ * an allow-list of `A-Za-z0-9._ -`, so the `#` is already an `_` before the id
+ * exists — `upload:<them>:budget_2`. `safe_owner` does the same to the other
+ * half. **No uploaded document has ever been reachable by this defect**, and
+ * `TestNoUrlPunctuationReachesAnUploadId` in `tests/test_uploads.py` now pins
+ * that so the claim cannot drift back.
+ *
+ * What the escaping does defend is a document whose id was *stated* rather
+ * than derived from a filename — `/ingest`, `kb_ingest`, or `sextant-ingest`
+ * on the box, none of which sanitise — and which the caller is allowed to
+ * write to. A browser with no `localStorage` sends no client name, the server
+ * answers it as the anonymous `shared` owner, and `shared` owns the shared
+ * corpus: on a box with no gate in front, every stated id in it is `yours`.
+ * So the escaping stays, as the right shape for a path segment rather than as
+ * a fix for a bug a person could hit by naming a file.
  *
  * These assert what the server receives, not what the string looks like: the
  * URL is parsed the way a browser parses it before sending, and the path is
@@ -70,8 +84,9 @@ beforeEach(() => localStorage.clear())
 afterEach(() => vi.unstubAllGlobals())
 
 describe('the id a delete carries', () => {
-  // Every one of these is a filename a person can save on a Mac or a Linux
-  // box and drop on the upload box, reduced to its stem by `uploads.py`.
+  // Every one of these is an id the *store* can hold, which is not the same
+  // set as the ids an upload can produce — `safe_name` reduces all but the
+  // space to `_` on the way in, so these arrive by `/ingest` or the CLI.
   // Only the first two were broken; the rest are here because the list was
   // measured rather than reasoned about, and because the cheapest way for
   // this fix to regress is for the next person to narrow the escaping back
@@ -137,10 +152,12 @@ describe('the defect these are here about', () => {
     expect(lost.dropped).toBe('#2')
   })
 
-  it('removes a real, different document when one exists', () => {
-    // The reason this is a defect and not an inconvenience. Both files are
-    // this person's, so the truncated id is one they may write to: the server
-    // authorises it, removes it, and answers 200 with a chunk count.
+  it('names a different document, which is why a refusal is the good case', () => {
+    // The truncated id is not a non-existent one — it is a shorter id in the
+    // same namespace. A 404 is then the lucky outcome: if that id is also in
+    // the store the caller may write to it, so the server authorises the
+    // removal and answers 200 with a chunk count for a document nobody named.
+    // Reachable only for ids the store was *told*, per the header above.
     const asked = 'upload:ada:budget#2'
     const removed = idTheServerSees(`${SERVER_URL}/documents/${encodeURI(asked)}`).id
     expect(removed).not.toBe(asked)
