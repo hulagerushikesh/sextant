@@ -22,11 +22,17 @@
  * What the escaping does defend is a document whose id was *stated* rather
  * than derived from a filename — `/ingest`, `kb_ingest`, or `sextant-ingest`
  * on the box, none of which sanitise — and which the caller is allowed to
- * write to. A browser with no `localStorage` sends no client name, the server
- * answers it as the anonymous `shared` owner, and `shared` owns the shared
- * corpus: on a box with no gate in front, every stated id in it is `yours`.
- * So the escaping stays, as the right shape for a path segment rather than as
- * a fix for a bug a person could hit by naming a file.
+ * write to — a gate user who states an id inside their own namespace through
+ * `/ingest`, or the shared caller that curl and the CLI are. So the escaping
+ * stays, as the right shape for a path segment rather than as a fix for a bug
+ * a person could hit by naming a file.
+ *
+ * **Narrowed again 2026-11-11.** That list used to begin with "a browser with
+ * no `localStorage`", which sends no client name and was answered as
+ * `shared`. It is not on the list any more because that is closed: a browser
+ * that cannot write its name down now sends `NO_STORAGE_OWNER` instead of
+ * nothing, so it owns its own uploads and none of the stated ids in the
+ * shared corpus.
  *
  * These assert what the server receives, not what the string looks like: the
  * URL is parsed the way a browser parses it before sending, and the path is
@@ -127,6 +133,27 @@ describe('the id a delete carries', () => {
     // caller, which owns none of this browser's uploads: a 403 on your own file.
     const headers = seen[0].init?.headers as Record<string, string> | undefined
     expect(headers?.[CLIENT_HEADER]).toBeTruthy()
+  })
+
+  it('names the browser even when the browser cannot remember its name', async () => {
+    // The storage-less case, 2026-11-11. `clientId()` used to return null
+    // here and `sent()` dropped the header, so the server answered as
+    // `shared` -- the owner of everything the operator ingested. The delete
+    // this file is about was then *authorised* against the shared corpus, and
+    // the listing had already drawn a button for it on every row.
+    vi.stubGlobal('localStorage', {
+      getItem: () => {
+        throw new Error('denied')
+      },
+      setItem: () => {
+        throw new Error('denied')
+      },
+    })
+    const seen = capture()
+    await forgetDocument('upload:ada:notes')
+    const headers = seen[0].init?.headers as Record<string, string> | undefined
+    expect(headers?.[CLIENT_HEADER]).toBeTruthy()
+    expect(headers?.[CLIENT_HEADER]).not.toBe('shared')
   })
 
   it('throws on a refusal rather than returning a flag', async () => {

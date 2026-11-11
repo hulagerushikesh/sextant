@@ -42,6 +42,29 @@ export function storageKey(suffix: string): string {
 const CLIENT_KEY = PREFIX + 'client.v1'
 
 /**
+ * The namespace a browser falls into when it cannot write its own name down.
+ *
+ * Deliberately **not** the server's `shared` default. Omitting the header
+ * sends a request there instead, and `shared` owns every document the
+ * operator ingested — `identity.writable_by` says so, which is what lets the
+ * CLI and curl seed a box. That was harmless while a namespace only kept two
+ * people's uploads apart. Since 0.9.1 it is also a delete: `GET /documents`
+ * answers `yours` with `writable_by`, so a storage-less browser was told the
+ * whole corpus was its own and `corpus-card.tsx` drew a remove control on
+ * every row of it. Behind the gate Caddy names every caller and the client
+ * id is never consulted, so the reachable case is any box run without the
+ * gate, which is every development box.
+ *
+ * A constant rather than a per-load random id, for the reason the null it
+ * replaces was chosen: a fresh name each load makes every re-upload a second
+ * document, and this browser cannot remember one to avoid it. The cost is
+ * that two storage-less browsers share this namespace and can replace each
+ * other's uploads — the pre-0.8.2 collision, confined to callers that have
+ * no way to be told apart, and no longer reaching anybody else's documents.
+ */
+export const NO_STORAGE_OWNER = 'no-storage'
+
+/**
  * A stable random name for this browser, sent with uploads.
  *
  * It exists so two people behind the one shared password stop overwriting
@@ -51,20 +74,24 @@ const CLIENT_KEY = PREFIX + 'client.v1'
  * nothing from anyone's search. See `mcp_server/identity.py`.
  *
  * Random rather than anything about the person: it needs to be unique and
- * stable, and nothing more. If storage is unavailable, the server's own
- * default applies and the old shared behaviour is what you get — which is the
- * right failure, because the alternative is a new id per page load and a
- * duplicate document on every re-upload.
+ * stable, and nothing more. If storage is unavailable this answers
+ * `NO_STORAGE_OWNER` rather than nothing — see that constant for why the
+ * server's own default is the one answer this must never give.
+ *
+ * Never null, so there is no call site left that can decide to send no name.
  */
-export function clientId(): string | null {
+export function clientId(): string {
   try {
     let id = localStorage.getItem(CLIENT_KEY)
     if (!id) {
       id = `b${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
+      // A `getItem` that works and a `setItem` that does not is the quota
+      // case; the id above was never written down, so returning it would be
+      // the new-name-per-load failure. The catch below is the right arm.
       localStorage.setItem(CLIENT_KEY, id)
     }
     return id
   } catch {
-    return null
+    return NO_STORAGE_OWNER
   }
 }

@@ -216,6 +216,59 @@ and the more expensive one: **a defect's blast radius is a claim like any
 other, and this one was written up for a day without anybody reading the
 thirty lines of server that decide it.**
 
+### The browser that could not write its own name down — ₹0
+
+**Amended 2026-11-11.** The correction above names "a browser with no
+`localStorage`" as one of the callers who could reach a stated id. That was
+true when written and it is closed now, because it was never only about ids
+with punctuation in them: such a browser was `shared`, and `shared` owns
+everything the operator ingested.
+
+`storage.clientId()` returned `null` when `localStorage` threw, and said why
+in a docstring: a fresh id per page load would make every re-upload a
+duplicate document, so the server's own default was "the right failure". With
+`sent()` omitting the header, the request was answered as `shared`. A
+defensible trade while `shared` meant one thing — a namespace keeping two
+anonymous people's uploads apart. **Item 1 gave it a second meaning.**
+`GET /documents` answers `yours` with `writable_by`, so a browser whose
+storage was unavailable was told the operator's whole corpus was its own, and
+`corpus-card.tsx` drew a remove control on every row.
+
+Reproduced against the real local store before anything was changed: unnamed,
+**22 of 22 documents came back `yours: true`**, and the delete of one of them
+is authorised and answers 200 with a chunk count. Behind the gate it is
+unreachable — Caddy names every caller and the client id is never consulted —
+so the environment with the defect is every box run without the gate,
+including the one it was found on.
+
+**The fix is on the browser's side, and that was the decision the queue was
+waiting on.** Narrowing `writable_by` would stop `sextant-ingest`, curl and
+the eval harness seeding a box, to close a hole no HTTP client without a
+delete button can fall into; worse, it would make `yours` disagree with what
+the DELETE then does, and this route's own docstring says an affordance that
+cannot work is worse than none. So `clientId()` cannot return nothing any
+more. `NO_STORAGE_OWNER` is a constant rather than a random id, which keeps
+the behaviour the null was protecting — a re-upload replaces — and gives up
+only the part nobody wanted: two storage-less browsers share one namespace,
+which is the pre-0.8.2 collision confined to callers that cannot be told
+apart, and no longer reaching anybody else's documents.
+
+Checked end to end in a real browser against the real server rather than only
+in tests: with `localStorage` throwing on access, the request carries
+`X-Sextant-Client: no-storage` and 0 of 22 documents come back `yours`. Both
+sides are pinned, and the cross-language one is the pin that matters —
+`TestNoBrowserFallsIntoTheSharedNamespace` fails if either name is renamed to
+match the other, which is the only way to restore this defect in full while
+breaking nothing else.
+
+**The shape worth keeping: a fallback is only as safe as what it falls back
+to, and that is not a property of the fallback.** The `null` was not an
+oversight. It was a documented decision, right on the day it was written, and
+nothing came back to it when the meaning of the name it deferred to changed
+one directory over. Same sentence as the correction above, one layer out —
+there the claim that aged was about who a fix saved, here about what a default
+costs.
+
 ## 2 · Deploy it and prove the delete through the gate — ≈₹2
 
 Item 1 met every clause of its own rule, against a real store and a real

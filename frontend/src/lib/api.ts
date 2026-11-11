@@ -42,11 +42,16 @@ export const MOCK_NOTICE =
  * own search results. One helper, used everywhere, so a call site added later
  * does not have to remember. Untrusted by the server: it namespaces, it does
  * not authenticate — see mcp_server/identity.py.
+ *
+ * It is sent unconditionally, because `shared` is not a namespace this
+ * browser may be put in by accident: it owns the corpus the operator
+ * ingested, so a request with no name is a request that may delete it.
+ * `clientId()` answers `NO_STORAGE_OWNER` instead and cannot return nothing.
  */
-const sent = (extra?: Record<string, string>): Record<string, string> => {
-  const id = clientId()
-  return { ...extra, ...(id ? { 'X-Sextant-Client': id } : {}) }
-}
+const sent = (extra?: Record<string, string>): Record<string, string> => ({
+  ...extra,
+  'X-Sextant-Client': clientId(),
+})
 
 const describeFailure = async (response: Response) => {
   const fallback = `Server returned ${response.status}`

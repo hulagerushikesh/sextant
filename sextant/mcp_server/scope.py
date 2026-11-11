@@ -98,8 +98,11 @@ visitor would be measuring nothing, and the whole point of the view is which
 index to build over the corpus that exists.
 
 `shared` is scoped like any other name. It is the fallback for curl, the CLI
-and a browser with no storage -- and if it saw everything, every tenant could
-read every other tenant's uploads by deleting one header.
+and the eval harness -- and if it saw everything, every tenant could read
+every other tenant's uploads by deleting one header. Our own browser is not
+on that list since 2026-11-11: it sends a namespace of its own even when
+`localStorage` is unavailable, because `shared` owns the ingested corpus and
+`/documents` answers `yours` with `writable_by`.
 """
 
 from __future__ import annotations

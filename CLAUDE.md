@@ -674,6 +674,25 @@ lifetime rather than per day.
 
 ## Gotchas that recur
 
+- **A fallback is only as safe as what it falls back to, and that is not a
+  property of the fallback.** `storage.clientId()` returned `null` when
+  `localStorage` threw and documented why: a fresh id per page load makes
+  every re-upload a duplicate, so deferring to the server's `shared` default
+  was the better of two failures. Correct the day it was written. Then 0.9.1
+  gave `shared` a second meaning — `GET /documents` answers `yours` with
+  `writable_by`, and `writable_by` gives `shared` the whole unnamespaced
+  corpus so the CLI can seed a box — and that one line of frontend started
+  telling any browser in private mode that the operator's 22 ingested
+  documents were its own, with a remove control on each. Nothing was wrong
+  with the fallback; what it deferred to grew teeth one directory over.
+  **When a name's authority changes, grep for everything that defaults to
+  it** — the default is written once, read never, and reads as a decision
+  somebody already checked. Closed 2026-11-11 by giving the browser a
+  namespace of its own (`NO_STORAGE_OWNER`), not by narrowing the server:
+  `yours` must say exactly what the DELETE will do. Pinned across the
+  language boundary by `TestNoBrowserFallsIntoTheSharedNamespace`, because
+  renaming either side to match the other restores it in full and fails
+  nothing else.
 - **An upload's id carries no URL punctuation, and a stated id carries
   whatever it likes.** `safe_name` (and `safe_owner` on the other half) is an
   allow-list of `A-Za-z0-9._ -`, so `budget#2.txt` is stored as
