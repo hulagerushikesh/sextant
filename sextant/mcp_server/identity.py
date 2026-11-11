@@ -80,9 +80,19 @@ USER_HEADER = "X-Sextant-User"
 PROXY_HEADER = "X-Sextant-Proxy-Auth"
 PROXY_SECRET = "PROXY_SECRET"
 
-# Everyone who does not say otherwise: the CLI, curl, the eval harness, and any
-# browser whose storage is unavailable. Named for what it is -- one shared
-# namespace -- rather than something like "anonymous" that implies a user.
+# Everyone who does not say otherwise: the CLI, curl, the eval harness. Named
+# for what it is -- one shared namespace -- rather than something like
+# "anonymous" that implies a user.
+#
+# It used to read "and any browser whose storage is unavailable", which was
+# true until 2026-11-11 and was a defect by then: this name owns the
+# unnamespaced corpus (`writable_by`, so the CLI can seed a box) and
+# `/documents` answers `yours` with that, so a browser in private mode was
+# shown a remove control on everything the operator ingested. Our frontend
+# now sends a namespace of its own in that case rather than no name at all --
+# `NO_STORAGE_OWNER` in `frontend/src/lib/storage.ts`, pinned against this
+# constant by `TestNoBrowserFallsIntoTheSharedNamespace`. **Anything that
+# defaults to this name is defaulting to ownership of the shared corpus.**
 DEFAULT_OWNER = "shared"
 
 # An owner reaches a document id (`upload:<owner>:<stem>`) and from there a

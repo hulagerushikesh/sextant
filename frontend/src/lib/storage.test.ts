@@ -13,6 +13,27 @@ const load = async () => {
   return import('./storage')
 }
 
+/**
+ * `identity.DEFAULT_OWNER`, written out rather than imported across a
+ * language boundary. It is the name this browser must *not* answer to, so a
+ * test that read it from the server would agree with the server by
+ * construction and stop being the claim worth checking.
+ */
+const SHARED_OWNER = 'shared'
+
+/** A browser whose storage refuses both ways: private mode, or quota. */
+const denied = () => ({
+  getItem: () => {
+    throw new Error('denied')
+  },
+  setItem: () => {
+    throw new Error('denied')
+  },
+  removeItem: () => {
+    throw new Error('denied')
+  },
+})
+
 beforeEach(() => localStorage.clear())
 afterEach(() => vi.unstubAllGlobals())
 
@@ -80,14 +101,31 @@ describe('the browser name that stops two people overwriting each other', () => 
     expect(reloaded.clientId()).toBe(first)
   })
 
-  it('returns null rather than a fresh id when storage is unavailable', async () => {
-    // The server's shared default is the right failure here; a new id each
-    // load is the wrong one.
-    vi.stubGlobal('localStorage', {
-      getItem: () => { throw new Error('denied') },
-      setItem: () => { throw new Error('denied') },
-    })
+  it('falls back to a namespace of its own, never to the shared one', async () => {
+    // Until 2026-11-11 this returned null, `api.ts` then sent no client name,
+    // and the server answered as `shared` -- which owns every document the
+    // operator ingested. `GET /documents` therefore marked all of them
+    // `yours` and `corpus-card.tsx` drew a delete control on each row. The
+    // reasoning that was here chose that failure deliberately, and it was
+    // written when `shared` meant only a shared namespace; milestone 22 made
+    // it mean a delete and nobody came back to this line.
+    vi.stubGlobal('localStorage', denied())
     const { clientId } = await load()
-    expect(clientId()).toBeNull()
+    expect(clientId()).toBeTruthy()
+    expect(clientId()).not.toBe(SHARED_OWNER)
+  })
+
+  it('keeps that fallback stable, which is why it is not a random id', async () => {
+    // The original reason for returning null at all: a fresh id per page load
+    // makes every re-upload a second document, and this browser cannot write
+    // one down to avoid it. A constant keeps the replace-on-re-upload
+    // behaviour and gives up only the thing nobody wanted -- two storage-less
+    // browsers landing in one namespace, which is the pre-0.8.2 collision
+    // confined to callers that cannot be told apart anyway.
+    vi.stubGlobal('localStorage', denied())
+    const { clientId } = await load()
+    const first = clientId()
+    const reloaded = await load()
+    expect(reloaded.clientId()).toBe(first)
   })
 })

@@ -5,6 +5,61 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-11 — the delete button on somebody else's corpus (₹0)
+
+**The question the 11-05 entry filed rather than answered: should a browser
+with no storage be `shared`?** No. It is closed, and the reason it was worth
+asking is that both halves were written on purpose and the second one changed
+what the first one cost.
+
+`storage.clientId()` returned `null` when `localStorage` threw — private
+mode, quota, a locked-down profile — and said so in a docstring with a
+reason: a fresh id per page load would make every re-upload a duplicate
+document, so falling back to the server's own default was "the right
+failure". `sent()` then omitted `X-Sextant-Client` and the request was
+answered as `shared`. That was a defensible trade while `shared` meant one
+thing: a namespace keeping two anonymous people's uploads apart.
+
+Milestone 22 gave it a second meaning. `GET /documents` answers `yours` with
+`identity.writable_by`, and `writable_by` gives `shared` the whole
+unnamespaced corpus — deliberately, because that is how `sextant-ingest`,
+curl and the eval harness seed a box. **So a browser that could not write its
+own name down was told the operator's entire ingested corpus was its own, and
+`corpus-card.tsx` drew a remove control on every row of it.** Measured
+against the real local store, 22 documents of it: unnamed, 22 of 22 come back
+`yours: true`; the delete of one of them is authorised and answers 200 with a
+chunk count. Not reachable behind the gate, where Caddy names every caller
+and the client id is never consulted — reachable on any box run without the
+gate, which is every development box, including this one.
+
+**The fix is on the browser's side of the seam, and that was the decision.**
+Narrowing `writable_by` would stop a box being seeded in order to close a
+hole no HTTP client without a delete button can fall into, and it would make
+`yours` disagree with what the DELETE will actually do — which is the one
+thing that route's own docstring forbids. So `clientId()` cannot return
+nothing any more: storage-less browsers land in `NO_STORAGE_OWNER`, a
+constant rather than a random id, which keeps the replace-on-re-upload
+behaviour the null was protecting and gives up only the thing nobody wanted.
+Two storage-less browsers now share one namespace — the pre-0.8.2 collision,
+confined to callers that have no way to be told apart, and no longer reaching
+anybody else's documents. `sent()` sends the name unconditionally.
+
+Checked end to end in a real browser against the real server, not only in
+tests: with `localStorage` throwing on access, the request carries
+`X-Sextant-Client: no-storage` and **0 of 22 documents come back `yours`**.
+Pinned on both sides — `storage.test.ts` and `api.test.ts` for the browser,
+and `TestNoBrowserFallsIntoTheSharedNamespace` across the language boundary,
+which fails if either side is renamed to match the other. 912 python tests,
+72 frontend.
+
+**The shape worth keeping.** The `null` was not an oversight; it was a
+documented choice, correct when written, and nothing in the repository
+re-read it when the meaning of the name it fell back to changed underneath.
+**A fallback is only as safe as what it falls back to, and that is not a
+property of the fallback.** The same sentence as 11-05's, one layer out:
+there the claim that aged was about who a fix saved, here it is about what a
+default costs.
+
 ## 2026-11-05 — the defect that was smaller than its write-up (₹0)
 
 **A correction, and the thing being corrected is yesterday's own record.**

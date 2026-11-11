@@ -32,6 +32,7 @@ from pathlib import Path
 import pytest
 
 from sextant import settings
+from sextant.mcp_server import identity
 from sextant.mcp_server.identity import (
     CLIENT_HEADER,
     PROXY_HEADER,
@@ -59,6 +60,23 @@ def env_example() -> str:
 @pytest.fixture(scope="module")
 def api_client() -> str:
     return API_CLIENT.read_text()
+
+
+@pytest.fixture(scope="module")
+def storage() -> str:
+    path = FRONTEND / "lib" / "storage.ts"
+    assert path.is_file(), f"{path} is the file this pins"
+    return path.read_text()
+
+
+def _header_is_conditional(helper: str) -> bool:
+    """Whether `sent()` decides at run time to include the browser's name.
+
+    The shape being refused is a conditional spread --
+    `...(id ? { 'X-Sextant-Client': id } : {})` -- which omits the header
+    entirely for a falsy id and sends the request as the shared owner.
+    """
+    return "?" in helper.split("=>", 1)[-1]
 
 
 class TestTheProxySetsWhatTheAppReads:
@@ -2483,6 +2501,85 @@ class TestTheBrowserSendsWhatTheAppReads:
         assert _calls_without_headers("\n" + twice) == [
             "fetchSpend: 2 fetch, 1 through sent()"
         ]
+
+
+class TestNoBrowserFallsIntoTheSharedNamespace:
+    """The same seam again, for the value rather than the header name.
+
+    `identity.DEFAULT_OWNER` is `shared`, and `writable_by` gives `shared` the
+    whole unnamespaced corpus -- deliberately, since that is how the CLI and
+    curl seed a box. `storage.clientId()` used to answer `null` when
+    `localStorage` threw, `sent()` dropped the header, and the request was
+    answered as that owner: `GET /documents` marked every document the
+    operator had ingested `yours`, and the UI drew a remove control on each
+    row. Not reachable behind the gate, where Caddy names every caller and the
+    client id is never read; reachable on any box run without the gate.
+
+    Both halves of the fix are in TypeScript, so nothing in the Python suite
+    could see either of them. What is pinned here is the one relationship that
+    has to hold across the two languages: **the browser's fallback name is not
+    the server's default owner.** Renaming either side to match the other
+    restores the defect in full and fails nothing else -- the browser would go
+    on sending a name, the server would go on believing it, and the name would
+    be the one that owns everything.
+    """
+
+    def test_the_fallback_name_is_declared_where_the_browser_can_reach_it(
+        self, storage: str
+    ) -> None:
+        assert "NO_STORAGE_OWNER" in storage, (
+            "the storage-less fallback name has gone; a browser with no "
+            "localStorage is answered as the shared owner again"
+        )
+
+    def test_the_fallback_is_not_the_owner_of_the_shared_corpus(
+        self, storage: str
+    ) -> None:
+        declared = re.findall(
+            r"NO_STORAGE_OWNER\s*=\s*['\"]([^'\"]+)['\"]", storage
+        )
+        assert declared, "NO_STORAGE_OWNER is declared but not assigned a name"
+        assert identity.DEFAULT_OWNER not in declared, (
+            f"the browser's fallback is {identity.DEFAULT_OWNER!r}, which "
+            "owns every document the operator ingested -- so a browser with "
+            "no storage is handed a delete on all of it"
+        )
+
+    def test_the_fallback_survives_the_server_that_will_read_it(
+        self, storage: str
+    ) -> None:
+        # It becomes the owner half of `upload:<owner>:<stem>`, so it has to
+        # come back out of `safe_owner` unchanged. A name the server rewrites
+        # is a name the browser cannot predict its own documents' ids from.
+        (name,) = re.findall(r"NO_STORAGE_OWNER\s*=\s*['\"]([^'\"]+)['\"]", storage)
+        assert identity.safe_owner(name) == name
+
+    def test_the_browser_sends_a_name_unconditionally(self, api_client: str) -> None:
+        # The other half: `sent()` used to spread the header in only when the
+        # id was truthy, so a null id meant no header at all.
+        helper = api_client.split("const sent = ")[1].split("\n\n")[0]
+        assert not _header_is_conditional(helper), (
+            "sent() decides whether to include the browser name; a request "
+            f"with no name is answered as the shared owner: {helper}"
+        )
+
+    def test_the_scan_refuses_the_shape_this_replaced(self) -> None:
+        """Anti-vacuity: the conditional spread that was there until
+        2026-11-11 has to fail the check above, or the check is decoration."""
+        was = (
+            "(extra?: Record<string, string>): Record<string, string> => {\n"
+            "  const id = clientId()\n"
+            "  return { ...extra, ...(id ? { 'X-Sextant-Client': id } : {}) }\n"
+            "}\n"
+        )
+        now = (
+            "(extra?: Record<string, string>): Record<string, string> => ({\n"
+            "  ...extra,\n"
+            "  'X-Sextant-Client': clientId(),\n"
+            "})\n"
+        )
+        assert _header_is_conditional(was)
+        assert not _header_is_conditional(now)
 
 
 class TestTheFrontendLinterRuns:

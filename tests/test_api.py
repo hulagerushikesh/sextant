@@ -395,11 +395,54 @@ class TestTheListingSaysWhatIsYours:
         }
 
     def test_an_unidentified_caller_owns_the_shared_corpus(self, client, host):
-        # `shared` is curl, the CLI and a browser with no storage, and it owns
-        # the unnamespaced documents -- the same asymmetry `/ingest` has.
+        # `shared` is curl, the CLI and the eval harness, and it owns the
+        # unnamespaced documents -- the same asymmetry `/ingest` has, and what
+        # lets a box be seeded at all. **Unchanged on purpose, 2026-11-11.**
+        #
+        # This comment used to say "and a browser with no storage", which was
+        # true and was the defect: `GET /documents` answers `yours` with
+        # `writable_by`, so such a browser was told the operator's whole
+        # corpus was its own and the UI drew a remove control on every row of
+        # it. The fix is on the browser's side of the seam -- `clientId()`
+        # cannot return nothing any more -- because the rule this test pins is
+        # the one curl and the CLI depend on, and narrowing it would stop a box
+        # being seeded to close a hole no HTTP client without a delete button
+        # can fall into. `TestNoBrowserFallsIntoTheSharedNamespace` in
+        # `test_deploy_config.py` pins the other side.
         host.results["kb_list"] = self.LISTING
         body = client.get("/documents").json()
         assert {d["id"]: d["yours"] for d in body["documents"]}["handbook"] is True
+
+    def test_what_owning_it_actually_permits(self, client, host):
+        # The consequence of the line above, stated where it can be read. A
+        # flag in a listing is cosmetic; this is not, and it is the reason the
+        # browser must never arrive here unnamed.
+        host.results["kb_forget"] = {
+            "success": True,
+            "found": True,
+            "message": "Removed handbook and its 9 chunk(s)",
+            "chunks_removed": 9,
+            "collection_size": 31,
+        }
+        assert client.delete("/documents/handbook").status_code == 200
+
+    def test_a_browser_that_lost_its_storage_owns_only_its_own(self, client, host):
+        # The name `storage.ts` falls back to. Written out rather than read
+        # from the frontend: the claim is that an unrecognised name owns
+        # nothing shared, which holds for any name that is not `shared`.
+        listing = {
+            "count": 2,
+            "documents": [
+                {"document_id": "upload:no-storage:notes", "chunks": 3},
+                {"document_id": "handbook", "chunks": 9},
+            ],
+        }
+        host.results["kb_list"] = listing
+        body = client.get("/documents", headers={CLIENT_HEADER: "no-storage"}).json()
+        assert {d["id"]: d["yours"] for d in body["documents"]} == {
+            "upload:no-storage:notes": True,
+            "handbook": False,
+        }
 
     def test_a_store_that_cannot_be_listed_reads_as_empty(self, client, host):
         # Same arm as the scoped stats: reporting the whole store instead would
