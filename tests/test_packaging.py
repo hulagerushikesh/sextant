@@ -459,6 +459,31 @@ class TestTheEvalCommandShipsWhatItGrades:
         assert not missing, f"`sextant-eval` opens these and no wheel would carry them: {missing}"
 
 
+class TestTheQuickstartNamesWhatThePackageInstalls:
+    """The README's first screen is typed by a stranger, word for word.
+
+    The clean-room run of 2026-11-12 followed it from an empty folder. Two of
+    the ways it can go wrong are checkable here: a command the package does
+    not install, and a Python floor that is not the package's -- which pip
+    reports as "no matching distribution", saying nothing about Python.
+    """
+
+    README = ROOT / "README.md"
+
+    def test_every_command_it_names_is_a_console_script(self):
+        named = set(re.findall(r"~/sextant/bin/(sextant-[a-z-]+)", self.README.read_text()))
+        # Anti-vacuity: a quickstart that stopped naming them would pass.
+        assert {"sextant-ingest", "sextant-kb"} <= named, f"the quickstart names only {named}"
+        missing = named - set(PYPROJECT["project"]["scripts"])
+        assert not missing, f"the README tells a reader to run {missing}, which nothing installs"
+
+    def test_the_python_it_asks_for_is_the_one_the_package_requires(self):
+        floor = PYPROJECT["project"]["requires-python"]
+        assert floor.startswith(">="), f"the floor is no longer a simple minimum: {floor}"
+        stated = f"Python {floor.removeprefix('>=')} or newer"
+        assert stated in self.README.read_text(), f"the quickstart does not say {stated!r}"
+
+
 class TestEveryRelativeDocLinkResolves:
     """The other half of a rename nothing executes.
 

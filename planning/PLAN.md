@@ -35,8 +35,8 @@ are closed. Nothing is running and nothing is billing beyond parked disks.
 
 Other facts worth knowing:
 
-- **933 + 72 automated tests**, all passing; the online check is green.
-- The tree is at 0.9.1; the public package is 0.9.0 (as far as the repo shows — not checked against the index today).
+- **938 + 72 automated tests**, all passing; the online check is green.
+- The tree is at 0.9.1; the public package is 0.9.0 (confirmed by installing it, 2026-11-12).
 - The hosted site works and was proven with two test accounts, but it is **off by default** and costs about ₹2 each time it is switched on. Parked disks were last recorded at about ₹270 a month.
 - **Outside users so far: none.** The two accounts on the hosted site are test accounts.
 
@@ -139,6 +139,8 @@ stopping point and nothing else.
 | More multi-user and gate hardening | The hosted site has a real second user |
 | More checks on the deploy scripts | A real trip fails |
 | Scanned-PDF reading, tables in answers, accounts and sync | An outside user hits it |
+| Quieter first run: the `HF_TOKEN` warning and the server's download log lines | An outside user reads one as an error |
+| README links that work on the package index's page | The owner publishes and the page is checked |
 | Licence review of the PDF library | Before any closed-source distribution |
 | Keeping the hosted box at all (~₹270/month parked) | Owner decides after milestone 25 item 3 |
 
@@ -215,14 +217,14 @@ If a record needs more than its limit, the extra goes in the commit message.
 ## 8 · Scoreboard
 
 **Build goal:** complete (phases 0–15, milestones 16–22).
-**Use goal:** **5 of 14 items (36%).**
-**Current item:** milestone 24, item 1 — the clean-room run (waits on the owner's OK for the download).
+**Use goal:** **8 of 14 items (57%).**
+**Current item:** milestone 24, item 4 — the owner publishes 0.9.1; Claude then repeats the clean-room run.
 
 | Milestone | Items | Done | State |
 | --- | --- | --- | --- |
 | 23 · Readable | 4 | 4 | all four done 2026-11-12: `CLAUDE.md` 1,068 → 130 lines; `NEXT.md` 215 → 48; both front pages re-checked; saved note 2,114 → 73. **Rule not yet ticked — the owner confirms** |
-| 24 · Ten minutes | 4 | 0 | item 1 waits on the owner's OK to download. Rehearsed offline from a locally built package: install, three documents, a search over the protocol all work. Item 3 half done: README 685 → 171 lines, opens with the quickstart; its screenshot needs one paid question (under ₹1) |
-| 25 · Proof on one screen | 3 | 1 | item 1 done 2026-11-12, taken early because milestone 24 waits on the owner: [`docs/RESULTS.md`](../docs/RESULTS.md) is generated and tested. Item 2's command runs from a locally built package; its clean-room check waits on milestone 24 |
+| 24 · Ten minutes | 4 | 3 | items 1–3 done 2026-11-12: the published package went from an empty folder to a right, sourced answer in about 2 minutes of machine time ([`clean-room.md`](clean-room.md)); three stumbles fixed with tests; README 685 → 179 lines with a quickstart and a real screenshot. **Not yet shown: a real assistant, or a person's ten minutes.** Item 4 waits on the owner publishing |
+| 25 · Proof on one screen | 3 | 1 | item 1 done 2026-11-12: [`docs/RESULTS.md`](../docs/RESULTS.md) is generated and tested. Item 2's command works from a locally built package but **fails from the published 0.9.0**, so it waits on the release. Item 3 is the owner's decision |
 | 26 · Three people | 3 | 0 | — |
 
 Update this table and the three lines above it in the same commit that
@@ -231,5 +233,6 @@ finishes an item. It is the only place progress is counted.
 ## 9 · Waiting on the owner
 
 1. ~~Approve this plan~~ — approved 2026-11-12.
-2. Later, inside milestone 24: OK the clean-room download, and publish the release.
-3. Later, after milestone 25: keep or remove the hosted box.
+2. ~~OK the clean-room download~~ — given 2026-11-12. **Publish 0.9.1** (milestone 24 item 4), then try the quickstart once in Claude Desktop.
+3. Confirm milestone 23's rule is met (all four limits are; see section 8).
+4. Milestone 25 item 3: recorded demo on free hosting, or screenshots only. Then: keep or remove the hosted box.

@@ -16,7 +16,22 @@ import pytest
 
 from sextant.vector_db import ingest_cli
 from sextant.vector_db.ingest_cli import _ingest, _summaries_wanted
+from sextant.vector_db.retrieval import RerankerUnavailable
 from sextant.vector_db.summaries import SummariesUnavailable
+
+
+class FakeReranker:
+    """Counts the loads `sextant-ingest` asks for, and can refuse one."""
+
+    def __init__(self, unavailable: str | None = None) -> None:
+        self.scored: list[tuple[str, list[str]]] = []
+        self.unavailable = unavailable
+
+    def score(self, query: str, passages: list[str]) -> list[float]:
+        if self.unavailable:
+            raise RerankerUnavailable(self.unavailable)
+        self.scored.append((query, passages))
+        return [1.0 for _ in passages]
 
 
 class FakeKB:
@@ -24,6 +39,7 @@ class FakeKB:
 
     def __init__(self) -> None:
         self.stored: list[tuple[str, str | None]] = []
+        self.reranker = FakeReranker()
 
     async def load_file(self, path: str, category: str) -> Any:
         class Doc:
@@ -159,3 +175,46 @@ class TestTheLossPrintedBesideTheChunkCount:
         out = capsys.readouterr().out
         assert "chunks" in out
         assert "not in the corpus" not in out
+
+
+class TestTheFirstQuestionDoesNotWaitOnADownload:
+    """The reranker loads on first search, which for a stranger is question one.
+
+    Found by the clean-room run of 2026-11-12: from the published package the
+    first `kb_search` took 20 seconds, almost all of it a model arriving
+    behind a tool call with nothing on screen. Ingestion is the step a
+    person watches, so that is where the fetch belongs.
+    """
+
+    async def test_a_run_that_stored_something_loads_the_search_model_once(
+        self, kb_and_files, capsys
+    ):
+        kb, files = kb_and_files
+        assert await _ingest(files, "general") == 0
+        assert len(kb.reranker.scored) == 1, "one load per run, not one per file"
+        assert "search models ready" in capsys.readouterr().out
+
+    async def test_a_model_that_cannot_be_fetched_is_a_note_not_a_failure(
+        self, kb_and_files, capsys
+    ):
+        """Offline, the documents are still stored and the exit code still says so."""
+        kb, files = kb_and_files
+        kb.reranker = FakeReranker(unavailable="no network")
+        assert await _ingest(files, "general") == 0
+        assert len(kb.stored) == 2
+        out = capsys.readouterr().out
+        assert "no network" in out and "first question will fetch it" in out
+
+    async def test_a_run_that_stored_nothing_fetches_nothing(self, monkeypatch, tmp_path):
+        """Nothing to search is nothing to get ready for."""
+
+        class RefusingKB(FakeKB):
+            async def add_file(self, path: str, category: str) -> dict[str, Any]:
+                return {"success": False, "message": "refused"}
+
+        kb = RefusingKB()
+        monkeypatch.setattr(ingest_cli, "KnowledgeBase", lambda: kb)
+        path = tmp_path / "one.md"
+        path.write_text("# x")
+        assert await _ingest([path], "general") == 1
+        assert kb.reranker.scored == []
