@@ -9,12 +9,18 @@ a folder of PDF, Markdown or text files, plug it into Claude Desktop or any
 other MCP client, and ask. Answers come from your documents and name the file
 and the page.
 
+![A question answered from the indexed documents, each claim followed by a numbered citation](docs/answer.png)
+
+*A real answer from the project's own web interface (2026-11-12). Each
+numbered marker opens the passage it came from.*
+
 ## Quickstart
 
-Four steps. Most of the time is two downloads: the libraries, then the search
-models. No account and no key. It needs Python 3.11 or newer — check first,
-because an older one fails with a confusing "no matching distribution"
-message:
+Four steps. Most of the time is two downloads — about 360 MB of libraries,
+then about 180 MB of search models — which took two minutes on a fast
+connection when last measured (2026-11-12). No account and no key. It needs
+Python 3.11 or newer — check first, because an older one fails with a
+confusing "no matching distribution" message:
 
 ```bash
 python3 --version
@@ -36,10 +42,11 @@ python3 -m venv ~/sextant
 ~/sextant/bin/sextant-ingest ~/Documents/notes -r
 ```
 
-The first run downloads two small search models (~180 MB), once. A note about
-a missing `GEMINI_API_KEY` is expected and harmless: it only means documents
-are stored without an optional model-written overview. Searching happens on
-your machine; the passages it finds go to whichever assistant you plug it into.
+The first run downloads the search models, once. A note about a missing
+`GEMINI_API_KEY`, or a warning about `HF_TOKEN`, is expected and harmless:
+the first only means documents are stored without an optional model-written
+overview. Searching happens on your machine; the passages it finds go to
+whichever assistant you plug it into.
 
 **3. Plug it into your assistant.** In Claude Desktop: Settings → Developer →
 Edit Config, then add this and restart the app. The command must be a full

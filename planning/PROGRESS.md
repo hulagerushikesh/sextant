@@ -5,6 +5,17 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-12 — milestone 24, items 1–3: the clean-room run and what it fixed (about ₹1)
+
+The published package, an empty folder, an empty home: **about 2 minutes of
+machine time** to a right, sourced answer ([`clean-room.md`](clean-room.md)).
+Three stumbles fixed with tests: the published `sextant-eval` crashes without
+its data; the first question waited 20 s on a silent download; the quickstart
+now checks Python and gives a known path. The README has a real screenshot
+(one paid question, ₹0.16). **Up to ₹0.75 was spent by mistake**: a test
+ingest from the checkout found the key and wrote three overviews. Not
+proven: a real assistant, a person's ten minutes, or the release.
+
 ## 2026-11-12 — milestone 24, item 3 (first half): the README opens with a quickstart (₹0)
 
 The README went from **685 lines to 171**: four steps (install, add, plug in,

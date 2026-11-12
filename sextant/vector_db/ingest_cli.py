@@ -26,6 +26,7 @@ from sextant.vector_db.loaders import (
     UnsupportedDocument,
     unreadable_line,
 )
+from sextant.vector_db.retrieval import RerankerUnavailable
 from sextant.vector_db.summaries import SummariesUnavailable, summarise
 from sextant.vector_db.vector_search import KnowledgeBase, KnowledgeBaseUnavailable
 
@@ -76,11 +77,28 @@ def _summaries_wanted(flag: bool | None) -> bool:
     return False
 
 
+def _fetch_search_model(kb: KnowledgeBase) -> None:
+    """Load the reranker now, so the first question does not wait on it.
+
+    It loads on first *search*, which in an MCP client is the first question
+    somebody asks: ~90 MB arriving behind a tool call with nothing on screen.
+    This command is the step a person is watching. A failure here is a note,
+    not an error -- the documents are stored, and the search fetches it later.
+    """
+    try:
+        kb.reranker.score("ready", ["ready"])
+    except RerankerUnavailable as e:
+        print(f"  note  search model not fetched ({e}); the first question will fetch it.")
+    else:
+        print("  ok    search models ready")
+
+
 async def _ingest(
     files: list[Path], category: str, summaries: bool = False, required: bool = False
 ) -> int:
     kb = KnowledgeBase()
     failures = 0
+    stored = 0
 
     for path in files:
         try:
@@ -110,6 +128,7 @@ async def _ingest(
             continue
 
         if result.get("success"):
+            stored += 1
             note = " (+ overview)" if summaries else ""
             print(f"  ok    {path.name}: {result['chunks_added']} chunks{note}")
             # A chunk count on its own reads as "all of it". Pages the loader
@@ -121,6 +140,9 @@ async def _ingest(
         else:
             print(f"  fail  {path.name}: {result.get('message')}")
             failures += 1
+
+    if stored:
+        _fetch_search_model(kb)
 
     stats = await kb.health_check()
     print(

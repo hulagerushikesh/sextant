@@ -9,6 +9,7 @@ product.
 | **Plan** | [`PLAN.md`](PLAN.md) — the goal, where it stands, the next four milestones and the working rules. Approved 2026-11-12; it outranks everything below |
 | **Next** | [`NEXT.md`](NEXT.md) — the queue only: where the current item is, where parked ideas live, and what was decided against |
 | **Progress** | [`PROGRESS.md`](PROGRESS.md) — what shipped, by date |
+| **Proof** | [`clean-room.md`](clean-room.md) — the published package installed from an empty folder, timed, with every stumble · [`../docs/RESULTS.md`](../docs/RESULTS.md) — the numbers, generated |
 | **Lessons** | [`LESSONS.md`](LESSONS.md) — the story behind each rule in [`../CLAUDE.md`](../CLAUDE.md) |
 | **Past plans** | Milestones [22](milestone-22.md) · [21](milestone-21.md) · [20](milestone-20.md) · [19](milestone-19.md) · [18](milestone-18.md) · [17](milestone-17.md) · [16](milestone-16.md) · [15](milestone-15.md) — all closed · [`go-live-proof.md`](go-live-proof.md) — what was observed when the site went live |
 | **History** | [`archive/queue-through-milestone-22.md`](archive/queue-through-milestone-22.md) — the finished queue rows, unedited · [`trackers/`](trackers/) — HTML checklists from phases 9–13 · [`archive/`](archive/) — course-era docs describing features never built (`archive/README.md`) |
@@ -24,10 +25,10 @@ place only — [`PLAN.md`](PLAN.md), section 8.
 | What | State |
 | --- | --- |
 | Phases 0–15 and milestones 16–22 | **Done** — the last closed 2026-11-04 |
-| Tests | 933 Python + 72 frontend; the online check is green |
+| Tests | 938 Python + 72 frontend; the online check is green |
 | Search quality | 93% first-result hit rate on the 55 answerable questions of 65 (dense alone 87%); 91% on the 144-page set |
 | Local library | 22 documents, 1,660 passages |
-| Package | this tree is 0.9.1; 0.9.0 is the published one (2026-10-24), as far as the repo records |
+| Package | this tree is 0.9.1, unpublished; 0.9.0 is the published one — confirmed by installing it 2026-11-12 |
 | Hosted site | off by default and proven from outside 2026-11-04; switching it on for a session costs about ₹2 |
 | Outside users | none yet — milestones 23–26 exist to change that |
 | Repository | public since 2026-09-20 (MIT) |
