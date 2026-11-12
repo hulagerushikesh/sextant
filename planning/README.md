@@ -6,6 +6,7 @@ product.
 
 | | Read |
 | --- | --- |
+| **Plan** | [`PLAN.md`](PLAN.md) — the goal, where it stands, the next four milestones and the working rules. Approved 2026-11-12; it outranks everything below |
 | **Next** | [`NEXT.md`](NEXT.md) — the queue: what is in progress, what waits on a key or a go-ahead, what was decided against and why |
 | **Now** | [`milestone-21.md`](milestone-21.md) — what else assumed there was one person: both doors closed (0.8.5) and both counters fixed (0.8.6) on 2026-10-06; what is left is the trip that puts 0.8.2–0.8.7 on the box |
 | **Progress** | [`PROGRESS.md`](PROGRESS.md) — what shipped, by date |

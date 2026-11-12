@@ -1,5 +1,9 @@
 # Next
 
+> **2026-11-12:** the plan was rewritten and approved — direction is read from
+> [`PLAN.md`](PLAN.md). This file shrinks to the queue only in milestone 23,
+> item 2.
+
 The queue, in the order it should be taken. Each line says what it needs
 before it can start and what it costs; anything with a ₹ or $ figure is
 asked for before it runs. Move a line to [`PROGRESS.md`](PROGRESS.md) when it
