@@ -7,49 +7,30 @@ product.
 | | Read |
 | --- | --- |
 | **Plan** | [`PLAN.md`](PLAN.md) — the goal, where it stands, the next four milestones and the working rules. Approved 2026-11-12; it outranks everything below |
-| **Next** | [`NEXT.md`](NEXT.md) — the queue: what is in progress, what waits on a key or a go-ahead, what was decided against and why |
-| **Now** | [`milestone-21.md`](milestone-21.md) — what else assumed there was one person: both doors closed (0.8.5) and both counters fixed (0.8.6) on 2026-10-06; what is left is the trip that puts 0.8.2–0.8.7 on the box |
+| **Next** | [`NEXT.md`](NEXT.md) — the queue only: where the current item is, where parked ideas live, and what was decided against |
 | **Progress** | [`PROGRESS.md`](PROGRESS.md) — what shipped, by date |
-| **Past plans** | [`milestone-20.md`](milestone-20.md) — what a corpus belongs to; four items, ₹0, done · [`milestone-19.md`](milestone-19.md) — the redesigned UI is the UI; the key rotation is its one open item · [`milestone-18.md`](milestone-18.md) — re-ingest, summaries by default, 0.8, done · [`milestone-17.md`](milestone-17.md) — cap, `kb_list`, three candidates closed, done · [`milestone-16.md`](milestone-16.md) — five retrieval experiments, done · [`milestone-15.md`](milestone-15.md) — ship, prove, rename, done · [`go-live-proof.md`](go-live-proof.md) — what was observed when the site went live |
-| **History** | [`trackers/`](trackers/) — HTML checklists from phases 9–13 · [`archive/`](archive/) — course-era docs describing features never built (`archive/README.md`) |
+| **Lessons** | [`LESSONS.md`](LESSONS.md) — the story behind each rule in [`../CLAUDE.md`](../CLAUDE.md) |
+| **Past plans** | Milestones [22](milestone-22.md) · [21](milestone-21.md) · [20](milestone-20.md) · [19](milestone-19.md) · [18](milestone-18.md) · [17](milestone-17.md) · [16](milestone-16.md) · [15](milestone-15.md) — all closed · [`go-live-proof.md`](go-live-proof.md) — what was observed when the site went live |
+| **History** | [`archive/queue-through-milestone-22.md`](archive/queue-through-milestone-22.md) — the finished queue rows, unedited · [`trackers/`](trackers/) — HTML checklists from phases 9–13 · [`archive/`](archive/) — course-era docs describing features never built (`archive/README.md`) |
 
 Operational runbooks stay next to what they operate: [`../deploy/README.md`](../deploy/README.md)
 (GCP + Caddy), [`../sextant/eval/README.md`](../sextant/eval/README.md) (golden set + metrics).
 
-## Status (2026-10-31)
+## Status (last checked 2026-11-12)
 
-| Phase | What | State |
-| --- | --- | --- |
-| 0–8 | Foundation → MCP server → agent loop → hybrid retrieval → eval harness → hardening → interface → Gemini port | Done |
-| 9–12 | Index Lab: flat/HNSW/IVF-PQ from scratch, FAISS reference, two-stage rerank, live `AGENTICRAG_ANN_INDEX` switch | Done |
-| 13 | Production deploy: prod compose, Caddy edge, preflight, GCP provisioned, image built on VM | **Live** 2026-09-15 at `agenticrag.hulage.in` (Basic-auth gate); VM run on demand |
-| 14 | Product-grade UI: ⌘K palette, shortcuts, empty states, onboarding, skeletons, toasts | Done |
-| 15 | Ship + prove + rename | **Done** 2026-09-15 — A–E; snapshot drill skipped. `go-live-proof.md` |
-| 16 | Retrieval research: table chunking, agent-level eval, chunk size, embedder swap, summary nodes | **Experiments done** (5/5, $0.21) — table chunking shipped (+0.09 hit@1); decomposition prompt + last-turn note shipped; bge-small, chunk size, summaries measured and kept as knobs; PDF extractor moved to PyMuPDF. Table rendering + Markdown export shipped 2026-09-17; composer fix deployed 2026-09-23; see `milestone-16.md` |
-| 17 | Per-document candidate cap; `kb_list` tool; three product candidates measured | **Done** 2026-09-23 — cap shipped 09-17 (default 2, dense r@5 +0.02 to +0.07, rerank unchanged); `kb_list` shipped 09-20 (lists first on 4/5 global questions, names 100% of expected documents); floor fallback, prompt caching and the fallback's cost claim measured and closed ($0.43 across the three); composer fix deployed 09-23. See `milestone-17.md` |
-| 18 | Re-ingest the deployed store; `--summaries` by default; 0.8 | **Done** 2026-09-27 — 0.8 cut and summaries defaulted 09-24; a re-ingest made a replacement plus `sextant-forget` 09-25; the deployed store re-ingested 09-27 (61 chunks/22 docs → 79/21 with 21 overviews, résumé removed, ₹8). See `milestone-18.md` |
-| 19 | Port the redesigned UI into `frontend/` | **Port done** 2026-09-27 — React 19 + TS + Tailwind v4 + shadcn replaces 747 lines of `App.jsx` and 1,952 of `App.css`; four post-scan gaps closed first, three more bugs found by running it; bundle 61.5 → 186.8 kB gzip. Deploy still open. See `milestone-19.md` |
+The build is finished; what is unproven is use. Progress is counted in one
+place only — [`PLAN.md`](PLAN.md), section 8.
 
-| 20 | What a corpus belongs to: the upload collision, one-collection-vs-one-each, identity, the listing leak | **Done** 2026-10-06, ₹0 across all four — uploads namespaced by owner (0.8.2); **A, one collection filtered**, decided on a measurement that passed and could not have failed (`../learning/multi-corpus.md`); identity forwarded by Caddy and refused without proof (0.8.3); every tool result scoped to the asker (0.8.4). See `milestone-20.md` |
-| 21 | What else assumed there was one person | **Items 1–2 done** 2026-10-06, ₹0 — the rule behind both scope holes (0.8.5): `trim()` recognises an *id* wherever one appears, and writes are an allow-list where reads are a deny-list. Then two ceilings (0.8.6): the limiter keys on a name only when the proxy vouched for it, and a per-owner share sits under the global cap rather than replacing it. Then an unplanned item 4 (0.8.7): every HTTP route is pinned on one side of the scope boundary, because all three defects above were routes and only the tool list was pinned. Then an item 5: `trip.sh` read the box's state back after parking and only printed it, so an offline run ended `RUNNING` with exit 0 — it compares now, and a box or an address left billing takes the 0 away. Then an item 6: every check in the trip ran inside the box behind Caddy, so the trip that deploys the gate had never gone through it — step 6 now runs from the operator's machine against the public URL. Then item 7: the pre-registered success criterion itself — two users, one filename, from the public URL — now run by the script, with the probe documents removed in the EXIT trap; then item 8, because that step judged an upload by its status code and `/upload` answers 200 with `"success": false`. Item 3 (the VM trip carrying 0.8.2–0.8.7 plus the key rotation) open; items 36 and 37 both came out of its first attempt. See `milestone-21.md` |
-
-Numbers that describe the system today (2026-10-31): 864 Python + 52 frontend
-tests, mypy clean (69 files), two golden sets (65 questions / 58 chunks; 39
-page-labelled / 1,608 chunks), hit@1 0.94 and 0.93 for the full pipeline,
-~$0.0015/query on `gemini-3.1-flash-lite`, 22 docs / 1,660 chunks in the local
-store. Package is `sextant` 0.9.0, on PyPI as `sextant-kb` since 2026-10-24.
-**The box now runs this tree** (deployed 2026-10-31, ₹1): the api is healthy
-and scoped, 79 chunks / 21 documents, and a forged `X-Sextant-User` is refused
-— but **Caddy is down**, so nothing is being served. Slot 2's bcrypt hash was
-mangled in the box's `.env` and a three-slot Caddyfile read it for the first
-time; `agenticrag.hulage.in` also still resolves to nothing. One trip closes
-both, and item 36 makes the hash a ₹0 stop rather than a post-build one.
-Item 37 then found why item 3 kept being deferred at all: `set-secrets.sh`,
-the script `CLAUDE.md` has told every reader to run since go-live, **had never
-been written**, so putting a secret on that box meant a hand-edit on a running
-VM — which is both how slot 2's hash was mangled and why the leaked model key
-outlived four trips. It exists now, and the trip is one non-interactive
-command again. The repo has been public since 2026-09-20 (MIT).
+| What | State |
+| --- | --- |
+| Phases 0–15 and milestones 16–22 | **Done** — the last closed 2026-11-04 |
+| Tests | 912 Python + 72 frontend; the online check is green |
+| Search quality | 93% first-result hit rate on the 55 answerable questions of 65 (dense alone 87%); 91% on the 144-page set |
+| Local library | 22 documents, 1,660 passages |
+| Package | this tree is 0.9.1; 0.9.0 is the published one (2026-10-24), as far as the repo records |
+| Hosted site | off by default and proven from outside 2026-11-04; switching it on for a session costs about ₹2 |
+| Outside users | none yet — milestones 23–26 exist to change that |
+| Repository | public since 2026-09-20 (MIT) |
 
 ## Cost position
 
@@ -57,11 +38,11 @@ GCP project `agenticrag-rush`, billing account in **INR**.
 
 | Resource | State | ₹/month |
 | --- | --- | --- |
-| VM `agenticrag` e2-standard-2 | on demand — `deploy.sh HOST start\|stop` | ≈135/day while up (≈4,100 if left on) |
-| Static IP | released again 2026-09-27 after the re-ingest; re-reserve on go-live | 0 |
-| Boot disk 30 GB pd-standard + data disk 20 GB pd-balanced | kept | ≈270 |
-| Budget alert "agenticrag monthly" | ₹1,700 (≈$20), 50/90/100 % | — |
-| Gemini | free tier at personal volume | ≈0 |
+| VM `agenticrag` e2-standard-2 | parked (checked 2026-11-12); started only by a trip that parks itself | ≈135/day while up (≈4,100 if left on) |
+| Static IP | none reserved (checked 2026-11-12); a trip takes one and releases it | 0 |
+| Boot disk 30 GB pd-standard + data disk 20 GB pd-balanced | kept | ≈270 (last recorded) |
+| Budget alert "agenticrag monthly" | ₹1,700 (≈$20), 50/90/100 %, as set in 2026-09 | — |
+| Gemini | prepaid, capped at ₹500 a month; about ₹0.13 a question when last measured (2026-10) | by use |
 
 **Rule:** nothing that turns a meter on (VM start, resize, new resources, bulk
 API calls) happens without an explicit OK on the amount.

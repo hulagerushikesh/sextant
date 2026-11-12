@@ -18,6 +18,7 @@ MCP-native system described here. MIT licensed — see [`LICENSE`](LICENSE).
 ## Honest status
 
 The model chooses its own tools, and the numbers below are reproducible.
+Last checked 2026-11-12.
 
 | Capability | State |
 | --- | --- |
@@ -35,7 +36,10 @@ The model chooses its own tools, and the numbers below are reproducible.
 | Index Lab: flat / HNSW / IVF-PQ from scratch, FAISS reference, live switch | Working |
 | Daily spend cap, per-query cost, cheapest model that runs the loop | Working |
 | Command palette, keyboard-first, empty states, onboarding, Markdown export | Working |
-| Production stack: Caddy TLS + Basic-auth gate, prod compose, preflight | Built, verified locally; VM provisioned, parked |
+| Each person's uploads kept apart, and removable by the person who added them | Working |
+| Hosted deployment: Caddy TLS + sign-in gate, one-command deploy that switches itself off | Working — proven from outside the box 2026-11-04; off by default, started on demand |
+| Published package (`sextant-kb`) | 0.9.0 published 2026-10-24; this tree is 0.9.1, not yet published |
+| Used by anyone outside the project | Not yet — see [`planning/PLAN.md`](planning/PLAN.md) |
 
 Study material lives in [`learning/`](learning/) (a levelled path from
 foundations to the research papers) and project status, cost and the next
@@ -76,7 +80,7 @@ app afterwards. `which sextant-kb` gives the path. No `cwd` is needed — the
 console script resolves the package on its own.
 
 Two things happen on first use, both once. The embedding and reranking models
-(~120 MB) are downloaded from Hugging Face, so the first query is slow and
+(~180 MB) are downloaded from Hugging Face, so the first query is slow and
 needs a network. And the collection is created: in a checkout that is
 `<repo>/chroma_db`, and from an installed wheel it is the platform's user-data
 directory, because writing a person's corpus under `site-packages` would hand
@@ -215,22 +219,23 @@ configuration. Full method and results in [`sextant/eval/README.md`](sextant/eva
 | dense (vectors only) | 0.873 | 0.885 | 0.915 | 0.904 |
 | lexical (BM25 only) | 0.782 | 0.876 | 0.864 | 0.851 |
 | rrf (fused) | 0.909 | 0.921 | 0.950 | 0.931 |
-| rerank (full pipeline) | 0.909 | 0.949 | 0.955 | 0.938 |
+| rerank (full pipeline) | 0.927 | 0.967 | 0.961 | 0.952 |
 
-Two results worth stating plainly, because one of them is unflattering.
+Two results worth stating plainly, because the second is smaller than it sounds.
 
 **Fusion earns its place.** Hybrid beats either retriever alone by 4–13 points
 of hit@1. They fail on different questions, which is the whole argument for
 running both.
 
-**Reranking does not, on this corpus — and does on a larger one.** At 52
-chunks it ties fusion on hit@1 and MRR and gains 0.001 on nDCG@5; fusion
-already ranks correctly and the cross-encoder has nothing to fix. On a
-1,602-chunk store (a 144-page PDF, 32 page-labelled questions,
-`sextant/eval/golden-large.jsonl`) it leads on hit@1 0.926 vs 0.889 and nDCG@5 0.931
-vs 0.904, and it is the only stage whose score is calibrated enough to
-abstain on: 0.000 on every off-corpus question, ~0.95 on in-corpus ones,
-where RRF's rank reciprocals separate by 0.003. That is why it stays.
+**Reranking earns one question — and the right to say "I do not know".** On
+this corpus it leads fusion on hit@1 by 0.927 to 0.909, which is one
+question of 55. On a 144-page PDF (39 questions, 34 answerable,
+`sextant/eval/golden-large.jsonl`) it leads 0.912 to 0.882 — one question
+again. That margin alone would not pay for a second model. What does is that
+it is the only stage whose score can be abstained on: on the larger set every
+off-corpus question scores 0.000 against a mean of 0.92 for answerable ones,
+where RRF's rank reciprocals separate by 0.003. On the small corpus the same
+floor blocks 8 of 10 unanswerable questions, not all ten (see Known issues).
 The full argument is in [`learning/reranker-decision.md`](learning/reranker-decision.md).
 
 `sextant-eval --check` compares against the committed baseline and fails on
@@ -240,7 +245,7 @@ by injecting a regression to confirm it fires.
 ## Operating it
 
 ```bash
-pytest tests/ -q          # 320 tests, ~140s (two models load once)
+pytest tests/ -q          # 912 tests, a few minutes (two models load once)
 mypy sextant tests
 ruff check .
 pre-commit install
@@ -448,17 +453,17 @@ sextant/vector_db/
   forget_cli.py      `sextant-forget` — take a document and its chunks back out
 sextant/settings.py    `SEXTANT_*` env names; reports pre-rename leftovers
 chroma_db/           Persistent vector store (gitignored)
-eval/
+sextant/eval/
   corpus/            21 committed documents — the fixed evaluation corpus
   golden.jsonl       65 labelled questions, 55 answerable and 10 not
-  golden-large.jsonl 39 questions over a 144-page PDF, 38 page-labelled
+  golden-large.jsonl 39 questions over a 144-page PDF, 34 answerable
   metrics.py         hit@1, recall@k, MRR, nDCG@k
   harness.py         `sextant-eval` — grades every retrieval mode
   judge.py           `sextant-judge` — faithfulness and abstention
   agent_harness.py   `sextant-eval-agent` — grades what the loop retrieved
   baseline.json      Committed results; the CI gate compares against these
-  baseline-large.json Results on the 1,602-chunk store (reranker decision)
-tests/               392 tests: chunking, retrieval, ANN, agent loop, API, regressions
+  baseline-large.json Results on the 144-page store (reranker decision)
+tests/               912 tests: chunking, retrieval, ANN, agent loop, API, regressions
 deploy/              Caddyfile, prod Dockerfile for the edge, GCP runbook
   trip.sh            one VM trip: start, deploy, verify, park (parking is an EXIT trap)
   deploy.sh          the individual steps: preflight, ship, build, start/stop
@@ -539,13 +544,13 @@ corpus was live, the sources were real, and the prose was hardcoded.
 ## Known issues
 
 - `min_score` is `0.01`, set from the golden set: it blocks 8 of 10 unanswerable
-  queries and costs 2 of 50 answerable ones. It cannot do better than 8 in 10,
+  queries and costs 3 of 55 answerable ones. It cannot do better than 8 in 10,
   and no threshold can — the two survivors ask for a fact absent from a passage
   genuinely about that subject. Only reading the passage catches those, which is
   why the agent prompt carries an abstention rule.
 
   This corrects a claim made in Phase 4. On five queries over one PDF the
-  reranker looked like it separated relevant from irrelevant cleanly; across 60
+  reranker looked like it separated relevant from irrelevant cleanly; across 65
   questions it does not. That is what the golden set was for.
 - The BM25 index is rebuilt in memory from the collection on first search and
   the chunk text is held resident. Fine at this scale (1,568 chunks from a
@@ -575,10 +580,9 @@ corpus was live, the sources were real, and the prose was hardcoded.
   specific follow-up may retrieve rather than remember.
 - A scanned PDF with no text layer is rejected rather than OCR'd. It is
   reported as such instead of being stored as a document that matches nothing.
-- The answer renderer handles paragraphs, lists, headings, bold and inline code.
-  It is not a markdown parser, and a table in an answer renders as its source
-  text. Gemini reaches for LaTeX unprompted, so the system prompt asks for
-  equations as inline code instead.
+- The answer renderer handles paragraphs, lists, headings, tables, bold and
+  inline code. It is not a markdown parser. Gemini reaches for LaTeX
+  unprompted, so the system prompt asks for equations as inline code instead.
 - A web source's title is the site's domain and its link is a Google redirect.
   That is the shape of the grounding metadata, not a choice.
 - The judge and the agent now share one model family, so `sextant-judge`
@@ -647,12 +651,19 @@ needed a conversion layer between the protocol's contract and the model's.
     retrieval through any of them *(done)*
 13. **Production** — prod compose, Caddy TLS + Basic-auth gate, preflight,
     daily spend cap, GCP VM provisioned and image built; edge verified
-    locally against a stub API *(built; go-live parked on DNS + secrets)*
+    locally against a stub API *(done — live 2026-09-15; run on demand since)*
 14. **Product-grade interface** — ⌘K palette, keyboard map, empty states,
     onboarding, skeletons, toasts *(done)*
 15. **Ship, prove, rename** — `sextant` everywhere; reranker settled with
     data on 1,602 chunks (it stays); docs match the code; go-live; ops floor
-    *(in progress — see `planning/milestone-15.md`)*
+    *(done 2026-09-15)*
+16. **Milestones 16–22** — five retrieval experiments, a per-document cap,
+    document overviews, the rebuilt interface, uploads kept apart per person,
+    a published package (`sextant-kb`), and a person removing their own
+    upload *(done 2026-11-04)*
+
+What comes next is not more building: it is the first outside users. The plan
+is [`planning/PLAN.md`](planning/PLAN.md).
 
 ### On web search
 

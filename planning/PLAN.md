@@ -95,7 +95,7 @@ reader can answer "what is the goal, what is done, what is next" from
 
 | # | Item | Done when |
 | --- | --- | --- |
-| 1 | **Clean-room run.** Empty folder, install the public package, add three documents, plug it into a real AI client, ask one question — following only the README. Time it; write down every stumble | A dated record with the time taken and the list of stumbles. *Downloads the package and ~120 MB of models: owner's OK first* |
+| 1 | **Clean-room run.** Empty folder, install the public package, add three documents, plug it into a real AI client, ask one question — following only the README. Time it; write down every stumble | A dated record with the time taken and the list of stumbles. *Downloads the package and ~180 MB of models: owner's OK first* |
 | 2 | Fix the **top three** stumbles. The rest go to Parked | Each fix has a test |
 | 3 | The README opens with a one-screen quickstart (install, add, plug in, ask) and one screenshot of a real cited answer. Long reference sections move to `docs/` | README ≤ 300 lines |
 | 4 | **Release.** Owner publishes the current version (owner's command, always). Claude repeats the clean-room run against the published package | The repeat run meets the rule below |
@@ -215,12 +215,12 @@ If a record needs more than its limit, the extra goes in the commit message.
 ## 8 · Scoreboard
 
 **Build goal:** complete (phases 0–15, milestones 16–22).
-**Use goal:** **2 of 14 items (14%).**
-**Current item:** milestone 23, item 3 — fix what is stale in the two front pages.
+**Use goal:** **3 of 14 items (21%).**
+**Current item:** milestone 23, item 4 — shrink Claude's saved notes.
 
 | Milestone | Items | Done | State |
 | --- | --- | --- | --- |
-| 23 · Readable | 4 | 2 | items 1–2 done 2026-11-12: `CLAUDE.md` 1,068 → 130 lines; `NEXT.md` 215 → 48 |
+| 23 · Readable | 4 | 3 | items 1–3 done 2026-11-12: `CLAUDE.md` 1,068 → 130 lines; `NEXT.md` 215 → 48; both front pages re-checked |
 | 24 · Ten minutes | 4 | 0 | — |
 | 25 · Proof on one screen | 3 | 0 | — |
 | 26 · Three people | 3 | 0 | — |
