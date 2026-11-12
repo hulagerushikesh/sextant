@@ -9,8 +9,12 @@ and the quote has to be in the note -- so a note that is corrected, or a
 baseline that is re-run, fails `--check` until the page is regenerated.
 
     python -m sextant.eval.results_page            # print
-    python -m sextant.eval.results_page --write    # write docs/RESULTS.md
-    python -m sextant.eval.results_page --check    # exit 1 if the page is stale
+    python -m sextant.eval.results_page --write    # write the page and the README table
+    python -m sextant.eval.results_page --check    # exit 1 if either is stale
+
+The README carries a four-row summary between two markers. It is written by
+the same command for the same reason: it is the first number a visitor sees,
+and it was two baselines out of date on the day this module was written.
 
 This is a checkout tool: the notes are not in the wheel, and it says so
 instead of writing a page with half its sources missing.
@@ -31,6 +35,8 @@ from sextant.eval.harness import CORPUS_DIR, REGRESSION_TOLERANCE
 
 EVAL_DIR = Path(__file__).resolve().parent
 PAGE = Path("docs") / "RESULTS.md"
+README = Path("README.md")
+BLOCK_START, BLOCK_END = "<!-- results:start -->", "<!-- results:end -->"
 NOTES = Path("learning")
 
 MODES = (
@@ -303,6 +309,33 @@ def render() -> str:
     return "\n".join(lines)
 
 
+def render_summary() -> str:
+    """The README's table: one figure per stage, and the abstention line."""
+    small = _baseline("baseline.json")
+    _, unanswerable = _split("golden.jsonl")
+    documents = len(list(CORPUS_DIR.glob("*.md")))
+    blocked = small["threshold_sweep"][FLOOR]["unanswerable_blocked"]
+    lines = ["| Search stage | Right passage first |", "| --- | --- |"]
+    for mode, label in MODES:
+        figure = _pct(small["modes"][mode]["hit@1"])
+        lines.append(f"| {label} | {f'**{figure}**' if mode == MODES[-1][0] else figure} |")
+    lines += [
+        "",
+        f"{small['questions']} test questions over {documents} documents. Asked "
+        f"{unanswerable} questions those documents cannot answer, it declines {blocked}.",
+    ]
+    return "\n".join(lines)
+
+
+def with_summary(readme: str) -> str:
+    """`readme` with the text between the markers replaced by the summary."""
+    if readme.count(BLOCK_START) != 1 or readme.count(BLOCK_END) != 1:
+        raise StaleSource(f"{README} must contain {BLOCK_START} and {BLOCK_END} exactly once")
+    head, rest = readme.split(BLOCK_START)
+    _, tail = rest.split(BLOCK_END)
+    return f"{head}{BLOCK_START}\n{render_summary()}\n{BLOCK_END}{tail}"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Write docs/RESULTS.md from measurements.")
     group = parser.add_mutually_exclusive_group()
@@ -311,20 +344,27 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         page = render()
-        target = _root() / PAGE
+        target, readme = _root() / PAGE, _root() / README
+        front = with_summary(readme.read_text())
     except StaleSource as problem:
         print(f"FAILED: {problem}", file=sys.stderr)
         return 1
     if args.write:
         target.parent.mkdir(exist_ok=True)
         target.write_text(page)
-        print(f"wrote {PAGE}")
+        readme.write_text(front)
+        print(f"wrote {PAGE} and the table in {README}")
         return 0
     if args.check:
-        if not target.is_file() or target.read_text() != page:
-            print(f"FAILED: {PAGE} is stale; run with --write", file=sys.stderr)
+        stale = [
+            str(name)
+            for name, path, wanted in ((PAGE, target, page), (README, readme, front))
+            if not path.is_file() or path.read_text() != wanted
+        ]
+        if stale:
+            print(f"FAILED: stale, run with --write: {', '.join(stale)}", file=sys.stderr)
             return 1
-        print(f"{PAGE} matches the measurement files")
+        print(f"{PAGE} and {README} match the measurement files")
         return 0
     print(page, end="")
     return 0
