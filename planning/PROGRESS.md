@@ -5,6 +5,16 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-12 — the plan rewritten, and the rules cut to one page (₹0)
+
+The owner asked where the project stands and for a plan that keeps direction.
+The build goal is complete; the unproven promise is that a stranger can use
+the published server. [`PLAN.md`](PLAN.md) is the new direction — four
+milestones, 14 items — approved the same day. Milestone 23 item 1 shipped:
+`CLAUDE.md` went from **1,068 lines to 130**, rules only, and every story
+moved unedited to [`LESSONS.md`](LESSONS.md). Does not prove the shorter file
+keeps sessions on track; the next few sessions will show that.
+
 ## 2026-11-11 — the delete button on somebody else's corpus (₹0)
 
 **The question the 11-05 entry filed rather than answered: should a browser
