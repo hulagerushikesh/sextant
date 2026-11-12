@@ -215,12 +215,12 @@ If a record needs more than its limit, the extra goes in the commit message.
 ## 8 · Scoreboard
 
 **Build goal:** complete (phases 0–15, milestones 16–22).
-**Use goal:** **1 of 14 items (7%).**
-**Current item:** milestone 23, item 2 — `NEXT.md` becomes the queue only.
+**Use goal:** **2 of 14 items (14%).**
+**Current item:** milestone 23, item 3 — fix what is stale in the two front pages.
 
 | Milestone | Items | Done | State |
 | --- | --- | --- | --- |
-| 23 · Readable | 4 | 1 | item 1 done 2026-11-12: `CLAUDE.md` 1,068 → 130 lines |
+| 23 · Readable | 4 | 2 | items 1–2 done 2026-11-12: `CLAUDE.md` 1,068 → 130 lines; `NEXT.md` 215 → 48 |
 | 24 · Ten minutes | 4 | 0 | — |
 | 25 · Proof on one screen | 3 | 0 | — |
 | 26 · Three people | 3 | 0 | — |
