@@ -24,7 +24,7 @@ place only — [`PLAN.md`](PLAN.md), section 8.
 | What | State |
 | --- | --- |
 | Phases 0–15 and milestones 16–22 | **Done** — the last closed 2026-11-04 |
-| Tests | 912 Python + 72 frontend; the online check is green |
+| Tests | 931 Python + 72 frontend; the online check is green |
 | Search quality | 93% first-result hit rate on the 55 answerable questions of 65 (dense alone 87%); 91% on the 144-page set |
 | Local library | 22 documents, 1,660 passages |
 | Package | this tree is 0.9.1; 0.9.0 is the published one (2026-10-24), as far as the repo records |

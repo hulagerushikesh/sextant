@@ -117,6 +117,12 @@ testpaths = ["tests"]
 [tool.setuptools.packages.find]
 include = ["sextant*"]
 
+# `sextant-eval` is a console script, so it has to run wherever the script
+# is. 0.9.0 published it without the documents, the questions and the
+# baseline it grades: it worked in a checkout and nowhere else.
+[tool.setuptools.package-data]
+"sextant.eval" = ["corpus/*.md", "golden*.jsonl", "baseline*.json"]
+
 [tool.mypy]
 # 3.12, not the 3.11 floor in requires-python: numpy's own stubs use `type`
 # statements, so checking against 3.11 fails inside a dependency before it

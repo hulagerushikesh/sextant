@@ -5,6 +5,16 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-12 — milestone 25, item 1: the results on one generated page (₹0)
+
+[`docs/RESULTS.md`](../docs/RESULTS.md) answers "how good, how do you know,
+what did you reject" on one page: **93% right-passage-first** against 87% for
+plain search, nine rejected ideas with one figure each, about ₹0.13 a
+question. Nothing on it is typed — 18 tests fail if it and the measurement
+files disagree. Found on the way: the published 0.9.0 ships `sextant-eval`
+without the documents it grades; fixed in the tree and run from a built
+package. Does not prove a stranger can reproduce it — that is the clean room.
+
 ## 2026-11-12 — milestone 23, items 2–4: the records made readable (₹0)
 
 `NEXT.md` went from **215 lines (79 KB) to 48**: the queue only, with the
