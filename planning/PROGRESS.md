@@ -5,6 +5,17 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-12 — milestone 24, item 3 (first half): the README opens with a quickstart (₹0)
+
+The README went from **685 lines to 171**: four steps (install, add, plug in,
+ask), then the tools, a results table that is generated rather than typed,
+and an honest status. The long sections moved unchanged to `docs/`. An offline
+rehearsal from a locally built package passed — three documents in, the right
+passage back over the protocol with file and page. Stumbles it found and the
+new text removes: an old Python fails confusingly, the config needs a full
+path, the model download is 180 MB not 120. Not proven: the public package,
+a real assistant, or any timing — and the screenshot is still missing.
+
 ## 2026-11-12 — milestone 25, item 1: the results on one generated page (₹0)
 
 [`docs/RESULTS.md`](../docs/RESULTS.md) answers "how good, how do you know,

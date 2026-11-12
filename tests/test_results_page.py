@@ -30,7 +30,24 @@ class TestTheResultsPageMatchesTheMeasurementFiles:
 
     def test_the_check_command_agrees(self, capsys):
         assert results_page.main(["--check"]) == 0
-        assert "matches" in capsys.readouterr().out
+        assert "match" in capsys.readouterr().out
+
+    def test_the_readme_table_is_the_generated_one(self):
+        """The first number a visitor sees was two baselines old once."""
+        root = settings.repo_root()
+        assert root is not None
+        readme = (root / results_page.README).read_text()
+        assert results_page.with_summary(readme) == readme, (
+            "README.md's results table is stale: run "
+            "`python -m sextant.eval.results_page --write`"
+        )
+        between = readme.split(results_page.BLOCK_START)[1].split(results_page.BLOCK_END)[0]
+        assert between.strip() == results_page.render_summary()
+        assert "%" in between, "the block is empty"
+
+    def test_a_readme_without_the_markers_is_refused(self):
+        with pytest.raises(results_page.StaleSource, match="exactly once"):
+            results_page.with_summary("# a README nobody marked\n")
 
     def test_a_changed_baseline_changes_the_page(self, monkeypatch):
         """The test above is vacuous if the page ignores the files."""
@@ -44,6 +61,10 @@ class TestTheResultsPageMatchesTheMeasurementFiles:
 
         monkeypatch.setattr(results_page, "_baseline", moved)
         assert results_page.render() != _page()
+        root = settings.repo_root()
+        assert root is not None
+        readme = (root / results_page.README).read_text()
+        assert results_page.with_summary(readme) != readme
         assert results_page.main(["--check"]) == 1
 
     def test_a_changed_threshold_sweep_changes_the_page(self, monkeypatch):

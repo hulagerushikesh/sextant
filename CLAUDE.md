@@ -69,6 +69,7 @@ Read [`planning/PLAN.md`](planning/PLAN.md) first: the goal, the current milesto
 - CI must run every gate command with the same arguments; the runner and every action are pinned. Bumping one is a recorded decision, not a workaround.
 - An optional dependency must not decide whether the code type-checks: annotate the name `Any` instead of a `type: ignore`.
 - `sextant-eval --check` must grade every baseline mode and the full question count; a missing baseline is a failure.
+- `docs/RESULTS.md` and the README's results table are generated: after a baseline or a measurement note changes, run `./.venv/bin/python -m sextant.eval.results_page --write`. Never type a figure into either.
 - When testing a fix, plant the defect back and check the test fails for the right reason.
 
 ## Gotchas that recur
