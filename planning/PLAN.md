@@ -35,7 +35,7 @@ are closed. Nothing is running and nothing is billing beyond parked disks.
 
 Other facts worth knowing:
 
-- **912 + 72 automated tests**, all passing; the online check is green.
+- **931 + 72 automated tests**, all passing; the online check is green.
 - The tree is at 0.9.1; the public package is 0.9.0 (as far as the repo shows — not checked against the index today).
 - The hosted site works and was proven with two test accounts, but it is **off by default** and costs about ₹2 each time it is switched on. Parked disks were last recorded at about ₹270 a month.
 - **Outside users so far: none.** The two accounts on the hosted site are test accounts.
@@ -215,14 +215,14 @@ If a record needs more than its limit, the extra goes in the commit message.
 ## 8 · Scoreboard
 
 **Build goal:** complete (phases 0–15, milestones 16–22).
-**Use goal:** **4 of 14 items (29%).**
+**Use goal:** **5 of 14 items (36%).**
 **Current item:** milestone 24, item 1 — the clean-room run (waits on the owner's OK for the download).
 
 | Milestone | Items | Done | State |
 | --- | --- | --- | --- |
 | 23 · Readable | 4 | 4 | all four done 2026-11-12: `CLAUDE.md` 1,068 → 130 lines; `NEXT.md` 215 → 48; both front pages re-checked; saved note 2,114 → 73. **Rule not yet ticked — the owner confirms** |
 | 24 · Ten minutes | 4 | 0 | — |
-| 25 · Proof on one screen | 3 | 0 | — |
+| 25 · Proof on one screen | 3 | 1 | item 1 done 2026-11-12, taken early because milestone 24 waits on the owner: [`docs/RESULTS.md`](../docs/RESULTS.md) is generated and tested. Item 2's command runs from a locally built package; its clean-room check waits on milestone 24 |
 | 26 · Three people | 3 | 0 | — |
 
 Update this table and the three lines above it in the same commit that

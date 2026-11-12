@@ -436,6 +436,29 @@ class TestTheImageInstallsWhatItRuns:
         )
 
 
+class TestTheEvalCommandShipsWhatItGrades:
+    """A console script is installed everywhere; its inputs were not.
+
+    `sextant-eval` is in `[project.scripts]`, so `pip install sextant-kb`
+    puts it on the path -- and 0.9.0 put it there without the corpus, the
+    golden set or the baseline, because data files are not packages and
+    nothing declared them. In a checkout the files sit beside the module,
+    which is the only place anybody had run it.
+    """
+
+    def test_every_file_the_harness_opens_is_declared_package_data(self):
+        from sextant.eval import harness
+
+        globs = PYPROJECT["tool"]["setuptools"]["package-data"]["sextant.eval"]
+        declared = {path for glob in globs for path in harness.EVAL_DIR.glob(glob)}
+        corpus = set(harness.CORPUS_DIR.glob("*.md"))
+        # Anti-vacuity: an empty corpus would make the subset check pass.
+        assert len(corpus) > 10, f"only {len(corpus)} corpus documents found"
+        needed = {harness.GOLDEN_PATH, harness.BASELINE_PATH, *corpus}
+        missing = sorted(str(path.relative_to(harness.EVAL_DIR)) for path in needed - declared)
+        assert not missing, f"`sextant-eval` opens these and no wheel would carry them: {missing}"
+
+
 class TestEveryRelativeDocLinkResolves:
     """The other half of a rename nothing executes.
 

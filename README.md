@@ -213,6 +213,8 @@ never separated from what produced it.
 
 65 labelled questions over a committed 21-document corpus, graded per
 configuration. Full method and results in [`sextant/eval/README.md`](sextant/eval/README.md).
+The numbers, the nine rejected ideas and the cost of a question are on one
+generated page: [`docs/RESULTS.md`](docs/RESULTS.md).
 
 | mode | hit@1 | recall@3 | MRR | nDCG@5 |
 | --- | --- | --- | --- | --- |
@@ -245,7 +247,7 @@ by injecting a regression to confirm it fires.
 ## Operating it
 
 ```bash
-pytest tests/ -q          # 912 tests, a few minutes (two models load once)
+pytest tests/ -q          # about six minutes (two models load once)
 mypy sextant tests
 ruff check .
 pre-commit install
@@ -463,7 +465,7 @@ sextant/eval/
   agent_harness.py   `sextant-eval-agent` — grades what the loop retrieved
   baseline.json      Committed results; the CI gate compares against these
   baseline-large.json Results on the 144-page store (reranker decision)
-tests/               912 tests: chunking, retrieval, ANN, agent loop, API, regressions
+tests/               chunking, retrieval, ANN, agent loop, API, regressions
 deploy/              Caddyfile, prod Dockerfile for the edge, GCP runbook
   trip.sh            one VM trip: start, deploy, verify, park (parking is an EXIT trap)
   deploy.sh          the individual steps: preflight, ship, build, start/stop
