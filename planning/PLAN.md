@@ -215,12 +215,12 @@ If a record needs more than its limit, the extra goes in the commit message.
 ## 8 · Scoreboard
 
 **Build goal:** complete (phases 0–15, milestones 16–22).
-**Use goal:** **3 of 14 items (21%).**
-**Current item:** milestone 23, item 4 — shrink Claude's saved notes.
+**Use goal:** **4 of 14 items (29%).**
+**Current item:** milestone 24, item 1 — the clean-room run (waits on the owner's OK for the download).
 
 | Milestone | Items | Done | State |
 | --- | --- | --- | --- |
-| 23 · Readable | 4 | 3 | items 1–3 done 2026-11-12: `CLAUDE.md` 1,068 → 130 lines; `NEXT.md` 215 → 48; both front pages re-checked |
+| 23 · Readable | 4 | 4 | all four done 2026-11-12: `CLAUDE.md` 1,068 → 130 lines; `NEXT.md` 215 → 48; both front pages re-checked; saved note 2,114 → 73. **Rule not yet ticked — the owner confirms** |
 | 24 · Ten minutes | 4 | 0 | — |
 | 25 · Proof on one screen | 3 | 0 | — |
 | 26 · Three people | 3 | 0 | — |

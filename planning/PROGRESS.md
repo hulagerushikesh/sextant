@@ -5,6 +5,16 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-12 — milestone 23, items 2–4: the records made readable (₹0)
+
+`NEXT.md` went from **215 lines (79 KB) to 48**: the queue only, with the
+finished rows for milestones 17–22 moved unedited to `archive/`. Both front
+pages were re-read against the files: the README's search table was two
+baselines old (the full pipeline is 0.927 first-hit, not 0.909) and its
+roadmap still called go-live "parked". Claude's saved note went from 2,114
+lines to 73. Full check green: 912 + 72 tests. Does not prove a reader finds
+the state in a minute — that is the owner's call on milestone 23's rule.
+
 ## 2026-11-12 — the plan rewritten, and the rules cut to one page (₹0)
 
 The owner asked where the project stands and for a plan that keeps direction.
