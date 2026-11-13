@@ -484,6 +484,27 @@ class TestTheQuickstartNamesWhatThePackageInstalls:
         assert stated in self.README.read_text(), f"the quickstart does not say {stated!r}"
 
 
+class TestTheReadmeIsTrueInsideTheRelease:
+    """The README is the package's page on the index, frozen at upload.
+
+    0.9.1's README said "this tree is 0.9.1, not yet published" -- true in
+    the checkout the day before, and now on the page of the published 0.9.1,
+    where a release cannot be edited. A sentence about whether *this*
+    version is out is false in one of the two places it is read, whichever
+    way round it is written.
+    """
+
+    README = ROOT / "README.md"
+    PHRASES = ("not yet published", "unpublished", "this tree is")
+
+    def test_it_does_not_say_whether_its_own_version_is_published(self):
+        text = self.README.read_text()
+        # Anti-vacuity: the status row this guards must still be there.
+        assert "published as `sextant-kb`" in text, "the README's package row has moved"
+        said = [phrase for phrase in self.PHRASES if phrase in text]
+        assert not said, f"the README states its own release status: {said}"
+
+
 class TestEveryRelativeDocLinkResolves:
     """The other half of a rename nothing executes.
 

@@ -554,6 +554,15 @@ lifetime rather than per day.
 - Publishing is **the owner's command, never the agent's**: a PyPI release
   is irreversible -- a version number cannot be re-used even after a
   delete -- and it needs a token the agent must never hold.
+- **The README ships inside the release, and that copy cannot be edited.**
+  0.9.1's README said "this tree is 0.9.1, not yet published". The files were
+  built, checked for secrets, installed and launched before the owner was
+  handed the upload command -- and nobody read the README as the page it was
+  about to become. It is now the published 0.9.1's page, saying 0.9.1 is not
+  published, beside a screenshot and 13 relative links that do not work
+  there (checked 2026-11-13). The README no longer states its own release
+  status (`TestTheReadmeIsTrueInsideTheRelease`); the links wait for the
+  next release.
 
 ## Local ports
 

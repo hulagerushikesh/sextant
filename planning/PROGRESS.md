@@ -5,6 +5,16 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-13 — milestone 24 item 4 and milestone 25 item 2: 0.9.1 is out (₹0)
+
+**Published by the owner.** The repeat run from an empty folder: **about 2
+minutes of machine time**, the first question 8 s with nothing left to
+download ([`clean-room.md`](clean-room.md)). The results page's one command
+reproduces its table from the published package in 18 s. Found too late: the
+README inside 0.9.1 says 0.9.1 is unpublished, and its page's screenshot and
+13 links do not work; the first is now pinned by a test, the second is
+parked. Not proven: a real assistant, or a person's ten minutes.
+
 ## 2026-11-12 — milestone 24, items 1–3: the clean-room run and what it fixed (about ₹1)
 
 The published package, an empty folder, an empty home: **about 2 minutes of

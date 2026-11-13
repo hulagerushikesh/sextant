@@ -18,7 +18,7 @@ numbered marker opens the passage it came from.*
 
 Four steps. Most of the time is two downloads — about 360 MB of libraries,
 then about 180 MB of search models — which took two minutes on a fast
-connection when last measured (2026-11-12). No account and no key. It needs
+connection when last measured (2026-11-13). No account and no key. It needs
 Python 3.11 or newer — check first, because an older one fails with a
 confusing "no matching distribution" message:
 
@@ -146,7 +146,7 @@ Last checked 2026-11-12.
 | What | State |
 | --- | --- |
 | Search over your own documents: PDF, Markdown, text; add, replace, remove | Working |
-| Standard MCP server, published as `sextant-kb` | Working — 0.9.0 published; this tree is 0.9.1, not yet published |
+| Standard MCP server, published as `sextant-kb` | Working — on the public package index; the quickstart installs the latest release |
 | Measured search quality with a check on every change | Working |
 | Agent, web interface, citations, cost per question, daily spend cap | Working |
 | Each person's uploads kept apart on a shared deployment | Working — proven on a hosted box 2026-11-04 |

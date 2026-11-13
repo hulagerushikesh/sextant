@@ -47,6 +47,7 @@ Read [`planning/PLAN.md`](planning/PLAN.md) first: the goal, the current milesto
 - `settings.repo_root()` is the only thing that knows the tree's shape; it is `None` inside a wheel, where no `.env` is read and the store goes to the user-data directory.
 - Versions come from `sextant.__version__`, never a literal. The Dockerfile installs `.[app]`.
 - **Publishing to PyPI is the owner's command, never the agent's.**
+- The README is frozen onto the index page at upload: it never says whether its own version is published. Before handing over a release, read it as that page.
 
 ## Local ports
 
