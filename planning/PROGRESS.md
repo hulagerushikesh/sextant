@@ -5,6 +5,14 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-13 — the hosted box is removed (saves about ₹270 a month)
+
+**Deleted by the owner's command:** the server, both disks, 14 backups and
+their schedule, and the two firewall rules; the project then listed none of
+them. The project, its budget alert, the model key and the rebuild recipe
+stay. Not on the plan's count (still 11 of 14). It does not prove the bill
+is zero — that shows on the next statement.
+
 ## 2026-11-13 — milestone 25 item 3: the demo is screenshots only (₹0)
 
 **Decided by the owner.** No always-on demo and no recorded replay; the
