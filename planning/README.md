@@ -25,10 +25,10 @@ place only — [`PLAN.md`](PLAN.md), section 8.
 | What | State |
 | --- | --- |
 | Phases 0–15 and milestones 16–22 | **Done** — the last closed 2026-11-04 |
-| Tests | 938 Python + 72 frontend; the online check is green |
+| Tests | 939 Python + 72 frontend; the online check is green |
 | Search quality | 93% first-result hit rate on the 55 answerable questions of 65 (dense alone 87%); 91% on the 144-page set |
 | Local library | 22 documents, 1,660 passages |
-| Package | this tree is 0.9.1, unpublished; 0.9.0 is the published one — confirmed by installing it 2026-11-12 |
+| Package | 0.9.1, published by the owner 2026-11-13 and confirmed by installing it from an empty folder the same day |
 | Hosted site | off by default and proven from outside 2026-11-04; switching it on for a session costs about ₹2 |
 | Outside users | none yet — milestones 23–26 exist to change that |
 | Repository | public since 2026-09-20 (MIT) |

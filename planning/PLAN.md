@@ -31,12 +31,12 @@ are closed. Nothing is running and nothing is billing beyond parked disks.
 | --- | --- | --- |
 | A · your documents | Done | 22 documents / about 1,660 passages locally; upload, replace and delete all work |
 | B · measured | Done | 65-question test set: right passage first **93%** of the time (87% with plain search); nine ideas tested and rejected with numbers |
-| C · works outside | **Built, not proven with a person** | Published as `sextant-kb` 0.9.0; answers a test tool correctly. No record of anyone installing it from the public index and using it in a real AI client by following only the README |
+| C · works outside | **Built, not proven with a person** | Published as `sextant-kb` 0.9.1; from an empty folder it answers a test tool correctly in about 2 minutes (2026-11-13). No record of anyone installing it from the public index and using it in a real AI client by following only the README |
 
 Other facts worth knowing:
 
-- **938 + 72 automated tests**, all passing; the online check is green.
-- The tree is at 0.9.1; the public package is 0.9.0 (confirmed by installing it, 2026-11-12).
+- **939 + 72 automated tests**, all passing; the online check is green.
+- The public package is 0.9.1, the same as the tree (published by the owner and confirmed by installing it, 2026-11-13).
 - The hosted site works and was proven with two test accounts, but it is **off by default** and costs about ₹2 each time it is switched on. Parked disks were last recorded at about ₹270 a month.
 - **Outside users so far: none.** The two accounts on the hosted site are test accounts.
 
@@ -140,7 +140,7 @@ stopping point and nothing else.
 | More checks on the deploy scripts | A real trip fails |
 | Scanned-PDF reading, tables in answers, accounts and sync | An outside user hits it |
 | Quieter first run: the `HF_TOKEN` warning and the server's download log lines | An outside user reads one as an error |
-| README links that work on the package index's page | The owner publishes and the page is checked |
+| The package index's page for 0.9.1: the screenshot and 13 links to other pages do not work, and its status table still says 0.9.1 is unpublished (checked 2026-11-13; a release cannot be edited) | The next release happens for another reason — make the links absolute first |
 | Licence review of the PDF library | Before any closed-source distribution |
 | Keeping the hosted box at all (~₹270/month parked) | Owner decides after milestone 25 item 3 |
 
@@ -217,14 +217,14 @@ If a record needs more than its limit, the extra goes in the commit message.
 ## 8 · Scoreboard
 
 **Build goal:** complete (phases 0–15, milestones 16–22).
-**Use goal:** **8 of 14 items (57%).**
-**Current item:** milestone 24, item 4 — the owner publishes 0.9.1; Claude then repeats the clean-room run.
+**Use goal:** **10 of 14 items (71%).**
+**Current item:** milestone 25, item 3 — the owner decides: recorded demo on free hosting, or screenshots only.
 
 | Milestone | Items | Done | State |
 | --- | --- | --- | --- |
 | 23 · Readable | 4 | 4 | all four done 2026-11-12: `CLAUDE.md` 1,068 → 130 lines; `NEXT.md` 215 → 48; both front pages re-checked; saved note 2,114 → 73. **Rule not yet ticked — the owner confirms** |
-| 24 · Ten minutes | 4 | 3 | items 1–3 done 2026-11-12: the published package went from an empty folder to a right, sourced answer in about 2 minutes of machine time ([`clean-room.md`](clean-room.md)); three stumbles fixed with tests; README 685 → 179 lines with a quickstart and a real screenshot. **Not yet shown: a real assistant, or a person's ten minutes.** Item 4 waits on the owner publishing |
-| 25 · Proof on one screen | 3 | 1 | item 1 done 2026-11-12: [`docs/RESULTS.md`](../docs/RESULTS.md) is generated and tested. Item 2's command works from a locally built package but **fails from the published 0.9.0**, so it waits on the release. Item 3 is the owner's decision |
+| 24 · Ten minutes | 4 | 4 | items 1–3 done 2026-11-12; item 4 done 2026-11-13: the owner published 0.9.1 and the repeat run from an empty folder took about 2 minutes of machine time, the first question 8 seconds with nothing left to download ([`clean-room.md`](clean-room.md)). **Rule not yet ticked: a script asked the question. It needs the owner's own try in Claude Desktop — a real assistant and a person's ten minutes** |
+| 25 · Proof on one screen | 3 | 2 | item 1 done 2026-11-12: [`docs/RESULTS.md`](../docs/RESULTS.md) is generated and tested. Item 2 done 2026-11-13: the page's one command, run from the published 0.9.1 in the clean-room folder, printed the first table figure for figure in 18 seconds with no key. Item 3 is the owner's decision |
 | 26 · Three people | 3 | 0 | — |
 
 Update this table and the three lines above it in the same commit that
@@ -233,6 +233,6 @@ finishes an item. It is the only place progress is counted.
 ## 9 · Waiting on the owner
 
 1. ~~Approve this plan~~ — approved 2026-11-12.
-2. ~~OK the clean-room download~~ — given 2026-11-12. **Publish 0.9.1** (milestone 24 item 4), then try the quickstart once in Claude Desktop.
+2. ~~OK the clean-room download~~ — given 2026-11-12. ~~Publish 0.9.1~~ — done 2026-11-13. **Try the quickstart once in Claude Desktop** and say how it went: that is the evidence milestone 24's rule still needs.
 3. Confirm milestone 23's rule is met (all four limits are; see section 8).
 4. Milestone 25 item 3: recorded demo on free hosting, or screenshots only. Then: keep or remove the hosted box.
