@@ -150,7 +150,7 @@ Last checked 2026-11-12.
 | Measured search quality with a check on every change | Working |
 | Agent, web interface, citations, cost per question, daily spend cap | Working |
 | Each person's uploads kept apart on a shared deployment | Working — proven on a hosted box 2026-11-04 |
-| Hosted demo | Off by default; started on demand |
+| Hosted demo | None. The hosted box was removed 2026-11-13; [`deploy/`](deploy/README.md) is the recipe to build one |
 | Used by anyone outside the project | Not yet — see [`planning/PLAN.md`](planning/PLAN.md) |
 
 Known limits, stated plainly, are in [`docs/known-issues.md`](docs/known-issues.md).

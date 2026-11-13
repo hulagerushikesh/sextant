@@ -31,6 +31,7 @@ Read [`planning/PLAN.md`](planning/PLAN.md) first: the goal, the current milesto
 ## Cost
 
 - **Ask before anything that turns on a meter** — VM start, new cloud resources, paid builds, bulk model calls, downloads — and state the ₹ amount. Billing is in INR.
+- **No hosted box exists since 2026-11-13** (removed by the owner); building one is the owner's decision. The rules below apply to a rebuilt box.
 - The VM is ~₹135/day running, parked by default with no external IP. **Park it in the same turn it is started**; never wait on a human with it up.
 - **Use `deploy/trip.sh`, never a sequence of gcloud commands** — it parks on an EXIT trap. `--keep-up` is a decision someone types.
 - Start a trip in a Terminal tab, never the chat command box (it kills the process tree, so the trap never fires and the box keeps billing).

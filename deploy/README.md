@@ -24,6 +24,11 @@ export REGION=us-central1
 gcloud config set project "$PROJECT"
 ```
 
+**No box exists since 2026-11-13.** The owner removed the VM, both disks, the
+backups and the two firewall rules; the project, its budget alert and this
+recipe remain. Building one again starts at B1 below and is the owner's
+decision, with a cost.
+
 **For a box that already exists, use [`trip.sh`](trip.sh), not the steps
 below.** It starts the VM, ships the tree, rebuilds, verifies, and parks —
 parking is an `EXIT` trap, so it happens on success, on failure and on Ctrl-C.

@@ -17,7 +17,7 @@ product.
 Operational runbooks stay next to what they operate: [`../deploy/README.md`](../deploy/README.md)
 (GCP + Caddy), [`../sextant/eval/README.md`](../sextant/eval/README.md) (golden set + metrics).
 
-## Status (last checked 2026-11-12)
+## Status (last checked 2026-11-13)
 
 The build is finished; what is unproven is use. Progress is counted in one
 place only — [`PLAN.md`](PLAN.md), section 8.
@@ -29,7 +29,7 @@ place only — [`PLAN.md`](PLAN.md), section 8.
 | Search quality | 93% first-result hit rate on the 55 answerable questions of 65 (dense alone 87%); 91% on the 144-page set |
 | Local library | 22 documents, 1,660 passages |
 | Package | 0.9.1, published by the owner 2026-11-13 and confirmed by installing it from an empty folder the same day |
-| Hosted site | off by default and proven from outside 2026-11-04; switching it on for a session costs about ₹2 |
+| Hosted site | none — proven from outside 2026-11-04, then removed by the owner 2026-11-13; [`../deploy/README.md`](../deploy/README.md) rebuilds one |
 | Outside users | none yet — milestones 23–26 exist to change that |
 | Repository | public since 2026-09-20 (MIT) |
 
@@ -39,9 +39,7 @@ GCP project `agenticrag-rush`, billing account in **INR**.
 
 | Resource | State | ₹/month |
 | --- | --- | --- |
-| VM `agenticrag` e2-standard-2 | parked (checked 2026-11-12); started only by a trip that parks itself | ≈135/day while up (≈4,100 if left on) |
-| Static IP | none reserved (checked 2026-11-12); a trip takes one and releases it | 0 |
-| Boot disk 30 GB pd-standard + data disk 20 GB pd-balanced | kept | ≈270 (last recorded) |
+| VM `agenticrag`, its two disks, 14 backups and two firewall rules | deleted by the owner 2026-11-13; the project lists none of them (checked the same day) | 0 (was ≈270 parked) |
 | Budget alert "agenticrag monthly" | ₹1,700 (≈$20), 50/90/100 %, as set in 2026-09 | — |
 | Gemini | prepaid, capped at ₹500 a month; about ₹0.13 a question when last measured (2026-10) | by use |
 

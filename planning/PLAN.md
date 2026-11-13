@@ -25,7 +25,8 @@ the reusable, measured building block.
 ## 2 · Where it stands today (checked 2026-11-12)
 
 **Everything in the build plan is built.** Phases 0–15 and milestones 16–22
-are closed. Nothing is running and nothing is billing beyond parked disks.
+are closed. Nothing is running and, since the hosted box was removed on
+2026-11-13, nothing in the cloud is billing.
 
 | Promise | State | Evidence |
 | --- | --- | --- |
@@ -37,7 +38,7 @@ Other facts worth knowing:
 
 - **939 + 72 automated tests**, all passing; the online check is green.
 - The public package is 0.9.1, the same as the tree (published by the owner and confirmed by installing it, 2026-11-13).
-- The hosted site works and was proven with two test accounts, but it is **off by default** and costs about ₹2 each time it is switched on. Parked disks were last recorded at about ₹270 a month.
+- The hosted site worked and was proven with two test accounts (2026-11-04). The owner **removed the box on 2026-11-13**; the recipe to build one again is `deploy/README.md`.
 - **Outside users so far: none.** The two accounts on the hosted site are test accounts.
 
 ## 3 · What went wrong with the old plan
@@ -136,13 +137,13 @@ stopping point and nothing else.
 | Parked | Un-parks when |
 | --- | --- |
 | Faster index tiers for large libraries | A library ≥ 25,000 passages exists **and** someone needs it |
-| More multi-user and gate hardening | The hosted site has a real second user |
-| More checks on the deploy scripts | A real trip fails |
+| More multi-user and gate hardening | A hosted site exists again **and** has a real second user |
+| More checks on the deploy scripts | A box is rebuilt and a real trip fails |
 | Scanned-PDF reading, tables in answers, accounts and sync | An outside user hits it |
 | Quieter first run: the `HF_TOKEN` warning and the server's download log lines | An outside user reads one as an error |
 | The package index's page for 0.9.1: the screenshot and 13 links to other pages do not work, and its status table still says 0.9.1 is unpublished (checked 2026-11-13; a release cannot be edited) | The next release happens for another reason — make the links absolute first |
 | Licence review of the PDF library | Before any closed-source distribution |
-| Keeping the hosted box at all (~₹270/month parked) | Owner's decision, due now: the demo was decided as screenshots only on 2026-11-13 |
+| Rebuilding a hosted box (removed by the owner 2026-11-13; it cost ~₹270/month parked) | An outside user needs a shared deployment |
 
 A new idea goes here as **one line**. It is not started.
 
@@ -235,5 +236,5 @@ finishes an item. It is the only place progress is counted.
 1. ~~Approve this plan~~ — approved 2026-11-12.
 2. ~~OK the clean-room download~~ — given 2026-11-12. ~~Publish 0.9.1~~ — done 2026-11-13. **Try the quickstart once in Claude Desktop** and say how it went: that is the evidence milestone 24's rule still needs.
 3. Confirm milestone 23's rule is met (all four limits are; see section 8).
-4. ~~Milestone 25 item 3~~ — decided 2026-11-13: screenshots only. Confirm milestone 25's rule is met. **Keep or remove the hosted box** (about ₹270 a month parked; nothing in the plan now needs it).
+4. ~~Milestone 25 item 3~~ — decided 2026-11-13: screenshots only. Confirm milestone 25's rule is met. ~~Keep or remove the hosted box~~ — removed by the owner 2026-11-13.
 5. Milestone 26 item 1: pick three people and send them the quickstart — best after the Claude Desktop try in line 2.
