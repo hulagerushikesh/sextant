@@ -5,6 +5,13 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-13 — milestone 25 item 3: the demo is screenshots only (₹0)
+
+**Decided by the owner.** No always-on demo and no recorded replay; the
+README's real screenshot stands in for one. Plan: **11 of 14 (79%)**. Nothing
+was built. It does not settle whether to keep the hosted box (about ₹270 a
+month parked) — that is the owner's next decision.
+
 ## 2026-11-13 — milestone 24 item 4 and milestone 25 item 2: 0.9.1 is out (₹0)
 
 **Published by the owner.** The repeat run from an empty folder: **about 2

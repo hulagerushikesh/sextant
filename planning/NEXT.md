@@ -29,6 +29,8 @@ The full reasoning is in the linked note or in the archived queue.
   miss that 150 fixes. [note](../learning/chunk-size.md)
 - **Dropping the reranker** — the only stage with a calibrated "I do not
   know" score. [note](../learning/reranker-decision.md)
+- **A recorded always-on demo** — the owner chose screenshots only
+  (2026-11-13): the product is the local install. [plan](PLAN.md)
 - **Always-on hosting / scale-out** — the store is single-writer and the run
   policy is on demand. [milestone 15](milestone-15.md)
 - **HyDE / query expansion** — dense worse on both sets, invisible after the
