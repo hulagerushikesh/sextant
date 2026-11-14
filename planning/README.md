@@ -6,7 +6,7 @@ product.
 
 | | Read |
 | --- | --- |
-| **Plan** | [`PLAN.md`](PLAN.md) — the goal, where it stands, the next four milestones and the working rules. Approved 2026-11-12; it outranks everything below |
+| **Plan** | [`PLAN.md`](PLAN.md) — the goal, where it stands, the milestones through 32 and the working rules. Approved 2026-11-12, phase 3 approved 2026-11-14; it outranks everything below |
 | **Next** | [`NEXT.md`](NEXT.md) — the queue only: where the current item is, where parked ideas live, and what was decided against |
 | **Progress** | [`PROGRESS.md`](PROGRESS.md) — what shipped, by date |
 | **Proof** | [`clean-room.md`](clean-room.md) — the published package installed from an empty folder, timed, with every stumble · [`../docs/RESULTS.md`](../docs/RESULTS.md) — the numbers, generated |
