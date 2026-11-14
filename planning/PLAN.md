@@ -238,3 +238,4 @@ finishes an item. It is the only place progress is counted.
 3. Confirm milestone 23's rule is met (all four limits are; see section 8).
 4. ~~Milestone 25 item 3~~ — decided 2026-11-13: screenshots only. Confirm milestone 25's rule is met. ~~Keep or remove the hosted box~~ — removed by the owner 2026-11-13.
 5. Milestone 26 item 1: pick three people and send them the quickstart — best after the Claude Desktop try in line 2.
+6. **Read and approve, or change, the proposed next phase:** [`PLAN-PHASE-3.md`](PLAN-PHASE-3.md) (written 2026-11-14 at the owner's request; nothing in it is started).
