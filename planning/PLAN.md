@@ -1,6 +1,6 @@
 # sextant — the plan
 
-**Status: APPROVED by the owner 2026-11-12.** This file is the single source
+**Status: APPROVED by the owner 2026-11-12; phase 3 (sections 3–6) approved 2026-11-14.** This file is the single source
 of direction. Where it disagrees with an older planning file, this file wins.
 
 Read sections 1–5 to know where the project is going. Section 7 is the
@@ -41,107 +41,166 @@ Other facts worth knowing:
 - The hosted site worked and was proven with two test accounts (2026-11-04). The owner **removed the box on 2026-11-13**; the recipe to build one again is `deploy/README.md`.
 - **Outside users so far: none.** The two accounts on the hosted site are test accounts.
 
-## 3 · What went wrong with the old plan
+## 3 · What the history teaches
 
-The work was good; the direction drifted.
+The first plan (built → used, 2026-11-12) is in
+[`archive/plan-built-to-used.md`](archive/plan-built-to-used.md), unedited.
 
-- Milestone 21 was planned as **3 items and closed with 37**. Thirty-four were
-  unplanned fixes found along the way, nearly all hardening the deploy scripts
-  and the multi-user gate — for a site that is switched off and has no users.
-- The last five weeks (6 Oct → 11 Nov) went to that hardening. None of it moved
-  promise C, the one promise still unproven.
-- The records became unreadable: the instruction file is **1,068 lines**, the
-  queue is **79 KB**, one milestone file is **3,353 lines**. Claude loads the
-  instruction file every session, which is also why replies grew long.
+1. The measuring habit is the project's real asset. It is the one thing the
+   many similar projects do not show.
+2. Work drifted whenever there was no outside person to answer to: milestone
+   21 was planned as 3 items and closed with 37, hardening a site with no users.
+3. The stated weak point of the numbers is still open: the test questions
+   were written alongside the test documents, so the figures grade the
+   pipeline, not anyone else's library.
 
-## 4 · The new direction: from built to used
+**The field (looked up 2026-11-14).** Local "search your documents from an AI
+assistant" servers are now common: a single search turned up more than ten.
+They compete on file formats and folder watching. The most popular one found
+shows 88 stars in a third-party listing (unverified). None of those found
+publishes search-quality numbers, and none tells a user how well it works on
+that user's own files.
 
-**North-star test.** A stranger goes from an empty folder to a cited answer
-from their own documents, inside their own AI client, in **ten minutes**,
-following only the README.
+## 4 · The direction: from used to trusted
 
-Everything in the next four milestones serves that test. Anything that does
-not is parked (section 6).
+> **The knowledge base that shows its working — on public benchmarks, and on
+> your own documents.**
 
-| Option | What it means | Verdict |
+Three steps up from where it stands, each one resting on the one before:
+
+| Step | Today | After this phase |
 | --- | --- | --- |
-| **A · Built → used** | Make it readable, prove the ten-minute path, show the numbers on one page, put it in front of three people | **Recommended** — it is the only unproven promise |
-| B · Research at scale | Grow the library tenfold and test faster indexes | Parked — interesting, but no user has asked for scale |
-| C · Freeze | Declare it finished, maintenance only | Reasonable after milestone 26 if nobody engages |
+| **Install** | Four terminal steps, 530 MB | One click in Claude Desktop; one pasted line elsewhere |
+| **Trust** | Numbers on our own 21 documents | The same pipeline scored on public test sets anyone can compare, plus **a report card for the user's own library** |
+| **Reach** | Zero outside users | Listed where people look, launched with the measurement story, and its measuring kit usable on *any* such server |
+
+**North-star test.** A stranger installs with one click, points it at a
+folder, gets a cited answer, and within five more minutes sees a score for
+how well search works on *their* documents.
+
+**What "big" means, as numbers** (checked 30 days after launch): at least
+**100 stars**, at least **10 strangers** who wrote an issue or comment, and
+at least **3** who say they still use it. These are not in our control; they
+are the test of whether the direction was right.
 
 ## 5 · The milestones
 
-Four milestones, **14 items**. Each has a rule written before it starts that
-says what "done" means. Milestones run in order.
+Seven milestones, **26 items**, after the 11 finished in milestones 23–25. Same rules as before: in order, one item at a
+time, each milestone's rule written before it starts.
 
-### Milestone 23 — Make the project readable · ₹0 · Claude alone
+### Milestone 26 — Three outside people · owner-led · ₹0 *(approved 2026-11-12)*
 
-*Why first:* nobody, the owner included, can currently find the state of the
-project in under a minute, and every session pays for the clutter.
+Three items: the owner picks three people and sends them the quickstart; what happened to each is recorded in a short dated entry; the single most common stopping point is fixed. **Rule:** three people tried it and at least **one** reached a cited answer from their own documents without help. It runs **after milestone 27**, so the three people get
+the one-click version. First the owner's own ten-minute try in Claude Desktop.
 
-| # | Item | Done when |
-| --- | --- | --- |
-| 1 | Cut `CLAUDE.md` to rules only. Every lesson story moves, unedited, to a new `planning/LESSONS.md`; each rule keeps one line | `CLAUDE.md` ≤ 150 lines; no lesson text lost; tests that read it still pass |
-| 2 | `NEXT.md` becomes the queue only: Now / Parked / Decided against. Finished tables for milestones 17–22 move to `planning/archive/` untouched | `NEXT.md` ≤ 60 lines |
-| 3 | Fix what is stale in the two front pages: the README's roadmap and status rows, and `planning/README.md`'s status | Every dated claim on both pages is true on the day of the commit |
-| 4 | Shrink Claude's saved notes for this project to one short state note | Topic note ≤ 80 lines; index line ≤ 2 lines |
+### Milestone 27 — One click · ₹0
 
-**Rule:** all four limits met, the full check passes locally and online, and a
-reader can answer "what is the goal, what is done, what is next" from
-`planning/PLAN.md` alone.
-
-### Milestone 24 — A stranger's first ten minutes · ₹0 · needs two owner steps
-
-*Why:* promise C has only been tested from inside this checkout.
+*Why first:* every later step is worth nothing if people stop at a terminal.
 
 | # | Item | Done when |
 | --- | --- | --- |
-| 1 | **Clean-room run.** Empty folder, install the public package, add three documents, plug it into a real AI client, ask one question — following only the README. Time it; write down every stumble | A dated record with the time taken and the list of stumbles. *Downloads the package and ~180 MB of models: owner's OK first* |
-| 2 | Fix the **top three** stumbles. The rest go to Parked | Each fix has a test |
-| 3 | The README opens with a one-screen quickstart (install, add, plug in, ask) and one screenshot of a real cited answer. Long reference sections move to `docs/` | README ≤ 300 lines |
-| 4 | **Release.** Owner publishes the current version (owner's command, always). Claude repeats the clean-room run against the published package | The repeat run meets the rule below |
+| 1 | A Claude Desktop bundle: double-click, choose a folder, ask | Installed on the owner's machine from the file alone |
+| 2 | A no-setup line for other assistants (Claude Code, Cursor, VS Code) | One pasted line works in two of them |
+| 3 | **Slim engine.** Run the two search models without the 900 MB library they need today. Pass rule: no figure on the results page drops by more than 0.02 | Install under 200 MB, first answer under 10 seconds, the quality check still green — or the idea is rejected with its numbers, like the other nine |
+| 4 | A quiet first run: no warnings that read as errors *(un-parks two parked lines)* | A clean-room run prints nothing alarming |
+| 5 | Release 0.10 with working links on the package page; listed in the official MCP registry. *Owner's commands* | The listing and the page are checked from outside |
 
-**Rule:** empty folder → cited answer in a real client in **≤ 10 minutes**,
-with **zero** steps that needed knowledge from outside the README.
+**Rule:** empty machine → cited answer in Claude Desktop in **3 minutes** of
+a person's time, with **no terminal**.
 
-### Milestone 25 — Proof on one screen · ₹0
+### Milestone 28 — Numbers anyone can compare · ₹0 · one download to approve
 
-*Why:* the numbers behind promise B exist but are spread over 18 notes.
-
-| # | Item | Done when |
-| --- | --- | --- |
-| 1 | One results page: the four-stage comparison, the nine rejected ideas with one number each, and cost per question. Figures are generated from the measurement files, never typed | A test fails if the page and the files disagree |
-| 2 | One command a stranger runs to reproduce the comparison table | Verified in the clean-room setup from milestone 24 |
-| 3 | Decide the always-on demo: recorded real answers replayed in the existing interface on free hosting (clearly labelled as recorded), or screenshots only | Owner's decision recorded; if "recorded", it is live at ₹0 a month |
-
-**Rule:** a visitor can answer "how good is it, how do you know, what did you
-reject" from one page, and every figure on it is checked automatically.
-
-### Milestone 26 — Three outside people · owner-led
-
-*Why:* Atlas's first two users both left at an empty question box. Features
-were not the bottleneck there and probably are not here.
+*Why:* it answers the honest caveat on the results page.
 
 | # | Item | Done when |
 | --- | --- | --- |
-| 1 | Owner picks three people and sends them the quickstart (Claude drafts the message only if asked) | Sent |
-| 2 | Record what happened to each: installed? got an answer? where did they stop? | Three short dated entries |
-| 3 | Fix the single most common stopping point, then choose the next phase from that evidence | One fix shipped; next phase written here |
+| 1 | Score all four search stages on three public test sets (about 3,600, 5,000 and 57,000 documents) with the field's standard measure | Figures sit beside the published baseline for each set |
+| 2 | Speed and memory at 57,000 documents *(un-parks the faster-index line if it is slow)* | Search time and memory on the results page |
+| 3 | Re-test the two closest rejected ideas on the public sets | Each is kept rejected or adopted, by the same kind of rule |
+| 4 | The results page and its one command cover the public sets | A stranger reproduces one public set with one command |
 
-**Rule:** three people tried it and at least **one** reached a cited answer
-from their own documents without help. If none did, the next milestone is that
-stopping point and nothing else.
+**Rule:** every figure is generated and checked automatically, and **if the
+pipeline loses to a plain baseline anywhere, the page says so in its first
+screen.**
+
+### Milestone 29 — A report card for your own library · about ₹20
+
+*Why:* this is the feature nobody else has, and the reason to choose sextant.
+
+| # | Item | Done when |
+| --- | --- | --- |
+| 1 | A self-test: the user's own assistant writes a question for each of a sample of passages; sextant checks whether search finds the passage it came from. No key, nothing sent anywhere new | Works in Claude Desktop on a fresh library |
+| 2 | **Prove the self-test is honest.** On the public sets, where the true answers are known, the self-test score must rise and fall with the true score. Pass rule written first | It passes, or the feature ships labelled "rough guide" or is dropped |
+| 3 | The report: one score, the questions it missed, and documents that cannot be searched at all (scanned, empty, duplicated) | Readable by a non-engineer in one screen |
+| 4 | One suggestion the report can back with a number (for example "these 4 files are scanned") | Each suggestion links to its evidence |
+
+**Rule:** a stranger gets a score for their own library within **5 minutes**
+of the first answer, and the results page shows how far that score can be
+trusted.
+
+### Milestone 30 — What the first users stopped at · ₹0
+
+Three items, **chosen from milestone 26's evidence, not now.** Likely
+candidates: keeping a folder in sync as files change, Word and web-page
+files, scanned PDFs. **Rule:** the two most common stopping points are gone.
+
+### Milestone 31 — Launch · owner-led · ₹0
+
+| # | Item | Done when |
+| --- | --- | --- |
+| 1 | One write-up: "nine ideas measured and rejected, and what the public numbers said" | Published by the owner |
+| 2 | A 90-second screen recording: install, ask, report card | In the README |
+| 3 | The owner posts it in three places where such tools are discussed | Posted |
+| 4 | Every question answered for two weeks; each one recorded in one line | A dated list |
+
+**Rule:** the three numbers in section 4 are read 30 days after posting and
+written down, whatever they are.
+
+### Milestone 32 — The measuring kit for any knowledge base · only if 31 lands
+
+| # | Item | Done when |
+| --- | --- | --- |
+| 1 | The public-set scorer and the self-test work against any search server that speaks the same protocol, not only sextant | Run against two other open-source servers |
+| 2 | A comparison page: five popular servers, same sets, same measure, methods published so each author can reproduce it | Generated, with a test |
+| 3 | Authors are told before it is published and may correct their setup | Recorded |
+
+**Rule:** the comparison is reproducible by someone who is not us. This is
+the step that makes the project a reference point rather than one more server.
+
+### Decision points
+
+| After | If | Then |
+| --- | --- | --- |
+| 26 | None of three people reaches an answer | The next work is that stopping point only |
+| 28 | The pipeline is ordinary on public sets | Say so, fix the weakest stage first, and re-plan 29 |
+| 29 item 2 | The self-test does not track the truth | Drop the headline; the phase's big idea becomes milestone 32 |
+| 31 | Under 25 stars and no stranger writes in | Freeze: maintenance only, written up honestly |
+
+### Cost, effort and risk
+
+- **Money:** about **₹20** in total (model calls to validate the self-test),
+  well inside the daily cap. Downloads of the public sets need the owner's OK.
+- **Effort:** roughly eight to ten weeks of working sessions; milestones 26
+  and 31 move at the owner's pace.
+- **Owner's part:** the Desktop try, each release and listing, picking three
+  people, the launch posts.
+- **Risks, plainly:** the field is crowded; public numbers may be
+  unflattering; the self-test may fail its own check; attention cannot be
+  planned. Each has a decision point above rather than a hope.
 
 ## 6 · Parked — not now, and what would un-park each
 
+What does not change: every stage and feature is kept or dropped on a number,
+rule first. It runs on the user's machine — **no hosted site, no accounts, no
+usage tracking.**
+
 | Parked | Un-parks when |
 | --- | --- |
-| Faster index tiers for large libraries | A library ≥ 25,000 passages exists **and** someone needs it |
+| Faster index tiers for large libraries | Milestone 28 item 2 measures search as slow at 57,000 documents |
 | More multi-user and gate hardening | A hosted site exists again **and** has a real second user |
 | More checks on the deploy scripts | A box is rebuilt and a real trip fails |
-| Scanned-PDF reading, tables in answers, accounts and sync | An outside user hits it |
-| Quieter first run: the `HF_TOKEN` warning and the server's download log lines | An outside user reads one as an error |
-| The package index's page for 0.9.1: the screenshot and 13 links to other pages do not work, and its status table still says 0.9.1 is unpublished (checked 2026-11-13; a release cannot be edited) | The next release happens for another reason — make the links absolute first |
+| Scanned-PDF reading, Word and web-page files, folder sync | Milestone 30 picks it from what the first users stopped at |
+| Tables in answers, accounts and sync between machines | An outside user hits it |
 | Licence review of the PDF library | Before any closed-source distribution |
 | Rebuilding a hosted box (removed by the owner 2026-11-13; it cost ~₹270/month parked) | An outside user needs a shared deployment |
 
@@ -162,7 +221,7 @@ in full. These rules are about direction and length.
 ### 7.2 Staying on direction
 
 - **One item at a time, in order.** Finish it against its "done when", then
-  move to the next. "Go next" from the owner means the next row in section 5.
+  move to the next. "Go next" from the owner means the next row in section 5, with milestones in the order of the scoreboard (27 before 26).
 - **Found a defect that is not the current item?** Fix it now only if leaving
   it would (a) cost money, (b) lose or expose someone's data, or (c) block the
   current item. Otherwise add one line to section 6 and carry on.
@@ -182,7 +241,7 @@ The owner's global format applies. For this project it looks like this:
 >
 > One or two sentences: a link to the record, then what stayed unchanged.
 >
-> **Next — milestone 23, item 2 of 4 (plan: 1 of 14 done, 7%):** what comes
+> **Next — milestone 27, item 2 of 5 (plan: 12 of 37 done, 32%):** what comes
 > next, what it waits on, and one honest sentence on what this work does not
 > prove.
 >
@@ -218,24 +277,28 @@ If a record needs more than its limit, the extra goes in the commit message.
 ## 8 · Scoreboard
 
 **Build goal:** complete (phases 0–15, milestones 16–22).
-**Use goal:** **11 of 14 items (79%).**
-**Current item:** milestone 26, item 1 — the owner picks three people and sends them the quickstart.
+**Plan:** **11 of 37 items (30%).**
+**Current item:** milestone 27, item 1 — a Claude Desktop bundle that installs with a double-click.
 
 | Milestone | Items | Done | State |
 | --- | --- | --- | --- |
-| 23 · Readable | 4 | 4 | all four done 2026-11-12: `CLAUDE.md` 1,068 → 130 lines; `NEXT.md` 215 → 48; both front pages re-checked; saved note 2,114 → 73. **Rule not yet ticked — the owner confirms** |
-| 24 · Ten minutes | 4 | 4 | items 1–3 done 2026-11-12; item 4 done 2026-11-13: the owner published 0.9.1 and the repeat run from an empty folder took about 2 minutes of machine time, the first question 8 seconds with nothing left to download ([`clean-room.md`](clean-room.md)). **Rule not yet ticked: a script asked the question. It needs the owner's own try in Claude Desktop — a real assistant and a person's ten minutes** |
-| 25 · Proof on one screen | 3 | 3 | item 1 done 2026-11-12: [`docs/RESULTS.md`](../docs/RESULTS.md) is generated and tested. Item 2 done 2026-11-13: the page's one command, run from the published 0.9.1 in the clean-room folder, printed the first table figure for figure in 18 seconds with no key. Item 3 decided by the owner 2026-11-13: **screenshots only** — no always-on demo; the README's real screenshot stands in for one. **Rule not yet ticked — the owner confirms** |
-| 26 · Three people | 3 | 0 | — |
+| 23 · Readable | 4 | 4 | done 2026-11-12. **Rule not yet ticked — the owner confirms** |
+| 24 · Ten minutes | 4 | 4 | done 2026-11-13: an empty folder reaches a correct answer in about 2 minutes of machine time ([`clean-room.md`](clean-room.md)). **Rule not yet ticked: it needs the owner's own try in Claude Desktop** |
+| 25 · Proof on one screen | 3 | 3 | done 2026-11-13: [`docs/RESULTS.md`](../docs/RESULTS.md) is generated and tested; the owner chose screenshots only. **Rule not yet ticked — the owner confirms** |
+| 27 · One click | 5 | 0 | — |
+| 26 · Three people | 3 | 0 | runs after 27, so they get the one-click version |
+| 28 · Numbers anyone can compare | 4 | 0 | — |
+| 29 · Report card for your library | 4 | 0 | — |
+| 30 · What the first users stopped at | 3 | 0 | items chosen from milestone 26's evidence |
+| 31 · Launch | 4 | 0 | — |
+| 32 · Measuring kit for any knowledge base | 3 | 0 | only if 31 lands |
 
 Update this table and the three lines above it in the same commit that
 finishes an item. It is the only place progress is counted.
 
 ## 9 · Waiting on the owner
 
-1. ~~Approve this plan~~ — approved 2026-11-12.
-2. ~~OK the clean-room download~~ — given 2026-11-12. ~~Publish 0.9.1~~ — done 2026-11-13. **Try the quickstart once in Claude Desktop** and say how it went: that is the evidence milestone 24's rule still needs.
-3. Confirm milestone 23's rule is met (all four limits are; see section 8).
-4. ~~Milestone 25 item 3~~ — decided 2026-11-13: screenshots only. Confirm milestone 25's rule is met. ~~Keep or remove the hosted box~~ — removed by the owner 2026-11-13.
-5. Milestone 26 item 1: pick three people and send them the quickstart — best after the Claude Desktop try in line 2.
-6. **Read and approve, or change, the proposed next phase:** [`PLAN-PHASE-3.md`](PLAN-PHASE-3.md) (written 2026-11-14 at the owner's request; nothing in it is started).
+1. **Try the quickstart once in Claude Desktop** and say how it went: the evidence milestone 24's rule still needs, and the baseline the one-click install is measured against.
+2. Confirm the rules for milestones 23 and 25 are met.
+3. Milestone 27: OK each download it needs when asked; publish 0.10 and the registry listing when item 5 is reached.
+4. Milestone 26: pick three people — after milestone 27.

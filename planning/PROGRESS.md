@@ -5,6 +5,13 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-14 — phase 3 approved: from used to trusted (₹0)
+
+- The owner asked for a review of the whole project and a larger plan in the same direction, then approved it.
+- The plan now runs to milestone 32: one-click install, public test sets, a report card for the user's own library, first-user fixes, a launch, a measuring kit for any such server.
+- **11 of 37 items (30%)**; the current item is milestone 27, item 1. The first plan's sections are in `archive/plan-built-to-used.md`, unedited.
+- Does not prove: anything. It is a direction; the field check was one search with unverified figures.
+
 ## 2026-11-13 — the hosted box is removed (saves about ₹270 a month)
 
 **Deleted by the owner's command:** the server, both disks, 14 backups and
