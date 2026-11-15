@@ -5,6 +5,12 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-15 — milestone 27 item 2: one pasted line for Claude Code, VS Code and Cursor (₹0)
+
+- The owner counted item 1 ("you can go next"). The README now has one line each for Claude Code and VS Code and a config for Cursor; each shell line installs first with a new `sextant-kb --version`, so a first install does not hit a client's start-up timeout.
+- Tried in throwaway profiles: Claude Code 2.1.325 and VS Code 1.102.3 each saved exactly the intended setup; launched from those setups with today's wheel in place of the package, Claude Code reported it connected and the server indexed a two-file folder and returned the right passage first. The install step downloaded only index data (owner approved the download).
+- Does not prove: the lines from the public index — they ask for 0.10, which exists at item 5. Cursor is not installed here and is untried.
+
 ## 2026-11-15 — the owner's install: it works, and one locked PDF stopped the folder (₹0)
 
 - The owner installed the bundle in Claude Desktop from the file. Claude Desktop set up Python and the libraries itself and the server started in about 2 s: the experimental step the entry below could not test works on this Mac.
