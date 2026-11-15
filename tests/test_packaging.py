@@ -484,6 +484,69 @@ class TestTheQuickstartNamesWhatThePackageInstalls:
         assert stated in self.README.read_text(), f"the quickstart does not say {stated!r}"
 
 
+class TestTheOneLineSetupsAgree:
+    """Three pasted lines name one package, one command and one setting.
+
+    They are hand-copied into three formats -- a shell line, a JSON argument,
+    a JSON file -- so a change to one is a change the others miss.
+    """
+
+    README = ROOT / "README.md"
+
+    def _section(self) -> str:
+        text = self.README.read_text()
+        start = text.index("## One line instead")
+        return text[start : text.index("\n## ", start + 1)]
+
+    def _configs(self) -> list[dict]:
+        import json
+
+        section = self._section()
+        vscode = re.search(r"--add-mcp '(\{.*\})'", section)
+        cursor = re.search(r"```json\n(.*)\n```", section)
+        assert vscode and cursor, "the VS Code or Cursor setup has moved"
+        return [
+            json.loads(vscode.group(1)),
+            json.loads(cursor.group(1))["mcpServers"]["sextant"],
+        ]
+
+    def test_every_setup_runs_the_installed_command_with_the_folder_setting(self):
+        from sextant import settings
+
+        script = "sextant-kb"
+        assert script in PYPROJECT["project"]["scripts"]
+        for config in self._configs():
+            assert config["command"] == "uvx"
+            assert config["args"][-1] == script
+            assert list(config["env"]) == [settings.env_name("FOLDER")]
+
+    def test_every_setup_asks_for_the_same_release(self):
+        section = self._section()
+        asked = set(re.findall(r"sextant-kb>=[0-9.]+", section))
+        assert len(asked) == 1, f"the setups ask for different releases: {asked}"
+        (requirement,) = asked
+        for config in self._configs():
+            assert config["args"][:2] == ["--from", requirement]
+
+    def test_each_shell_line_installs_before_it_registers(self):
+        """A first install inside a client's start-up timeout reads as broken."""
+        lines = [line for line in self._section().splitlines() if line.startswith("uvx ")]
+        assert len(lines) == 2, f"expected the Claude Code and VS Code lines, found {lines}"
+        for line in lines:
+            assert line.split(" && ")[0].endswith("sextant-kb --version")
+
+    def test_version_prints_and_does_not_serve(self, monkeypatch, capsys):
+        from sextant.vector_db import server
+
+        def serve(**_: object) -> None:
+            raise AssertionError("--version started the server")
+
+        monkeypatch.setattr(server.mcp, "run", serve)
+        monkeypatch.setattr("sys.argv", ["sextant-kb", "--version"])
+        server.main()
+        assert capsys.readouterr().out == f"sextant-kb {PYPROJECT['project']['version']}\n"
+
+
 class TestTheReadmeIsTrueInsideTheRelease:
     """The README is the package's page on the index, frozen at upload.
 
