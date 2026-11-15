@@ -5,6 +5,13 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-15 — the owner's install: it works, and one locked PDF stopped the folder (₹0)
+
+- The owner installed the bundle in Claude Desktop from the file. Claude Desktop set up Python and the libraries itself and the server started in about 2 s: the experimental step the entry below could not test works on this Mac.
+- The first folder value was a pasted terminal prompt, not a path; the server said "could not be found", which is what it is for. With the Downloads folder chosen, Claude listed 14 documents and explained one with its file and page.
+- Found: one password-protected PDF raised an error that escaped the per-file handling and ended the pass at 18 of 190 files. Fixed: a locked PDF is now refused with a reason a person can act on, and any unexpected error skips that one file and carries on (and is retried next launch). Both planted back and caught. 973 tests pass.
+- Does not prove: that the full 190-file folder indexes cleanly — that needs the rebuilt bundle installed again. Whether item 1 counts is the owner's call.
+
 ## 2026-11-15 — milestone 27 item 1: a Claude Desktop bundle, built and waiting on an install (₹0)
 
 - `bundle/build.py` writes a 149 KB bundle: the search server's source, its dependency list read from `pyproject.toml`, and one setting, the folder to search. The format's own checker accepts it.
