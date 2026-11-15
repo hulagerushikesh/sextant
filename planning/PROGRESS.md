@@ -5,6 +5,11 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-15 — milestone 27 item 4: the cold first run is quiet too (₹0)
+
+- With the owner's yes, the search models downloaded into an empty throwaway cache (186 MB on disk): adding two documents took 24 s and printed nothing on the error stream — no warning, no progress bars — only the progress lines and "search models ready". The server then started on that cache with four ordinary log lines and returned the right passage first. **15 of 37 (41%)**.
+- Does not prove: a cold download started by the server itself, as a Claude Desktop install does without adding documents first — it runs the same loading code, but only the adding-documents path met the real hub cold. Not tried on Linux or Windows.
+
 ## 2026-11-15 — milestone 27 item 4: a quiet first run, built (₹0)
 
 - Reproduced in a clean environment: adding documents printed the hub's "set a HF_TOKEN" warning twice and a "no GEMINI_API_KEY" note; the server's log had a line for every model-file request and the same warning. Clean-room stumbles 4 and 5, both parked until now.
