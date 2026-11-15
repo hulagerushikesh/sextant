@@ -78,6 +78,36 @@ to `sextant-kb`. On Windows the config file is
 its commands in `Scripts\` rather than `bin/`; this project has not been
 tested on Windows.
 
+## One line instead: Claude Code, VS Code, Cursor
+
+With [uv](https://docs.astral.sh/uv/) installed, one pasted line replaces the
+four steps: it installs sextant, tells the assistant about it, and points it
+at a folder. Change `~/Documents` to the folder you want searched. Each line
+runs `--version` first, so the first install (a few hundred MB) finishes in
+the terminal rather than timing out inside the assistant. When the assistant
+starts it, the folder is indexed in the background and `kb_stats` shows the
+progress and any file it could not read.
+
+**Claude Code:**
+
+```bash
+uvx --from 'sextant-kb>=0.10' sextant-kb --version && claude mcp add sextant --scope user --env SEXTANT_FOLDER=~/Documents -- uvx --from 'sextant-kb>=0.10' sextant-kb
+```
+
+**VS Code** (needs the `code` command: in VS Code run *Shell Command: Install
+'code' command in PATH* once):
+
+```bash
+uvx --from 'sextant-kb>=0.10' sextant-kb --version && code --add-mcp '{"name":"sextant","command":"uvx","args":["--from","sextant-kb>=0.10","sextant-kb"],"env":{"SEXTANT_FOLDER":"~/Documents"}}'
+```
+
+**Cursor:** add this to `~/.cursor/mcp.json`. It has not been tried in
+Cursor yet.
+
+```json
+{"mcpServers": {"sextant": {"command": "uvx", "args": ["--from", "sextant-kb>=0.10", "sextant-kb"], "env": {"SEXTANT_FOLDER": "~/Documents"}}}}
+```
+
 ## What your assistant gets
 
 | Tool | Does |

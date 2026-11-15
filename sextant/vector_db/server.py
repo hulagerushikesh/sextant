@@ -380,7 +380,14 @@ def main() -> None:
     Installed by pyproject so MCP clients can name a single command with no
     flags -- some clients parse the argument list themselves and would eat a
     `-m`. Also what the Claude Desktop config points at.
+
+    `--version` prints and exits instead of serving. The README's one-line
+    setups run it first, so a first `uvx` install of several hundred MB
+    happens in the terminal, not inside a client's start-up timeout.
     """
+    if sys.argv[1:] == ["--version"]:
+        sys.stdout.write(f"sextant-kb {__version__}\n")
+        return
     mcp.run(transport="stdio")
 
 
