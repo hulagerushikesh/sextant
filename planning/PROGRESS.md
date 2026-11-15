@@ -5,6 +5,13 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-15 — milestone 27 item 5: release 0.10.0 prepared for the owner (₹0)
+
+- Version 0.10.0. Every README link and the screenshot now point at the repository directly, so they work on the package page (on 0.9.1 all 13 links and the image were dead there); a test checks each still names a file that exists.
+- `server.json` written for the official MCP registry, with the ownership line the registry looks for in the README; tests tie its name, version, package and setting to the files that produce the page. Each test caught its planted defect.
+- Built and checked: the wheel and source package pass the index's own checker; the wheel launched outside the checkout reported 0.10.0 over MCP, indexed a folder and returned the right passage. The Claude Desktop bundle was rebuilt as 0.10.0.
+- Does not prove: anything public — the upload and the listing are the owner's commands, and the registry's own validation runs only when the owner publishes to it.
+
 ## 2026-11-15 — milestone 27 item 4: the cold first run is quiet too (₹0)
 
 - With the owner's yes, the search models downloaded into an empty throwaway cache (186 MB on disk): adding two documents took 24 s and printed nothing on the error stream — no warning, no progress bars — only the progress lines and "search models ready". The server then started on that cache with four ordinary log lines and returned the right passage first. **15 of 37 (41%)**.

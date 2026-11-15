@@ -1,0 +1,30 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.hulagerushikesh/sextant",
+  "title": "sextant",
+  "description": "Search your own PDFs, Markdown and text files from any assistant. Local, no key, cited passages.",
+  "repository": {
+    "url": "https://github.com/hulagerushikesh/sextant",
+    "source": "github"
+  },
+  "version": "0.10.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "sextant-kb",
+      "version": "0.10.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "SEXTANT_FOLDER",
+          "description": "A folder of documents to index on start and keep in step with, e.g. ~/Documents",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}

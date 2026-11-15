@@ -286,7 +286,7 @@ If a record needs more than its limit, the extra goes in the commit message.
 | 23 · Readable | 4 | 4 | done 2026-11-12. **Rule not yet ticked — the owner confirms** |
 | 24 · Ten minutes | 4 | 4 | done 2026-11-13: an empty folder reaches a correct answer in about 2 minutes of machine time ([`clean-room.md`](clean-room.md)). **Rule not yet ticked: it needs the owner's own try in Claude Desktop** |
 | 25 · Proof on one screen | 3 | 3 | done 2026-11-13: [`docs/RESULTS.md`](../docs/RESULTS.md) is generated and tested; the owner chose screenshots only. **Rule not yet ticked — the owner confirms** |
-| 27 · One click | 5 | 4 | items 1–4 done 2026-11-15; item 3: no torch, 166 MB download (476 MB on disk), first answer 7 s, every figure unchanged. Item 4: a cold first run (empty model cache) prints nothing on stderr, then the server's log is four ordinary lines |
+| 27 · One click | 5 | 4 | items 1–4 done 2026-11-15; item 3: no torch, 166 MB download (476 MB on disk), first answer 7 s, every figure unchanged. Item 5 prepared: 0.10.0 built, links absolute, `server.json` written; waits on the owner's upload and listing. Item 4: a cold first run (empty model cache) prints nothing on stderr, then the server's log is four ordinary lines |
 | 26 · Three people | 3 | 0 | runs after 27, so they get the one-click version |
 | 28 · Numbers anyone can compare | 4 | 0 | — |
 | 29 · Report card for your library | 4 | 0 | — |
@@ -299,7 +299,7 @@ finishes an item. It is the only place progress is counted.
 
 ## 9 · Waiting on the owner
 
-1. Reinstall the rebuilt bundle (`dist/sextant-0.9.1.mcpb`) so the rest of Downloads indexes; say if anything is reported as not indexed.
+1. Reinstall the rebuilt bundle (now `dist/sextant-0.10.0.mcpb`) so the rest of Downloads indexes; say if anything is reported as not indexed.
 2. Confirm the rules for milestones 23 and 25 are met.
-3. Milestone 27: OK each download it needs when asked; publish 0.10 and the registry listing when item 5 is reached.
+3. Milestone 27 item 5, ready 2026-11-15: upload `dist/sextant_kb-0.10.0*` to the package index, then install `mcp-publisher`, `mcp-publisher login github` and `mcp-publisher publish` from the repository folder. The agent then checks the page and the listing from outside.
 4. Milestone 26: pick three people — after milestone 27.

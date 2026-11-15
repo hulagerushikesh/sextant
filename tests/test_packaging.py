@@ -606,3 +606,99 @@ class TestEveryRelativeDocLinkResolves:
         # Anti-vacuity: a regex that stops matching would pass silently.
         assert checked > 100, f"only {checked} relative links found -- has the pattern drifted?"
         assert not broken, f"links to files that do not exist: {broken}"
+
+
+class TestTheReadmeWorksOnThePackagePage:
+    """On the index page a relative link has no repository to resolve against.
+
+    Checked on the 0.9.1 page (2026-11-13): the screenshot and all 13 links
+    were dead there while every one worked on GitHub. So the README links
+    absolutely, and each absolute link into this repository must still name
+    a path that exists, which the relative-link test can no longer see.
+    """
+
+    README = ROOT / "README.md"
+    REPO = "https://github.com/hulagerushikesh/sextant/"
+    RAW = "https://raw.githubusercontent.com/hulagerushikesh/sextant/main/"
+    LINK = re.compile(r"\]\(([^)\s]+)\)")
+
+    def _targets(self) -> list[str]:
+        return [m.group(1) for m in self.LINK.finditer(self.README.read_text())]
+
+    def test_no_link_or_image_is_relative(self):
+        relative = [t for t in self._targets() if not t.startswith(("http", "mailto:", "#"))]
+        assert not relative, f"dead on the package page: {relative}"
+
+    def test_every_link_into_the_repository_names_a_path_that_exists(self):
+        checked, broken = 0, []
+        for target in self._targets():
+            url = target.split("#")[0]
+            if url.startswith(self.RAW):
+                path, want_dir = url[len(self.RAW) :], False
+            elif url.startswith(self.REPO + "blob/main/"):
+                path, want_dir = url[len(self.REPO + "blob/main/") :], False
+            elif url.startswith(self.REPO + "tree/main/"):
+                path, want_dir = url[len(self.REPO + "tree/main/") :], True
+            else:
+                continue
+            checked += 1
+            where = ROOT / path
+            if not (where.is_dir() if want_dir else where.is_file()):
+                broken.append(target)
+        assert checked >= 10, f"only {checked} repository links found -- has the pattern drifted?"
+        assert not broken, f"links to paths that do not exist: {broken}"
+
+    def test_the_screenshot_is_served_raw(self):
+        images = re.findall(r"!\[[^\]]*\]\(([^)\s]+)\)", self.README.read_text())
+        assert images and all(i.startswith(self.RAW) for i in images), images
+
+
+class TestTheRegistryEntryAgrees:
+    """`server.json` is what the official MCP registry lists.
+
+    The registry proves the package is ours by finding `mcp-name: <name>` in
+    the README on the index, so the name, the version and the package must
+    agree with the files that produce that page, or the listing is refused
+    after the release it describes can no longer change.
+    """
+
+    ENTRY = ROOT / "server.json"
+
+    @pytest.fixture
+    def entry(self) -> dict:
+        import json
+
+        return json.loads(self.ENTRY.read_text())
+
+    def test_the_readme_carries_the_name_on_its_own_line(self, entry):
+        marker = f"<!-- mcp-name: {entry['name']} -->"
+        lines = (ROOT / "README.md").read_text().splitlines()
+        assert marker in lines, f"the README must hold the line {marker!r}"
+
+    def test_the_name_is_under_the_owners_github_namespace(self, entry):
+        owner = PYPROJECT["project"]["urls"]["Homepage"].rstrip("/").split("/")[-2]
+        assert entry["name"].startswith(f"io.github.{owner}/")
+        assert entry["repository"]["url"] == PYPROJECT["project"]["urls"]["Homepage"]
+
+    def test_it_lists_this_release_of_this_package(self, entry):
+        version = PYPROJECT["project"]["version"]
+        (package,) = entry["packages"]
+        assert entry["version"] == package["version"] == version
+        assert package["registryType"] == "pypi"
+        assert package["identifier"] == PYPROJECT["project"]["name"]
+
+    def test_uvx_finds_a_command_named_after_the_package(self, entry):
+        """`uvx <identifier>` runs the console script of the same name."""
+        (package,) = entry["packages"]
+        assert package["runtimeHint"] == "uvx"
+        assert package["identifier"] in PYPROJECT["project"]["scripts"]
+
+    def test_the_description_fits_the_registry(self, entry):
+        assert 0 < len(entry["description"]) <= 100
+
+    def test_every_setting_it_offers_is_one_the_server_reads(self, entry):
+        from sextant import settings
+
+        (package,) = entry["packages"]
+        names = [v["name"] for v in package.get("environmentVariables", [])]
+        assert names == [settings.env_name("FOLDER")]

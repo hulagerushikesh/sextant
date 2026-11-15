@@ -1,5 +1,7 @@
 # sextant
 
+<!-- mcp-name: io.github.hulagerushikesh/sextant -->
+
 Search your own documents from any AI assistant — and see the numbers that
 say how well the search works.
 
@@ -9,7 +11,7 @@ a folder of PDF, Markdown or text files, plug it into Claude Desktop or any
 other MCP client, and ask. Answers come from your documents and name the file
 and the page.
 
-![A question answered from the indexed documents, each claim followed by a numbered citation](docs/answer.png)
+![A question answered from the indexed documents, each claim followed by a numbered citation](https://raw.githubusercontent.com/hulagerushikesh/sextant/main/docs/answer.png)
 
 *A real answer from the project's own web interface (2026-11-12). Each
 numbered marker opens the passage it came from.*
@@ -136,7 +138,7 @@ Measured, on a committed test set, and re-checked on every change:
 <!-- results:end -->
 
 The full comparison, the nine ideas that were measured and rejected, and what
-a question costs are on one page: [`docs/RESULTS.md`](docs/RESULTS.md). Every
+a question costs are on one page: [`docs/RESULTS.md`](https://github.com/hulagerushikesh/sextant/blob/main/docs/RESULTS.md). Every
 figure there is generated from the measurement files.
 
 ## The full app (optional)
@@ -166,7 +168,7 @@ Add your key to `.env`, then:
 
 The interface opens on http://localhost:3000. Or run both halves in
 containers with `docker compose up --build`. Details, every setting and the
-HTTP routes are in [`docs/running.md`](docs/running.md).
+HTTP routes are in [`docs/running.md`](https://github.com/hulagerushikesh/sextant/blob/main/docs/running.md).
 
 ## Honest status
 
@@ -179,10 +181,10 @@ Last checked 2026-11-12.
 | Measured search quality with a check on every change | Working |
 | Agent, web interface, citations, cost per question, daily spend cap | Working |
 | Each person's uploads kept apart on a shared deployment | Working — proven on a hosted box 2026-11-04 |
-| Hosted demo | None. The hosted box was removed 2026-11-13; [`deploy/`](deploy/README.md) is the recipe to build one |
-| Used by anyone outside the project | Not yet — see [`planning/PLAN.md`](planning/PLAN.md) |
+| Hosted demo | None. The hosted box was removed 2026-11-13; [`deploy/`](https://github.com/hulagerushikesh/sextant/blob/main/deploy/README.md) is the recipe to build one |
+| Used by anyone outside the project | Not yet — see [`planning/PLAN.md`](https://github.com/hulagerushikesh/sextant/blob/main/planning/PLAN.md) |
 
-Known limits, stated plainly, are in [`docs/known-issues.md`](docs/known-issues.md).
+Known limits, stated plainly, are in [`docs/known-issues.md`](https://github.com/hulagerushikesh/sextant/blob/main/docs/known-issues.md).
 The two that matter most to a new user: a scanned PDF with no text layer is
 refused rather than read, and the test questions were written alongside the
 test documents, so the numbers grade the search pipeline, not your library.
@@ -191,18 +193,18 @@ test documents, so the numbers grade the search pipeline, not your library.
 
 | Page | What is in it |
 | --- | --- |
-| [`docs/RESULTS.md`](docs/RESULTS.md) | The numbers, and what was rejected |
-| [`docs/how-it-works.md`](docs/how-it-works.md) | The agent loop, the search stages and why each exists, the model port |
-| [`docs/running.md`](docs/running.md) | Setup, settings, routes, repository layout |
-| [`docs/interface.md`](docs/interface.md) | What the web interface does and why |
-| [`docs/known-issues.md`](docs/known-issues.md) | Limits and deliberate trade-offs |
-| [`docs/history.md`](docs/history.md) | The roadmap as it was built, phase by phase |
-| [`learning/`](learning/) | A study path, plus the note behind every measurement |
-| [`planning/`](planning/) | The plan, progress and cost |
+| [`docs/RESULTS.md`](https://github.com/hulagerushikesh/sextant/blob/main/docs/RESULTS.md) | The numbers, and what was rejected |
+| [`docs/how-it-works.md`](https://github.com/hulagerushikesh/sextant/blob/main/docs/how-it-works.md) | The agent loop, the search stages and why each exists, the model port |
+| [`docs/running.md`](https://github.com/hulagerushikesh/sextant/blob/main/docs/running.md) | Setup, settings, routes, repository layout |
+| [`docs/interface.md`](https://github.com/hulagerushikesh/sextant/blob/main/docs/interface.md) | What the web interface does and why |
+| [`docs/known-issues.md`](https://github.com/hulagerushikesh/sextant/blob/main/docs/known-issues.md) | Limits and deliberate trade-offs |
+| [`docs/history.md`](https://github.com/hulagerushikesh/sextant/blob/main/docs/history.md) | The roadmap as it was built, phase by phase |
+| [`learning/`](https://github.com/hulagerushikesh/sextant/tree/main/learning) | A study path, plus the note behind every measurement |
+| [`planning/`](https://github.com/hulagerushikesh/sextant/tree/main/planning) | The plan, progress and cost |
 
 ## Credits
 
 Started as [SudhanshuR37/AgenticRAG](https://github.com/SudhanshuR37/AgenticRAG)
 with Sudhanshu Randive; rebuilt from the ground up in September 2026 and
-renamed from *AgenticRAG* in 0.7. MIT licensed — see [`LICENSE`](LICENSE).
+renamed from *AgenticRAG* in 0.7. MIT licensed — see [`LICENSE`](https://github.com/hulagerushikesh/sextant/blob/main/LICENSE).
 PDF reading uses PyMuPDF, which is AGPL-licensed.
