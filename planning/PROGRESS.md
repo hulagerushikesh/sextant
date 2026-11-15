@@ -5,6 +5,13 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-15 — milestone 27 item 1: a Claude Desktop bundle, built and waiting on an install (₹0)
+
+- `bundle/build.py` writes a 149 KB bundle: the search server's source, its dependency list read from `pyproject.toml`, and one setting, the folder to search. The format's own checker accepts it.
+- New: when a launcher names a folder, the server indexes it in the background on start, skips files it has already stored, and says what it could not read (empty files, two files with one name) through `kb_stats`. A question asked mid-index says the library is partial.
+- Tested by launching the bundle's server as Claude Desktop would, against a 23-file folder: answering in 0.6 s, indexed in 9 s, a second launch re-stored nothing, the right passages came first. 969 tests pass.
+- Does not prove: that Claude Desktop installs it. The bundle uses the host-managed Python type, which the format marks experimental; the host has to fetch about 360 MB of libraries on first start, and nobody has run that yet. The item is not counted until the owner's install works.
+
 ## 2026-11-14 — phase 3 approved: from used to trusted (₹0)
 
 - The owner asked for a review of the whole project and a larger plan in the same direction, then approved it.

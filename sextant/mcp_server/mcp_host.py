@@ -120,6 +120,12 @@ _NOT_FORWARDED = {
     settings.env_name("ALLOWED_ORIGINS"): (
         "CORS belongs to the HTTP layer, two processes above this one."
     ),
+    settings.env_name("FOLDER"): (
+        "the folder a Claude Desktop bundle indexes at start-up. The agent's "
+        "corpus is fed by uploads and sextant-ingest, and a folder variable "
+        "left in the operator's shell must not make the box's subprocess read "
+        "a directory nobody chose for it."
+    ),
 }
 
 _FORWARDED_ENV = (
