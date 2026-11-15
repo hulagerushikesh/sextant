@@ -47,10 +47,36 @@ def engine() -> str:
     return (settings.getenv("ENGINE") or "onnx").strip().lower()
 
 
-def _fetch(repo: str, filename: str) -> Path:
-    from huggingface_hub import hf_hub_download
+class _NoTokenNag(logging.Filter):
+    """Drops the hub's "set a HF_TOKEN" notice, which reads as an error.
 
-    return Path(hf_hub_download(repo, filename))
+    The hub sends it with every anonymous download, and anonymous is the
+    only way this program downloads: the models are public and the user has
+    no account to give. A real rate limit still fails the download loudly.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "HF_TOKEN" not in record.getMessage()
+
+
+_HUB_LOGGER = "huggingface_hub.utils._http"
+logging.getLogger(_HUB_LOGGER).addFilter(_NoTokenNag())
+
+
+def _fetch(repo: str, filename: str) -> Path:
+    """The cached copy if there is one, else a download.
+
+    Cache first: a start with the models present makes no network request,
+    so it works offline and never meets a newer upload than the one that
+    built the store.
+    """
+    from huggingface_hub import hf_hub_download
+    from huggingface_hub.utils import LocalEntryNotFoundError
+
+    try:
+        return Path(hf_hub_download(repo, filename, local_files_only=True))
+    except LocalEntryNotFoundError:
+        return Path(hf_hub_download(repo, filename))
 
 
 def _session(path: Path) -> Any:

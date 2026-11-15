@@ -32,8 +32,8 @@ which includes a person's typing and reading.
 | 1 | The published `sextant-eval` crashes: its documents and questions were not in the package | **Fixed** in the tree, with a test |
 | 2 | The first question waits 20 s in silence while a model downloads | **Fixed**: adding documents now fetches it, with tests |
 | 3 | An old Python fails with "no matching distribution"; the config needs a full path the reader had to hunt for | **Fixed** in the quickstart, with tests |
-| 4 | Adding documents prints a "set a HF_TOKEN" warning twice and a note about a missing key; both look like errors | README says the key note is expected; the warning is parked |
-| 5 | The server logs every model-download request | Parked |
+| 4 | Adding documents prints a "set a HF_TOKEN" warning twice and a note about a missing key; both look like errors | **Fixed** 2026-11-15 (milestone 27 item 4): the warning is dropped and the note reworded, with tests |
+| 5 | The server logs every model-download request | **Fixed** 2026-11-15: request lines are off, and a start with the models cached makes no request at all |
 | 6 | The package's page on the index shows the old README until the next release, and its relative links do not work there | Checked on the 0.9.1 page 2026-11-13: the new README shows; the screenshot and 13 links do not work. Parked until the next release |
 | 7 | The README said the models were 120 MB; they are about 175 MB | Corrected |
 
