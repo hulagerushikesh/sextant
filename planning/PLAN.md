@@ -203,6 +203,7 @@ usage tracking.**
 | Tables in answers, accounts and sync between machines | An outside user hits it |
 | Licence review of the PDF library | Before any closed-source distribution |
 | Rebuilding a hosted box (removed by the owner 2026-11-13; it cost ~₹270/month parked) | An outside user needs a shared deployment |
+| Two assistants (e.g. Claude Desktop and Claude Code) sharing one store at once — untested | Anyone reports a store error with both running |
 
 A new idea goes here as **one line**. It is not started.
 
@@ -241,7 +242,7 @@ The owner's global format applies. For this project it looks like this:
 >
 > One or two sentences: a link to the record, then what stayed unchanged.
 >
-> **Next — milestone 27, item 2 of 5 (plan: 12 of 37 done, 32%):** what comes
+> **Next — milestone 27, item 3 of 5 (plan: 13 of 37 done, 35%):** what comes
 > next, what it waits on, and one honest sentence on what this work does not
 > prove.
 >
@@ -277,15 +278,15 @@ If a record needs more than its limit, the extra goes in the commit message.
 ## 8 · Scoreboard
 
 **Build goal:** complete (phases 0–15, milestones 16–22).
-**Plan:** **11 of 37 items (30%).**
-**Current item:** milestone 27, item 1 — a Claude Desktop bundle that installs with a double-click. *Built and tested here 2026-11-15; the owner installed it the same day and it answered from their folder. A locked PDF stopped the folder pass and is fixed; counted when the owner says so.*
+**Plan:** **13 of 37 items (35%).**
+**Current item:** milestone 27, item 3 — slim engine: run the two search models without the 900 MB library, or reject the idea with its numbers.
 
 | Milestone | Items | Done | State |
 | --- | --- | --- | --- |
 | 23 · Readable | 4 | 4 | done 2026-11-12. **Rule not yet ticked — the owner confirms** |
 | 24 · Ten minutes | 4 | 4 | done 2026-11-13: an empty folder reaches a correct answer in about 2 minutes of machine time ([`clean-room.md`](clean-room.md)). **Rule not yet ticked: it needs the owner's own try in Claude Desktop** |
 | 25 · Proof on one screen | 3 | 3 | done 2026-11-13: [`docs/RESULTS.md`](../docs/RESULTS.md) is generated and tested; the owner chose screenshots only. **Rule not yet ticked — the owner confirms** |
-| 27 · One click | 5 | 0 | item 1 installed by the owner 2026-11-15, waiting on the owner's call |
+| 27 · One click | 5 | 2 | item 1 installed and counted by the owner 2026-11-15; item 2's lines work in Claude Code and VS Code with today's code, from the public index at 0.10 |
 | 26 · Three people | 3 | 0 | runs after 27, so they get the one-click version |
 | 28 · Numbers anyone can compare | 4 | 0 | — |
 | 29 · Report card for your library | 4 | 0 | — |
@@ -298,7 +299,7 @@ finishes an item. It is the only place progress is counted.
 
 ## 9 · Waiting on the owner
 
-1. **Install the bundle** (`dist/sextant-0.9.1.mcpb`, built by `bundle/build.py`): double-click it, choose a folder, ask one question, and say how long it took and where it stopped. This also stands in for milestone 24's Claude Desktop try.
+1. Reinstall the rebuilt bundle (`dist/sextant-0.9.1.mcpb`) so the rest of Downloads indexes; say if anything is reported as not indexed.
 2. Confirm the rules for milestones 23 and 25 are met.
 3. Milestone 27: OK each download it needs when asked; publish 0.10 and the registry listing when item 5 is reached.
 4. Milestone 26: pick three people — after milestone 27.
