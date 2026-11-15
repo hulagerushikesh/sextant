@@ -5,6 +5,13 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-15 — milestone 28 item 1: two of three public sets scored (₹0)
+
+- With the owner's yes, three BEIR sets downloaded (23 MB, checksums match BEIR's). A scorer computes BEIR's own measure on each stage; hand-worked tests pin it. NFCorpus and SciFact scored; [the note](../learning/public-sets.md) has the tables.
+- The full pipeline beats the paper's BM25 + cross-encoder on both (0.364 vs 0.350, 0.700 vs 0.688). **sextant's own keyword stage loses to the paper's BM25 on both** (0.299 vs 0.325, 0.635 vs 0.665) — the weakest stage, and the first-screen sentence the milestone's rule asks for.
+- Indexing is all embedding; batching shortest first cuts it by about a quarter with identical vectors (a test holds the order; planting the defect fails it).
+- Does not prove: the 57,000-document set — about 45 minutes of laptop load, past the 30-minute bound, so it waits for the owner's yes. Recall is at 10, not BEIR's 100.
+
 ## 2026-11-15 — milestone 27 item 5: 0.10.0 published and listed; milestone 27 done (₹0)
 
 - The owner uploaded 0.10.0 and published the registry entry (the publisher's own check passed first). Checked from outside: the package page shows the new README, the screenshot loads and all 12 repository links answer; the registry lists `io.github.hulagerushikesh/sextant` 0.10.0, package `sextant-kb` 0.10.0, status active. **16 of 37 (43%)**.
