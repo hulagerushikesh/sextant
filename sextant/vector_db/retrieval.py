@@ -26,6 +26,7 @@ import math
 import re
 from collections import Counter
 from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -165,10 +166,18 @@ class CrossEncoderReranker:
 
     def __init__(self, model_name: str = RERANK_MODEL) -> None:
         self.model_name = model_name
-        self._model = None
+        self._model: Any = None
 
-    def _load(self):
+    def _load(self) -> Any:
         if self._model is None:
+            from sextant.vector_db.onnx_models import RERANKER_REPOS, OnnxReranker, engine
+
+            if self.model_name in RERANKER_REPOS and engine() != "torch":
+                try:
+                    self._model = OnnxReranker(self.model_name)
+                except Exception as e:
+                    raise RerankerUnavailable(f"Could not load {self.model_name}: {e}") from e
+                return self._model
             try:
                 import torch
                 from sentence_transformers import CrossEncoder

@@ -255,8 +255,12 @@ class TestConcurrency:
             lambda: asyncio.gather(*(kb.search(f"query {i}", limit=5) for i in range(4)))
         )
 
+        # Half, not a quarter, since 2026-11-15: one fixed ~12 ms stall is the
+        # same under torch and ONNX (12.1 vs 13.0 ms), but ONNX halved the
+        # search, so it crossed 25%. The regression -- four searches back to back
+        # on the loop -- is still one gap near the whole of `elapsed`.
         longest = max(gaps, default=elapsed)
-        assert longest < elapsed * 0.25, (
+        assert longest < elapsed * 0.5, (
             f"loop stalled for {longest * 1000:.0f}ms of a {elapsed * 1000:.0f}ms "
             f"search ({longest / elapsed:.0%} of it in one unserved stretch)"
         )

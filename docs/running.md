@@ -176,7 +176,8 @@ appear in `/docs` and are rejected before a handler runs.
 | `SEXTANT_MODEL` | `gemini-3.1-flash-lite` | Cheapest model that runs the tool loop; `gemini-3.7-flash` for stronger synthesis |
 | `SEXTANT_CHROMA_DIR` | `./chroma_db` | Where the collection lives |
 | `SEXTANT_CHUNK_TOKENS` | `200` | Chunk target in the embedder's tokens (overlap follows at a fifth); refused past the embedder's window. Sweep in [`learning/chunk-size.md`](../learning/chunk-size.md) |
-| `SEXTANT_EMBEDDER` | `all-MiniLM-L6-v2` | Any sentence-transformers model; a store remembers the model that built it and refuses another (see [`learning/embedder-swap.md`](../learning/embedder-swap.md)) |
+| `SEXTANT_EMBEDDER` | `all-MiniLM-L6-v2` | Any sentence-transformers model (one without an ONNX export needs `pip install 'sextant-kb[torch]'`); a store remembers the model that built it and refuses another (see [`learning/embedder-swap.md`](../learning/embedder-swap.md)) |
+| `SEXTANT_ENGINE` | `onnx` | `torch` runs the default models through sentence-transformers instead (needs the `torch` extra); both give the same vectors and scores |
 | `SEXTANT_MAX_PER_DOCUMENT` | `2` | Chunks of one document in a result list; `0` turns the cap off. Measured in [`learning/candidate-cap.md`](../learning/candidate-cap.md) |
 | `SEXTANT_ANN_INDEX` | `chroma` | `flat` / `hnsw` / `ivfpq` / `ivfpq_rerank` to route live dense retrieval through the hand-written indexes |
 | `SEXTANT_WEB_SEARCH` | off | `on` offers Google Search grounding by default (billed per grounded request) |

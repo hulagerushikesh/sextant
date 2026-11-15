@@ -5,6 +5,13 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-15 — milestone 27 item 3: the search models run without torch (₹0)
+
+- Both models now run on their authors' ONNX exports; torch is an optional extra. Same vectors (cosine > 0.9999) and scores (within 0.0001) as the torch path, checked model against model; every figure on both test sets is identical to four decimals, and a torch-built store answers unchanged.
+- Measured on this Mac: libraries to download 292 → 166 MB (summed from the package index), installed size 1.2 GB → 476 MB, launch to first answer over a small folder 30 s → 7 s. The owner approved the 181 MB model download.
+- One test's threshold moved from a quarter to half of a search: a fixed 12 ms stall, the same under both engines, now exceeds a quarter of the faster search. The blocking regression it guards still fails it at 100%.
+- Does not prove: under 200 MB on disk — the vector store and PDF reader keep it at 476 MB, so "under 200 MB" holds for the download only. Linux and Windows sizes are not measured.
+
 ## 2026-11-15 — milestone 27 item 2: one pasted line for Claude Code, VS Code and Cursor (₹0)
 
 - The owner counted item 1 ("you can go next"). The README now has one line each for Claude Code and VS Code and a config for Cursor; each shell line installs first with a new `sextant-kb --version`, so a first install does not hit a client's start-up timeout.

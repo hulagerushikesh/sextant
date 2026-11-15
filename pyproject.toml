@@ -44,7 +44,13 @@ dependencies = [
 
     # Retrieval
     "chromadb>=1.0",
-    "sentence-transformers>=3.0",
+    # Both search models run on their published ONNX exports (onnx_models.py).
+    # chromadb already pulls the first two in; they are named because this
+    # package imports them, not because they add to the install.
+    "onnxruntime>=1.18",
+    "tokenizers>=0.19",
+    "huggingface-hub>=0.24",
+    "numpy>=1.26",
 ]
 
 [project.scripts]
@@ -81,9 +87,15 @@ app = [
 bench = [
     "faiss-cpu>=1.9",
 ]
+# The torch path: a model with no ONNX export (the embedder experiments in
+# `learning/`), or SEXTANT_ENGINE=torch. About 900 MB, which is why it is here.
+torch = [
+    "sentence-transformers>=3.0",
+]
 dev = [
-    # The gate runs the whole suite, which includes the agent server's tests.
-    "sextant-kb[app]",
+    # The gate runs the whole suite, which includes the agent server's tests,
+    # and compares the ONNX path against the torch one.
+    "sextant-kb[app,torch]",
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
     "httpx>=0.27",
