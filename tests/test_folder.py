@@ -39,17 +39,28 @@ class FakeReranker:
 class FakeKB:
     """Stores by file stem, like the real loaders, and can refuse a file."""
 
-    def __init__(self, refuse: dict[str, str] | None = None, broken: set[str] | None = None):
+    def __init__(
+        self,
+        refuse: dict[str, str] | None = None,
+        broken: set[str] | None = None,
+        crash: set[str] | None = None,
+    ):
         self.added: list[str] = []
         self.docs: set[str] = set()
         self.refuse = refuse or {}
         self.broken = broken or set()
+        self.crash = crash or set()
+        self.tried: list[str] = []
         self.reranker = FakeReranker()
 
     async def add_file(self, path: str, category: str = "general") -> dict[str, Any]:
         name = Path(path).name
+        self.tried.append(name)
         if name in self.broken:
             raise UnsupportedDocument(f"cannot parse {name}")
+        if name in self.crash:
+            # What PyMuPDF raised on a locked PDF in a real Downloads folder.
+            raise ValueError("document closed or encrypted")
         self.added.append(name)
         if name in self.refuse:
             return {"success": False, "message": self.refuse[name]}
@@ -177,6 +188,28 @@ class TestWhatIsNotIndexedIsSaid:
         sync = await _run(library, store, kb)
         assert sync.status()["state"] == "ready"
         assert sync.status()["not_indexed_files"][0]["file"] == str(Path("deep/inside/report.md"))
+
+    async def test_an_unexpected_error_skips_one_file_not_the_rest(self, library, store):
+        """One locked PDF ended the whole pass on a real 190-file folder."""
+        kb = FakeKB(crash={"notes.md"})
+        sync = await _run(library, store, kb)
+        status = sync.status()
+        assert status["state"] == "ready"
+        assert sorted(kb.added) == ["plan.txt", "report.md"]
+        assert status["not_indexed_files"] == [
+            {
+                "file": "notes.md",
+                "reason": "could not be read (ValueError: document closed or encrypted)",
+            }
+        ]
+
+    async def test_an_unexpected_error_is_tried_again_next_launch(self, library, store):
+        """Kept out of the ledger: a later version that can read it should."""
+        kb = FakeKB(crash={"notes.md"})
+        await _run(library, store, kb)
+        kb.tried.clear()
+        await _run(library, store, kb)
+        assert kb.tried == ["notes.md"]
 
     async def test_an_unchanged_failure_is_reported_again_without_retrying(self, library, store):
         kb = FakeKB(refuse={"plan.txt": "no text could be extracted"})

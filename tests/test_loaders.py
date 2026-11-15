@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from sextant.vector_db import loaders
@@ -308,3 +310,33 @@ class TestTheSentenceThatSaysWhatIsMissing:
 
     def test_one_page_reads_as_one_page(self):
         assert unreadable_line({"a.pdf": [4]}).startswith("1 page could not be read and is")
+
+
+class TestALockedPdf:
+    """Found in a real Downloads folder: PyMuPDF raises "document closed or
+    encrypted" on the first page, which tells a person nothing to do."""
+
+    @pytest.fixture
+    def locked(self, tmp_path):
+        import pymupdf
+
+        # The constant exists at runtime but not in the package's stubs.
+        mupdf: Any = pymupdf
+        path = tmp_path / "statement.pdf"
+        with pymupdf.open() as doc:
+            doc.new_page().insert_text((72, 72), "Balance due.", fontsize=10)
+            doc.save(
+                str(path),
+                encryption=mupdf.PDF_ENCRYPT_AES_256,
+                user_pw="open-me",
+                owner_pw="own-me",
+            )
+        return path
+
+    def test_it_is_refused_with_a_reason_a_person_can_act_on(self, locked):
+        with pytest.raises(UnsupportedDocument, match="password-protected"):
+            load_path(locked)
+
+    def test_the_fallback_reader_refuses_it_the_same_way(self, locked):
+        with pytest.raises(UnsupportedDocument, match="password-protected"):
+            loaders._pdf_pages_pypdf(locked)

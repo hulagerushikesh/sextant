@@ -243,7 +243,17 @@ class FolderSync:
                     self.done += 1
                     continue
 
-            reason = await self._store_one(kb, path)
+            try:
+                reason = await self._store_one(kb, path)
+            except Exception as e:  # noqa: BLE001 - one file must not end the pass
+                # A file the loaders did not expect. Until 2026-11-15 this
+                # escaped to `run`, and one locked PDF in a real Downloads
+                # folder left 172 of 190 files unread. Reported, and kept out
+                # of the ledger, so a later version that can read it tries again.
+                logger.warning("could not index %s: %s", path, e)
+                self._skip(path, f"could not be read ({type(e).__name__}: {e})")
+                self.done += 1
+                continue
             if reason is None:
                 ledger[key] = {"signature": signature, "stored": True}
                 self.stored += 1

@@ -159,6 +159,12 @@ def _load_pdf(path: Path, category: str) -> LoadedDocument:
     )
 
 
+_ENCRYPTED = (
+    "is password-protected, so its text cannot be read; "
+    "save a copy without the password to search it"
+)
+
+
 def _pdf_pages(path: Path) -> tuple[list[str], str | None, list[int]]:
     """Each page's text, and the document title if the file records one.
 
@@ -178,6 +184,11 @@ def _pdf_pages(path: Path) -> tuple[list[str], str | None, list[int]]:
     pages: list[str] = []
     unreadable: list[int] = []
     with pymupdf.open(str(path)) as document:
+        if document.needs_pass:
+            # Reading any page raises "document closed or encrypted", which
+            # says nothing a person can act on. Found on a real Downloads
+            # folder, where one such file stopped the whole folder pass.
+            raise UnsupportedDocument(_ENCRYPTED)
         for number, page in enumerate(document, start=1):
             try:
                 pages.append(_page_lines(page))
@@ -295,6 +306,10 @@ def _pdf_pages_pypdf(path: Path) -> tuple[list[str], str | None, list[int]]:
         ) from e
 
     reader = PdfReader(str(path))
+    # pypdf opens a file locked with an empty password by itself; anything
+    # still locked after that needs a password nobody gave it.
+    if reader.is_encrypted and not reader.decrypt(""):
+        raise UnsupportedDocument(_ENCRYPTED)
     pages: list[str] = []
     unreadable: list[int] = []
     for number, page in enumerate(reader.pages, start=1):
