@@ -5,6 +5,11 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-15 — milestone 27 item 5: 0.10.0 published and listed; milestone 27 done (₹0)
+
+- The owner uploaded 0.10.0 and published the registry entry (the publisher's own check passed first). Checked from outside: the package page shows the new README, the screenshot loads and all 12 repository links answer; the registry lists `io.github.hulagerushikesh/sextant` 0.10.0, package `sextant-kb` 0.10.0, status active. **16 of 37 (43%)**.
+- Does not prove: the milestone's rule — 3 minutes from an empty machine to a cited answer in Claude Desktop, no terminal — which is the owner's try. The one-line setups are still not run from the public index (a library download each).
+
 ## 2026-11-15 — milestone 27 item 5: release 0.10.0 prepared for the owner (₹0)
 
 - Version 0.10.0. Every README link and the screenshot now point at the repository directly, so they work on the package page (on 0.9.1 all 13 links and the image were dead there); a test checks each still names a file that exists.

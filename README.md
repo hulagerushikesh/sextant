@@ -177,7 +177,7 @@ Last checked 2026-11-12.
 | What | State |
 | --- | --- |
 | Search over your own documents: PDF, Markdown, text; add, replace, remove | Working |
-| Standard MCP server, published as `sextant-kb` | Working — on the public package index; the quickstart installs the latest release |
+| Standard MCP server, published as `sextant-kb` | Working — on the public package index and in the official MCP registry as `io.github.hulagerushikesh/sextant`; the quickstart installs the latest release |
 | Measured search quality with a check on every change | Working |
 | Agent, web interface, citations, cost per question, daily spend cap | Working |
 | Each person's uploads kept apart on a shared deployment | Working — proven on a hosted box 2026-11-04 |
