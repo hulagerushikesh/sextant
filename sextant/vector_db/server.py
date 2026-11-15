@@ -63,6 +63,9 @@ from sextant.vector_db.vector_search import (
 )
 
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
+# One line per model-file request on a first start reads as a fault in a
+# client's log; a failed download still raises and is reported.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # The folder a launcher chose (`SEXTANT_FOLDER`), indexed in the background

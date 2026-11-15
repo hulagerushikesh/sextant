@@ -73,7 +73,7 @@ def _summaries_wanted(flag: bool | None) -> bool:
             "~$0.003 each. --no-summaries to skip."
         )
         return True
-    print("  note  no GEMINI_API_KEY: storing text only, no per-document overviews.")
+    print("  note  storing text only (per-document overviews are optional: GEMINI_API_KEY)")
     return False
 
 

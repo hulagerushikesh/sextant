@@ -5,6 +5,13 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-15 — milestone 27 item 4: a quiet first run, built (₹0)
+
+- Reproduced in a clean environment: adding documents printed the hub's "set a HF_TOKEN" warning twice and a "no GEMINI_API_KEY" note; the server's log had a line for every model-file request and the same warning. Clean-room stumbles 4 and 5, both parked until now.
+- Now: the token warning is dropped (real hub warnings still show), the key note reads "storing text only … optional", request lines are off, and models load from the cache first, so a start with them present makes no request and works with the hub unreachable. Each change planted back and caught.
+- Re-run: adding documents prints only progress lines; the server's log is four lines, none alarming; the right passage came first.
+- Does not prove: a cold first run, where the models download — that path is tested with a stand-in for the hub, not the real one. It needs a 181 MB download the owner has not approved yet.
+
 ## 2026-11-15 — milestone 27 item 3: the search models run without torch (₹0)
 
 - Both models now run on their authors' ONNX exports; torch is an optional extra. Same vectors (cosine > 0.9999) and scores (within 0.0001) as the torch path, checked model against model; every figure on both test sets is identical to four decimals, and a torch-built store answers unchanged.

@@ -84,6 +84,7 @@ Read [`planning/PLAN.md`](planning/PLAN.md) first: the goal, the current milesto
 - Results are capped at 2 chunks per document (`SEXTANT_MAX_PER_DOCUMENT`); set it to `0` for any experiment's control.
 - `server.py` must import faiss before anything that pulls torch, or the subprocess segfaults (exit 139).
 - Both search models run on ONNX by default; torch is the `torch` extra (`SEXTANT_ENGINE=torch`, or a model with no ONNX export). The ONNX embedder keeps the torch stamp because `test_onnx_models.py` proves the vectors match.
+- Models load cache-first (`_fetch`), so a cached start makes no network request; the hub's "set a HF_TOKEN" notice is filtered and `httpx` request lines are off in `server.py`.
 - PDFs go through PyMuPDF, with pypdf as fallback only. PyMuPDF is AGPL — flag it before any closed distribution.
 - `/upload` answers **200 with `"success": false`** on failure: read the body, not the status code.
 

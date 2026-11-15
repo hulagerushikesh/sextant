@@ -286,7 +286,7 @@ If a record needs more than its limit, the extra goes in the commit message.
 | 23 · Readable | 4 | 4 | done 2026-11-12. **Rule not yet ticked — the owner confirms** |
 | 24 · Ten minutes | 4 | 4 | done 2026-11-13: an empty folder reaches a correct answer in about 2 minutes of machine time ([`clean-room.md`](clean-room.md)). **Rule not yet ticked: it needs the owner's own try in Claude Desktop** |
 | 25 · Proof on one screen | 3 | 3 | done 2026-11-13: [`docs/RESULTS.md`](../docs/RESULTS.md) is generated and tested; the owner chose screenshots only. **Rule not yet ticked — the owner confirms** |
-| 27 · One click | 5 | 3 | items 1–3 done 2026-11-15; item 3: no torch, 166 MB download (476 MB on disk), first answer 7 s, every figure unchanged |
+| 27 · One click | 5 | 3 | items 1–3 done 2026-11-15; item 3: no torch, 166 MB download (476 MB on disk), first answer 7 s, every figure unchanged. Item 4 built: quiet with the models cached; the cold-download run waits on the owner's yes to a 181 MB download |
 | 26 · Three people | 3 | 0 | runs after 27, so they get the one-click version |
 | 28 · Numbers anyone can compare | 4 | 0 | — |
 | 29 · Report card for your library | 4 | 0 | — |

@@ -41,10 +41,10 @@ python3 -m venv ~/sextant
 ~/sextant/bin/sextant-ingest ~/Documents/notes -r
 ```
 
-The first run downloads the search models, once. A note about a missing
-`GEMINI_API_KEY`, or a warning about `HF_TOKEN`, is expected and harmless:
-the first only means documents are stored without an optional model-written
-overview. Searching happens on your machine; the passages it finds go to
+The first run downloads the search models, once; after that it works
+offline. A note that it is storing text only is expected: an optional
+model-written overview per document needs a Gemini key, and nothing else
+does. Searching happens on your machine; the passages it finds go to
 whichever assistant you plug it into.
 
 **3. Plug it into your assistant.** In Claude Desktop: Settings → Developer →

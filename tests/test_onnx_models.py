@@ -9,7 +9,9 @@ model, rather than assumed from the export's name.
 from __future__ import annotations
 
 import json
+import logging
 import math
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -148,3 +150,68 @@ class TestAConfigItCannotReproduceIsRefused:
         monkeypatch.setattr(onnx_models, "_session", lambda path: object())
         with pytest.raises(EmbeddingsUnavailable, match="mean"):
             onnx_models.OnnxEmbedder(embeddings.LOCAL_MODEL)
+
+
+class TestAFirstRunIsQuiet:
+    """Nothing a new user reads should look like an error (milestone 27, item 4)."""
+
+    def test_the_hub_token_notice_is_dropped(self, monkeypatch, caplog, capfd):
+        from huggingface_hub.utils import LocalEntryNotFoundError
+
+        hub = logging.getLogger(onnx_models._HUB_LOGGER)
+        calls: list[bool] = []
+
+        def download(repo: str, filename: str, local_files_only: bool = False) -> str:
+            calls.append(local_files_only)
+            if local_files_only:
+                raise LocalEntryNotFoundError("not cached")
+            hub.warning("Warning: You are sending unauthenticated requests to the HF Hub. "
+                        "Please set a HF_TOKEN to enable higher rate limits.")
+            hub.warning("HTTP Error 500 thrown while requesting GET x")
+            return "/cache/model.onnx"
+
+        monkeypatch.setattr("huggingface_hub.hf_hub_download", download)
+        with caplog.at_level(logging.WARNING):
+            assert onnx_models._fetch("r", "f") == Path("/cache/model.onnx")
+        assert calls == [True, False], "the cache is asked first, then the network"
+        messages = [r.getMessage() for r in caplog.records]
+        assert not any("HF_TOKEN" in m for m in messages)
+        assert any("HTTP Error 500" in m for m in messages), "real hub warnings still show"
+        assert "HF_TOKEN" not in capfd.readouterr().err
+
+    def test_a_cached_model_works_offline(self, onnx_embedder, tmp_path):
+        """With the models cached, search starts with the hub unreachable.
+
+        The hub library would also fall back to its cache here on its own;
+        that the cache is asked *first*, so no request is made at all, is
+        the test above.
+        """
+        code = (
+            "from sextant.vector_db.embeddings import get_embedder\n"
+            "from sextant.vector_db.retrieval import CrossEncoderReranker\n"
+            "get_embedder().encode(['a'])\n"
+            "CrossEncoderReranker().score('a', ['b'])\n"
+            "print('ok')\n"
+        )
+        env = {k: v for k, v in os.environ.items() if not k.startswith(("SEXTANT_", "HF_HUB_"))}
+        env[settings.SEALED] = "1"
+        env["HF_ENDPOINT"] = "http://127.0.0.1:9"  # nothing listens; any request fails
+        out = subprocess.run(
+            [sys.executable, "-c", code], capture_output=True, text=True, env=env, timeout=120
+        )
+        assert out.returncode == 0, out.stderr
+        assert out.stdout.strip().splitlines()[-1] == "ok"
+        assert "127.0.0.1:9" not in out.stderr
+
+    def test_the_server_does_not_log_each_request(self):
+        """In a fresh process: other tests' imports set this logger too."""
+        code = (
+            "import logging, sextant.vector_db.server\n"
+            "print(logging.getLogger('httpx').getEffectiveLevel())\n"
+        )
+        env = {k: v for k, v in os.environ.items() if not k.startswith("SEXTANT_")}
+        env[settings.SEALED] = "1"
+        out = subprocess.run(
+            [sys.executable, "-c", code], capture_output=True, text=True, env=env, check=True
+        )
+        assert int(out.stdout.strip().splitlines()[-1]) >= logging.WARNING
