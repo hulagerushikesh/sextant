@@ -16,9 +16,8 @@ numbered marker opens the passage it came from.*
 
 ## Quickstart
 
-Four steps. Most of the time is two downloads — about 360 MB of libraries,
-then about 180 MB of search models — which took two minutes on a fast
-connection when last measured (2026-11-13). No account and no key. It needs
+Four steps. Most of the time is two downloads — about 170 MB of libraries,
+then about 180 MB of search models. No account and no key. It needs
 Python 3.11 or newer — check first, because an older one fails with a
 confusing "no matching distribution" message:
 

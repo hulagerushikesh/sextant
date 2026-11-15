@@ -1,7 +1,7 @@
 # The agent server, with the knowledge-base MCP server as its subprocess.
 #
-# Built on the full python image rather than -slim on purpose: chromadb and
-# sentence-transformers pull in packages that want a compiler, and trading a
+# Built on the full python image rather than -slim on purpose: chromadb
+# pulls in packages that want a compiler, and trading a
 # larger base for a build that works first time is the right way round for
 # something people run once to try the project.
 FROM python:3.12
@@ -16,13 +16,9 @@ RUN useradd --uid "$APP_UID" --create-home --shell /usr/sbin/nologin app
 WORKDIR /app
 
 # Dependency install is its own layer, so editing source does not re-resolve
-# and re-download two gigabytes of torch.
+# and re-download it. No torch since milestone 27: both search models run on
+# ONNX Runtime, and the image must not ask for the `torch` extra.
 COPY pyproject.toml README.md ./
-# CPU-only torch FIRST. On linux/x86 the default torch wheel is the CUDA build
-# and drags in ~3 GB of nvidia_* libraries that a CPU VM can never use -- it
-# turns a 2 GB image into a 6 GB one and every rebuild re-downloads it. With
-# a satisfying torch already present, `pip install -e .` leaves it alone.
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 # `.[app]`, not `.` -- and the brackets are the whole deployment. 0.9.0 moved
 # fastapi, uvicorn and google-genai out of the base dependencies so that
 # `pip install sextant-kb` is a knowledge base and nothing else. This image is
@@ -48,9 +44,9 @@ ENV HF_HOME=/opt/models HF_HUB_OFFLINE=1
 RUN mkdir -p /opt/models && chown app:app /opt/models
 USER app
 RUN HF_HUB_OFFLINE=0 python -c "\
-from sentence_transformers import CrossEncoder, SentenceTransformer; \
-SentenceTransformer('all-MiniLM-L6-v2'); \
-CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')"
+from sextant.vector_db.onnx_models import OnnxEmbedder, OnnxReranker; \
+OnnxEmbedder('all-MiniLM-L6-v2'); \
+OnnxReranker('cross-encoder/ms-marco-MiniLM-L-6-v2')"
 USER root
 
 # Written to a volume so ingested documents survive `docker compose down`.

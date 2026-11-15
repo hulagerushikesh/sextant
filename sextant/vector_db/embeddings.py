@@ -62,8 +62,8 @@ class Embedder(Protocol):
 class LocalEmbedder:
     """sentence-transformers, running in this process.
 
-    Costs ~900 MB of torch in the virtualenv and a few seconds of load time on
-    first use, and buys offline operation with no third API key.
+    Costs ~900 MB of torch, so it is the `torch` extra: used for a model with
+    no ONNX export, or when `SEXTANT_ENGINE=torch` asks for it.
     """
 
     def __init__(self, model_name: str = LOCAL_MODEL) -> None:
@@ -71,7 +71,8 @@ class LocalEmbedder:
             from sentence_transformers import SentenceTransformer
         except ImportError as e:
             raise EmbeddingsUnavailable(
-                f"sentence-transformers is not importable ({e}). Run: pip install -e '.[dev]'"
+                f"sentence-transformers is not importable ({e}); {model_name} needs it. "
+                "Run: pip install 'sextant-kb[torch]'"
             ) from e
 
         self._model = SentenceTransformer(model_name)
@@ -112,13 +113,17 @@ class LocalEmbedder:
 def get_embedder() -> Embedder:
     """The embedder for this process.
 
-    One backend today, any sentence-transformers model by name. The roadmap
-    called for moving to an API embedding model (Voyage or OpenAI) to drop
-    torch and ~900 MB of virtualenv, and this is the seam where that would go
-    -- but it would save nothing yet, because the cross-encoder reranker in
-    `retrieval.py` pulls torch in regardless. The golden sets decide which
-    model is the default (`learning/embedder-swap.md`); a store remembers the
-    model that built it and refuses another, because two 384-dimensional
-    models mixed in one index fail silently, not loudly.
+    A model with an ONNX export runs on ONNX Runtime (`onnx_models.py`), which
+    is what lets the base install leave torch out. Any other model, or
+    `SEXTANT_ENGINE=torch`, goes through sentence-transformers, which then
+    has to be installed (`pip install 'sextant-kb[torch]'`). The golden sets
+    decide which model is the default (`learning/embedder-swap.md`); a store
+    remembers the model that built it and refuses another, because two
+    384-dimensional models mixed in one index fail silently, not loudly.
     """
-    return LocalEmbedder(configured_model())
+    from sextant.vector_db.onnx_models import EMBEDDER_REPOS, OnnxEmbedder, engine
+
+    model = configured_model()
+    if model in EMBEDDER_REPOS and engine() != "torch":
+        return OnnxEmbedder(model)
+    return LocalEmbedder(model)

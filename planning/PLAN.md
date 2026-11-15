@@ -242,7 +242,7 @@ The owner's global format applies. For this project it looks like this:
 >
 > One or two sentences: a link to the record, then what stayed unchanged.
 >
-> **Next — milestone 27, item 3 of 5 (plan: 13 of 37 done, 35%):** what comes
+> **Next — milestone 27, item 4 of 5 (plan: 14 of 37 done, 38%):** what comes
 > next, what it waits on, and one honest sentence on what this work does not
 > prove.
 >
@@ -278,15 +278,15 @@ If a record needs more than its limit, the extra goes in the commit message.
 ## 8 · Scoreboard
 
 **Build goal:** complete (phases 0–15, milestones 16–22).
-**Plan:** **13 of 37 items (35%).**
-**Current item:** milestone 27, item 3 — slim engine: run the two search models without the 900 MB library, or reject the idea with its numbers.
+**Plan:** **14 of 37 items (38%).**
+**Current item:** milestone 27, item 4 — a quiet first run: no warnings that read as errors.
 
 | Milestone | Items | Done | State |
 | --- | --- | --- | --- |
 | 23 · Readable | 4 | 4 | done 2026-11-12. **Rule not yet ticked — the owner confirms** |
 | 24 · Ten minutes | 4 | 4 | done 2026-11-13: an empty folder reaches a correct answer in about 2 minutes of machine time ([`clean-room.md`](clean-room.md)). **Rule not yet ticked: it needs the owner's own try in Claude Desktop** |
 | 25 · Proof on one screen | 3 | 3 | done 2026-11-13: [`docs/RESULTS.md`](../docs/RESULTS.md) is generated and tested; the owner chose screenshots only. **Rule not yet ticked — the owner confirms** |
-| 27 · One click | 5 | 2 | item 1 installed and counted by the owner 2026-11-15; item 2's lines work in Claude Code and VS Code with today's code, from the public index at 0.10 |
+| 27 · One click | 5 | 3 | items 1–3 done 2026-11-15; item 3: no torch, 166 MB download (476 MB on disk), first answer 7 s, every figure unchanged |
 | 26 · Three people | 3 | 0 | runs after 27, so they get the one-click version |
 | 28 · Numbers anyone can compare | 4 | 0 | — |
 | 29 · Report card for your library | 4 | 0 | — |

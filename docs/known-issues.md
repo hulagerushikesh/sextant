@@ -17,11 +17,11 @@ Limits and deliberate trade-offs, stated plainly.
 - The BM25 index is rebuilt in memory from the collection on first search and
   the chunk text is held resident. Fine at this scale (1,568 chunks from a
   144-page PDF), and the thing to revisit when it stops being fine.
-- Cold start is roughly 20 seconds: the embedder, the cross-encoder and the
-  lexical index all load on first use. Warm searches run in about 0.1 s.
-- Embeddings are still local, so `torch` keeps ~900 MB in the virtualenv. Moving
-  to an API embedding model would not remove it while the reranker is local —
-  see the note in `embeddings.py`.
+- Cold start is a few seconds: from launch to a first answer over a small
+  folder took 7 s on a MacBook Air (2026-11-15). Warm searches run in about 0.1 s.
+- Both models run on ONNX Runtime without torch, but the install is still
+  about 480 MB on disk: the vector store and the PDF reader account for most
+  of it. A model with no ONNX export needs the `torch` extra (~900 MB).
 - The source list shows everything the agent retrieved, including passages the
   answer never cited. That is deliberate — it is a record of what was looked at.
 - Web results have no excerpt in the panel. The API returns page content
