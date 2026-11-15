@@ -278,14 +278,14 @@ If a record needs more than its limit, the extra goes in the commit message.
 
 **Build goal:** complete (phases 0–15, milestones 16–22).
 **Plan:** **11 of 37 items (30%).**
-**Current item:** milestone 27, item 1 — a Claude Desktop bundle that installs with a double-click.
+**Current item:** milestone 27, item 1 — a Claude Desktop bundle that installs with a double-click. *Built and tested here 2026-11-15; done when the owner installs it from the file alone.*
 
 | Milestone | Items | Done | State |
 | --- | --- | --- | --- |
 | 23 · Readable | 4 | 4 | done 2026-11-12. **Rule not yet ticked — the owner confirms** |
 | 24 · Ten minutes | 4 | 4 | done 2026-11-13: an empty folder reaches a correct answer in about 2 minutes of machine time ([`clean-room.md`](clean-room.md)). **Rule not yet ticked: it needs the owner's own try in Claude Desktop** |
 | 25 · Proof on one screen | 3 | 3 | done 2026-11-13: [`docs/RESULTS.md`](../docs/RESULTS.md) is generated and tested; the owner chose screenshots only. **Rule not yet ticked — the owner confirms** |
-| 27 · One click | 5 | 0 | — |
+| 27 · One click | 5 | 0 | item 1 built 2026-11-15, waiting on the owner's install |
 | 26 · Three people | 3 | 0 | runs after 27, so they get the one-click version |
 | 28 · Numbers anyone can compare | 4 | 0 | — |
 | 29 · Report card for your library | 4 | 0 | — |
@@ -298,7 +298,7 @@ finishes an item. It is the only place progress is counted.
 
 ## 9 · Waiting on the owner
 
-1. **Try the quickstart once in Claude Desktop** and say how it went: the evidence milestone 24's rule still needs, and the baseline the one-click install is measured against.
+1. **Install the bundle** (`dist/sextant-0.9.1.mcpb`, built by `bundle/build.py`): double-click it, choose a folder, ask one question, and say how long it took and where it stopped. This also stands in for milestone 24's Claude Desktop try.
 2. Confirm the rules for milestones 23 and 25 are met.
 3. Milestone 27: OK each download it needs when asked; publish 0.10 and the registry listing when item 5 is reached.
 4. Milestone 26: pick three people — after milestone 27.

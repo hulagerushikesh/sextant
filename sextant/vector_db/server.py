@@ -32,9 +32,13 @@ graph will corrupt the protocol stream.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import sys
+import threading
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Annotated, Any, Literal
 
 from mcp.server import MCPServer
@@ -49,17 +53,46 @@ from sextant import __version__, settings
 # first makes it the stable base (verified: faiss-then-torch coexists, the reverse
 # does not). A no-op when faiss is not installed; faiss_ref guards its own import.
 from sextant.vector_db.ann import faiss_ref as _faiss_preload  # noqa: F401
+from sextant.vector_db.folder import FolderSync, configured
 from sextant.vector_db.vector_search import (
     DEFAULT_MIN_SCORE,
     DEFAULT_MODE,
     KnowledgeBase,
     KnowledgeBaseUnavailable,
+    persist_dir,
 )
 
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger(__name__)
 
+# The folder a launcher chose (`SEXTANT_FOLDER`), indexed in the background
+# once the server is up -- see `folder.py` for why this is not a tool. `None`
+# for every mount that did not set it, which is every mount before 0.10.
+_folder_root = configured()
+_folder: FolderSync | None = (
+    FolderSync(_folder_root, persist_dir()) if _folder_root is not None else None
+)
+
+
+@asynccontextmanager
+async def _lifespan(_server: Any) -> AsyncIterator[dict[str, Any]]:
+    """Start indexing the chosen folder after the handshake can be answered.
+
+    In the background, not before serving: a first run downloads the search
+    models and embeds a whole folder, and a client that waits that long for
+    `initialize` decides the server is broken. Tools answer meanwhile, and
+    say the library is partial (`FolderSync.note`).
+    """
+    task = asyncio.create_task(_folder.run(_store)) if _folder is not None else None
+    try:
+        yield {}
+    finally:
+        if task is not None:
+            task.cancel()
+
+
 mcp = MCPServer(
+    lifespan=_lifespan,
     name="knowledge-base",
     title="Knowledge Base",
     # Read, not written. This said 0.4.0 for five releases -- it is the
@@ -78,6 +111,7 @@ mcp = MCPServer(
 )
 
 _kb: KnowledgeBase | None = None
+_kb_lock = threading.Lock()
 
 
 def _store() -> KnowledgeBase:
@@ -86,11 +120,24 @@ def _store() -> KnowledgeBase:
     Deferred rather than opened at import so that a broken embedding install
     surfaces as a tool error the client can read, not a crash during startup
     that leaves the client staring at a closed pipe.
+
+    Locked because the folder pass opens it from a thread while a tool call
+    may open it from the event loop: two `KnowledgeBase` objects over one
+    directory would each keep their own lexical index, and one would never
+    hear about the other's writes.
     """
     global _kb
-    if _kb is None:
-        _kb = KnowledgeBase()
-    return _kb
+    with _kb_lock:
+        if _kb is None:
+            _kb = KnowledgeBase()
+        return _kb
+
+
+def _with_folder(result: dict[str, Any]) -> dict[str, Any]:
+    """Attach what the folder pass would want a reader of this result to know."""
+    if _folder is not None and (note := _folder.note()):
+        result["folder_note"] = note
+    return result
 
 
 @mcp.tool(
@@ -139,9 +186,10 @@ async def kb_search(
 ) -> dict[str, Any]:
     """Hybrid search over the ingested corpus."""
     try:
-        return await _store().search(query, limit=limit, min_score=min_score, mode=mode)
+        found = await _store().search(query, limit=limit, min_score=min_score, mode=mode)
     except KnowledgeBaseUnavailable as e:
-        return {"success": False, "error": str(e), "results": [], "total_found": 0}
+        found = {"success": False, "error": str(e), "results": [], "total_found": 0}
+    return _with_folder(found)
 
 
 @mcp.tool(
@@ -178,15 +226,20 @@ async def kb_ingest(
         "Report the state of the knowledge base: how many documents and chunks "
         "it holds, which embedding and reranking models back it, and where it is "
         "stored. Use this to check whether the collection is empty before "
-        "concluding that a search found nothing."
+        "concluding that a search found nothing. When the user chose a folder "
+        "at install, 'folder' says whether it is still being indexed and lists "
+        "any files that could not be read, with the reason for each."
     )
 )
 async def kb_stats() -> dict[str, Any]:
-    """Health and size of the collection."""
+    """Health and size of the collection, and of the chosen folder if there is one."""
     try:
-        return await _store().health_check()
+        stats = await _store().health_check()
     except KnowledgeBaseUnavailable as e:
-        return {"status": "unavailable", "error": str(e)}
+        stats = {"status": "unavailable", "error": str(e)}
+    if _folder is not None:
+        stats["folder"] = _folder.status()
+    return _with_folder(stats)
 
 
 @mcp.tool(
