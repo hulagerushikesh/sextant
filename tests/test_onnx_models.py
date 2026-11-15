@@ -62,6 +62,13 @@ class TestTheEmbedderMatchesTorch:
         batched = onnx_embedder.encode(TEXTS)[0]
         assert _cosine(alone, batched) > 0.99999
 
+    def test_vectors_come_back_in_the_order_given(self, onnx_embedder):
+        """Batches run shortest first; the answer must not come back that way."""
+        texts = [LONG, *TEXTS[:3], *(f"Short note {i}." for i in range(40))]
+        together = onnx_embedder.encode(texts)
+        for text, vector in zip(texts, together, strict=True):
+            assert _cosine(onnx_embedder.encode([text])[0], vector) > 0.99999
+
     def test_the_token_budget_and_counts_are_the_same(self, onnx_embedder, torch_embedder):
         assert onnx_embedder.max_tokens == torch_embedder.max_tokens == 256
         for text in TEXTS:
