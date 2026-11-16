@@ -121,7 +121,20 @@ COUNT_FIELDS = frozenset({"count", "total", "total_found", "documents", "matches
 # Every tool the knowledge base exposes, classified. Pinned against the running
 # server in tests, because an unclassified tool is refused and a test failure is
 # a better way to find that out than a 500 in production.
-READ_TOOLS = frozenset({"kb_search", "kb_list", "kb_stats", "kb_ann_benchmark", "kb_ann_compare"})
+# The self-test pair are reads: they write nothing. Their passages and results
+# carry chunk ids, so `trim` drops another owner's like any other hit; the
+# hosted agent never offers them (`agent.READABLE_TOOLS`).
+READ_TOOLS = frozenset(
+    {
+        "kb_search",
+        "kb_list",
+        "kb_stats",
+        "kb_ann_benchmark",
+        "kb_ann_compare",
+        "kb_selftest_sample",
+        "kb_selftest_grade",
+    }
+)
 WRITE_TOOLS = frozenset({"kb_ingest", "kb_forget"})
 
 

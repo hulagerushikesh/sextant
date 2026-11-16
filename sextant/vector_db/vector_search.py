@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 from sextant import settings
+from sextant.vector_db import selftest
 from sextant.vector_db.chunking import (
     CHUNK_TOKENS_ENV,
     chunk_text,
@@ -1079,6 +1080,30 @@ class KnowledgeBase:
         for entry in documents:
             entry.pop("_first")
         return {"documents": documents, "count": len(documents)}
+
+    async def selftest_sample(self, size: int, seed: int | None = None) -> dict[str, Any]:
+        """Passages for the user's assistant to write questions about (`selftest.py`)."""
+        return await asyncio.to_thread(self._selftest_sample_sync, size, seed)
+
+    def _selftest_sample_sync(self, size: int, seed: int | None) -> dict[str, Any]:
+        self._ensure_index()
+        return selftest.sample(self._corpus, size=size, seed=seed)
+
+    async def selftest_grade(self, questions: list[dict[str, Any]]) -> dict[str, Any]:
+        """Where each question's own passage lands in a `kb_search` (`selftest.py`)."""
+        return await asyncio.to_thread(self._selftest_grade_sync, questions)
+
+    def _selftest_grade_sync(self, questions: list[dict[str, Any]]) -> dict[str, Any]:
+        self._ensure_index()
+
+        def search(question: str) -> list[dict[str, Any]]:
+            # As kb_search runs it, but with no floor: a passage the reranker
+            # scores low is still a rank, and the grade is about the rank.
+            return self.search_sync(
+                question, limit=selftest.SEARCH_DEPTH, min_score=0.0, mode=DEFAULT_MODE
+            )["results"]
+
+        return selftest.grade(self._corpus, questions, search)
 
     async def health_check(self) -> dict[str, Any]:
         """Report what the store actually contains."""

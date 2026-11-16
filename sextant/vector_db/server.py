@@ -1,13 +1,14 @@
 """
 Knowledge-base MCP server.
 
-Exposes the ChromaDB store in `vector_search.py` as six MCP tools over stdio:
-`kb_search`, `kb_ingest`, `kb_stats`, `kb_list`, `kb_ann_benchmark` and
-`kb_ann_compare`. This is a standalone server: it has no dependency on the
+Exposes the ChromaDB store in `vector_search.py` as eight MCP tools over stdio:
+`kb_search`, `kb_ingest`, `kb_stats`, `kb_list`, `kb_ann_benchmark`,
+`kb_ann_compare`, and the self-test pair `kb_selftest_sample` and
+`kb_selftest_grade` (`selftest.py`). This is a standalone server: it has no dependency on the
 FastAPI app, and it is meant to be mounted by any MCP client -- Claude Desktop,
 MCP Inspector, or the agent in `sextant/mcp_server/main.py`.
 
-A seventh, `kb_forget`, is registered only when the launcher sets
+A ninth, `kb_forget`, is registered only when the launcher sets
 `SEXTANT_REMOVAL_TOOL` -- see `_register_removal`. A mount that did not ask for
 it cannot delete anything, which is the point: this server is published, and
 deleting is the one tool whose availability has to be somebody's decision.
@@ -45,6 +46,7 @@ from mcp.server import MCPServer
 from pydantic import Field
 
 from sextant import __version__, settings
+from sextant.vector_db import selftest
 
 # Preload FAISS before the embedder import below pulls in PyTorch. faiss-cpu and
 # torch each bundle an OpenMP runtime, and on macOS whichever initialises *second*
@@ -109,7 +111,9 @@ mcp = MCPServer(
         "are split into overlapping chunks, so results are passages rather than "
         "whole files, and each one names the page or section it came from. Call "
         "kb_stats first if you need to know whether the collection has any "
-        "documents in it at all."
+        "documents in it at all. If the user asks how well search works on their "
+        "own documents, run the self-test: kb_selftest_sample, then "
+        "kb_selftest_grade."
     ),
 )
 
@@ -319,6 +323,63 @@ async def kb_ann_compare(
         return await _store().ann_compare(query, k=k, hnsw=hnsw, ivfpq=ivfpq)
     except KnowledgeBaseUnavailable as e:
         return {"error": str(e)}
+
+
+@mcp.tool(
+    description=(
+        "Step 1 of the library self-test, for when the user asks how well search "
+        "works on their own documents. Returns a sample of passages spread across "
+        "the library, with instructions: write one question per passage in your "
+        "own words, then pass them all to kb_selftest_grade. Nothing leaves the "
+        "user's machine except to you, the assistant already reading search "
+        "results."
+    )
+)
+async def kb_selftest_sample(
+    size: Annotated[
+        int,
+        Field(description="How many passages to test.", ge=1, le=selftest.MAX_SIZE),
+    ] = selftest.DEFAULT_SIZE,
+    seed: Annotated[
+        int | None,
+        Field(description="Repeat an earlier sample by passing the seed it reported."),
+    ] = None,
+) -> dict[str, Any]:
+    """Passages for the assistant to write test questions about."""
+    try:
+        return _with_folder(await _store().selftest_sample(size, seed))
+    except KnowledgeBaseUnavailable as e:
+        return {"error": str(e), "passages": []}
+
+
+@mcp.tool(
+    description=(
+        "Step 2 of the library self-test. Takes the questions written for "
+        "kb_selftest_sample's passages, each with its passage_id, searches every "
+        "question exactly as kb_search does, and reports how often the passage a "
+        "question was written from comes back first and in the first five, plus "
+        "the questions it missed. Present the score as a rough guide: it depends "
+        "on how the questions were written."
+    )
+)
+async def kb_selftest_grade(
+    questions: Annotated[
+        list[dict[str, Any]],
+        Field(
+            description=(
+                "One entry per passage: {passage_id, question}, the passage_id "
+                "exactly as kb_selftest_sample returned it."
+            ),
+            min_length=1,
+            max_length=selftest.MAX_SIZE,
+        ),
+    ],
+) -> dict[str, Any]:
+    """Grade the questions against the passages they were written from."""
+    try:
+        return await _store().selftest_grade(questions)
+    except KnowledgeBaseUnavailable as e:
+        return {"error": str(e), "questions": 0}
 
 
 async def kb_forget(

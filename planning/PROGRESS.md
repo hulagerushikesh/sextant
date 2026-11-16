@@ -5,6 +5,12 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-16 — milestone 29 item 1: a self-test for the user's own library (₹0)
+
+- The owner chose milestone 29 over fixing keyword search first. Two new tools: one samples passages across the library for the user's assistant to write a question each about; the other searches each question as `kb_search` does and reports how often its passage comes back first and in the first five, flagging questions that copy the passage. No key, nothing sent anywhere new. **21 of 37 (57%)**.
+- On a fresh library of this repo's 21 notes, mounted over MCP: indexed in 11 s, 20 questions graded in 10 s; own passage first 0.45, first five 0.75, right document first 0.65. Planted defects (copy flag, score floor, spread across documents) each caught.
+- Does not prove: that it works in Claude Desktop (the owner's try, after a release), or that the score tracks the true score at all — that is item 2.
+
 ## 2026-11-16 — milestone 28 item 4: the public sets on the results page, one command to reproduce (₹0)
 
 - The results page now opens with **where a stage loses to a plain baseline**: keyword search below plain BM25 on all three sets, fusion below meaning search alone on FiQA, and meaning search 0.004 below the published figure on NFCorpus. It is computed, so a re-run that changes who wins changes the first screen. Public tables follow. **Milestone 28 done, 20 of 37 (54%)**; its rule is the owner's to tick.
