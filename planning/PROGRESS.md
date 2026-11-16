@@ -5,6 +5,12 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-16 — milestone 28 item 3: the two closest rejected ideas, re-tested (₹0)
+
+- Rules written and pushed before any run. **Both stay rejected.** 150-token passages: the full search fell 0.005 on NFCorpus where it had to gain 0.03, so the larger sets were not needed. bge-small: meaning search gained on all three sets (+0.036, +0.049, +0.014) but FiQA missed the 0.03 bar; **after the reranker it moves the answer by at most 0.011.** **19 of 37 (51%)**.
+- The rules are code; a test fails if the note or the results page stops matching what the code computes from the committed runs (planted defects caught). No download (bge was cached); about 49 minutes of load over four watched runs, 0.9 GB peak.
+- Does not prove: anything about a product mode without the reranker, where bge's first-stage gain would count, or about sets of one-sentence questions, where small passages helped before.
+
 ## 2026-11-16 — milestone 28 item 2: speed and memory at 57,000 documents (₹0)
 
 - On the kept FiQA index (85,362 passages), in a fresh process: a full search takes 582 ms typically and 650 ms for the slowest 1 in 20; the first answer after opening takes 8.7 s; memory peaks at 1.0 GB. **Not slow** by the rule written before measuring, so faster index types stay parked. **18 of 37 (49%)**.
