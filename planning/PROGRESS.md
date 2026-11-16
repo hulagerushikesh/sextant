@@ -5,6 +5,12 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-16 — milestone 28 item 1 done: all three public sets scored (₹0)
+
+- With the owner's yes, FiQA re-run under the same watchdog: 46 minutes, 1.1 GB peak, no limit reached. The first real search of an 85,000-chunk library worked. **17 of 37 (46%)**.
+- The full pipeline beats the paper's BM25 + cross-encoder on all three sets (FiQA 0.375 vs 0.347). **sextant's keyword stage loses to the paper's BM25 on all three** (FiQA 0.216 vs 0.236), and **on FiQA fusing it in lowers the score** (dense alone 0.372, fused 0.341, reranked 0.375). [The note](../learning/public-sets.md) has the tables.
+- Does not prove: speed and memory as a user meets them (item 2), and the results page does not show these figures yet (item 4) — so the milestone's first-screen rule is not met yet.
+
 ## 2026-11-16 — milestone 28 item 1: the large set found a library-size bug (₹0)
 
 - With the owner's yes, FiQA (57,638 documents, 85,000 chunks) was indexed under a watchdog (memory, swap, battery, time); it peaked at 0.8 GB and took 33 minutes. Then it broke: **any library over about 32,000 chunks could not be searched or counted.** Every whole-library read was one unbounded Chroma call, and SQLite refuses more than 32,766 values in one statement. The first search builds the keyword index that way, so a big library failed on its first question.
