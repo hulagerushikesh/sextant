@@ -133,3 +133,48 @@ class TestTheWriter:
         with pytest.raises(honesty.OverBudget):
             honesty._check_budget(ledger)
         honesty._check_budget({"usd": 0.0})
+
+
+class TestTheCommittedRun:
+    """The verdict in the measurement file is recomputed, never typed."""
+
+    def _run(self) -> dict:
+        return json.loads(honesty.OUT.read_text())
+
+    def test_the_stored_verdict_is_what_the_rule_gives(self):
+        run = self._run()
+        assert honesty.summarise(run["sets"], honesty.WRITERS) == run["verdict"]
+
+    def test_every_set_every_writer_and_every_question_was_graded(self):
+        run = self._run()
+        assert set(run["sets"]) == set(honesty.SETS)
+        for got in run["sets"].values():
+            assert got["sampled"] == honesty.SIZE and got["seed"] == honesty.SEED
+            for writer in honesty.WRITERS:
+                assert got["writers"][writer]["graded"] == honesty.SIZE
+
+    def test_the_true_scores_reproduce_the_public_sets(self):
+        committed = json.loads(honesty.public_sets.COMMITTED.read_text())["sets"]
+        for name, got in self._run()["sets"].items():
+            for mode, value in got["true_ndcg@10"].items():
+                want = committed[name]["modes"][mode]["ndcg@10"]
+                assert abs(value - want) <= honesty.public_sets.REPRODUCE_TOLERANCE
+
+    def test_the_results_page_follows_the_verdict(self, monkeypatch):
+        from sextant.eval import results_page
+
+        real = results_page._measurement
+        page = results_page.render()
+        assert "**It is a rough guide**" in page and "0.58, under the 0.6" in page
+
+        def passed(name: str):
+            loaded = real(name)
+            if name == "selftest-honesty.json":
+                for verdict in loaded["verdict"]["writers"].values():
+                    verdict.update(passes=True, rule_1_tracks_true_score=True)
+                loaded["verdict"]["outcome"] = "checked"
+            return loaded
+
+        monkeypatch.setattr(results_page, "_measurement", passed)
+        changed = results_page.render()
+        assert "It passed" in changed and "rough guide" not in changed

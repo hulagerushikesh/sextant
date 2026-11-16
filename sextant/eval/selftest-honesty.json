@@ -1,0 +1,1558 @@
+{
+  "about": "Milestone 29 item 2; the rule is learning/selftest-honesty.md.",
+  "size": 50,
+  "seed": 29,
+  "spent_usd_this_run": 0.0765,
+  "sets": {
+    "scifact": {
+      "set": "scifact",
+      "sampled": 50,
+      "seed": 29,
+      "true_ndcg@10": {
+        "dense": 0.6747,
+        "lexical": 0.6348,
+        "rrf": 0.6881,
+        "rerank": 0.7004
+      },
+      "writers": {
+        "gemini-3.1-flash-lite": {
+          "questions": [
+            {
+              "passage_id": "12100963#1",
+              "question": "Why does the body restrict the movement of certain T cells after they encounter an antigen?"
+            },
+            {
+              "passage_id": "19052713#1",
+              "question": "What effect does albumin administration typically have on the mortality of critically ill individuals?"
+            },
+            {
+              "passage_id": "2048139#1",
+              "question": "Does having a history of substance use disorders affect a patient's likelihood of finishing hepatitis C treatment?"
+            },
+            {
+              "passage_id": "25041967#0",
+              "question": "What is the purpose of creating artificial human chromosomes with specific types of satellite DNA?"
+            },
+            {
+              "passage_id": "23959496#3",
+              "question": "What specific roles do JARID2, MTF2, and esPRC2p48 play in regulating gene expression within embryonic stem cells?"
+            },
+            {
+              "passage_id": "8724666#1",
+              "question": "Could altering glycolysis levels be a potential strategy for managing leukemia while keeping healthy blood stem cells intact?"
+            },
+            {
+              "passage_id": "20460020#1",
+              "question": "How does the estrogen receptor alpha influence the way immune cells repair damaged tissues?"
+            },
+            {
+              "passage_id": "11411060#1",
+              "question": "What happens to the ability of parasites to hide from the immune system when certain bromodomain proteins are inhibited?"
+            },
+            {
+              "passage_id": "10765888#0",
+              "question": "Are T lymphocytes involved in maintaining cognitive functions like spatial learning in adults?"
+            },
+            {
+              "passage_id": "8318922#1",
+              "question": "Is there a connection between how well kidneys function and patterns in heart rate variability?"
+            },
+            {
+              "passage_id": "10692948#4",
+              "question": "Does giving children dietary advice in their early years lead to any negative impacts on their physical development?"
+            },
+            {
+              "passage_id": "37296667#1",
+              "question": "Can adding sugar to diluents help protect boar sperm during the freezing process?"
+            },
+            {
+              "passage_id": "18374364#1",
+              "question": "How frequently do long-term blood stem cells divide in the average person?"
+            },
+            {
+              "passage_id": "10029970#1",
+              "question": "What is the primary objective of the conserved domain database curators?"
+            },
+            {
+              "passage_id": "2787558#2",
+              "question": "Do daily habits and nutritional choices have an effect on the likelihood of successful fertility treatments?"
+            },
+            {
+              "passage_id": "33872649#0",
+              "question": "Did anthrax spores become airborne again in office environments where they had previously contaminated surfaces?"
+            },
+            {
+              "passage_id": "12258338#2",
+              "question": "Did involving a pharmacist in the prescription process lead to a reduction in preventable medication errors?"
+            },
+            {
+              "passage_id": "36721932#2",
+              "question": "Can simple questionnaires effectively identify individuals experiencing neuropathic pain due to lower back issues?"
+            },
+            {
+              "passage_id": "3113630#2",
+              "question": "How does the location of a specific protein inside a cell relate to the development of ataxia telangiectasia?"
+            },
+            {
+              "passage_id": "8708082#0",
+              "question": "What are the most effective methods currently used to lower the risk of developing type 2 diabetes?"
+            },
+            {
+              "passage_id": "4886637#1",
+              "question": "Is there a confirmed link between diabetes and an increased chance of developing breast cancer?"
+            },
+            {
+              "passage_id": "43483151#1",
+              "question": "Can measuring a specific electrocardiographic feature help forecast mortality risk in diabetic patients?"
+            },
+            {
+              "passage_id": "37297740#0",
+              "question": "How do megakaryocytes achieve a state of having more than the usual two sets of chromosomes?"
+            },
+            {
+              "passage_id": "5035827#1",
+              "question": "What does the term inflammaging refer to in the context of elderly health?"
+            },
+            {
+              "passage_id": "20372201#0",
+              "question": "How does the existence of cancer stem cells complicate efforts to successfully treat gastrointestinal tumors?"
+            },
+            {
+              "passage_id": "10641162#1",
+              "question": "What is the functional relationship between certain archaeal proteins and the ESCRT-III complex found in eukaryotes?"
+            },
+            {
+              "passage_id": "19561411#2",
+              "question": "What role does the interaction between specific proteins play in managing calcium levels within immune cells?"
+            },
+            {
+              "passage_id": "8318286#0",
+              "question": "Why has the study of adult stem cells in the brain become so important for medical science?"
+            },
+            {
+              "passage_id": "7165938#2",
+              "question": "Could a specific protein be used to predict the outlook for patients with colorectal cancer?"
+            },
+            {
+              "passage_id": "26297042#0",
+              "question": "In what ways do reactive oxygen species influence how cells move and stick to surfaces?"
+            },
+            {
+              "passage_id": "21260231#1",
+              "question": "Does having an observer present significantly alter the accuracy of nurses during medication administration?"
+            },
+            {
+              "passage_id": "4460880#1",
+              "question": "How does the p53 pathway affect the heart's ability to create new blood vessels after an injury?"
+            },
+            {
+              "passage_id": "19701340#2",
+              "question": "Does the response of melanoma cells to melatonin depend on the specific receptors present in those cells?"
+            },
+            {
+              "passage_id": "3330111#0",
+              "question": "How has our understanding of the role neutrophils play in the immune system changed beyond just fighting pathogens?"
+            },
+            {
+              "passage_id": "20187433#0",
+              "question": "Why is it recommended to have open discussions between oncology staff and a patient's relatives?"
+            },
+            {
+              "passage_id": "17693849#3",
+              "question": "How does health literacy affect the general quality of life for individuals living with heart disease?"
+            },
+            {
+              "passage_id": "15790930#0",
+              "question": "What principles should researchers follow when selecting sequences for gene silencing experiments?"
+            },
+            {
+              "passage_id": "36288526#1",
+              "question": "How does using hydroxyethyl starch compare to albumin in terms of bleeding risks after surgery?"
+            },
+            {
+              "passage_id": "22003328#0",
+              "question": "What specific biochemical function have researchers discovered for the proteins in the CAS2 family?"
+            },
+            {
+              "passage_id": "36904081#0",
+              "question": "What is unique about how the yeast ribosomal protein gene is transcribed and processed?"
+            },
+            {
+              "passage_id": "3444507#0",
+              "question": "Why is the Integrative Genomics Viewer useful for people working with large sets of sequencing data?"
+            },
+            {
+              "passage_id": "8354687#2",
+              "question": "How is a specific protein transferred between cells to help remove certain immune cells in the thymus?"
+            },
+            {
+              "passage_id": "6106004#0",
+              "question": "What are the common methods used in research to physically separate parent yeast cells from their offspring?"
+            },
+            {
+              "passage_id": "1398021#0",
+              "question": "How is the tendency to develop hiatal hernias passed through families?"
+            },
+            {
+              "passage_id": "37641175#0",
+              "question": "Do living cells release a specific type of genetic material into their environment?"
+            },
+            {
+              "passage_id": "6945285#0",
+              "question": "Did the use of bezafibrate provide any benefit in preventing heart attacks or strokes in men with arterial disease?"
+            },
+            {
+              "passage_id": "16626264#0",
+              "question": "How does a specific histone variant influence the regulation of gene expression in yeast?"
+            },
+            {
+              "passage_id": "29098525#0",
+              "question": "How does a tiny change in a single amino acid affect how a specific protein interacts with DNA?"
+            },
+            {
+              "passage_id": "14376683#2",
+              "question": "What process does the virus genome use to replicate itself in host plants?"
+            },
+            {
+              "passage_id": "20977638#3",
+              "question": "Does reducing antioxidant levels in embryos increase the likelihood of developmental issues when exposed to specific stressors?"
+            }
+          ],
+          "graded": 50,
+          "copied_wording": 0,
+          "modes": {
+            "dense": {
+              "found_first": 0.44,
+              "found_in_top_5": 0.72,
+              "right_document_first": 0.72,
+              "spread_at_20": {
+                "questions": 20,
+                "low": 0.55,
+                "high": 0.9
+              }
+            },
+            "lexical": {
+              "found_first": 0.3,
+              "found_in_top_5": 0.6,
+              "right_document_first": 0.56,
+              "spread_at_20": {
+                "questions": 20,
+                "low": 0.4,
+                "high": 0.8
+              }
+            },
+            "rrf": {
+              "found_first": 0.34,
+              "found_in_top_5": 0.7,
+              "right_document_first": 0.66,
+              "spread_at_20": {
+                "questions": 20,
+                "low": 0.55,
+                "high": 0.85
+              }
+            },
+            "rerank": {
+              "found_first": 0.54,
+              "found_in_top_5": 0.78,
+              "right_document_first": 0.74,
+              "spread_at_20": {
+                "questions": 20,
+                "low": 0.6,
+                "high": 0.9
+              }
+            }
+          }
+        },
+        "gemini-3.7-flash": {
+          "questions": [
+            {
+              "passage_id": "12100963#1",
+              "question": "What is the biological purpose of restricting CD8 T cell egress from tissues following antigen recognition?"
+            },
+            {
+              "passage_id": "19052713#1",
+              "question": "How does the administration of albumin influence the risk of mortality in critically ill patients?"
+            },
+            {
+              "passage_id": "2048139#1",
+              "question": "Does having a history of substance use disorder change the likelihood of completing interferon therapy for hepatitis C?"
+            },
+            {
+              "passage_id": "25041967#0",
+              "question": "Which specific alpha satellite DNA sequences were utilized to construct human artificial chromosomes?"
+            },
+            {
+              "passage_id": "23959496#3",
+              "question": "Which regulatory subunits synergistically enhance the histone methyltransferase activity of PRC2 in stem cells?"
+            },
+            {
+              "passage_id": "8724666#1",
+              "question": "How does a deficiency in PKM2 affect hematopoietic progenitor cells compared to hematopoietic stem cells?"
+            },
+            {
+              "passage_id": "20460020#1",
+              "question": "How does signaling through estrogen receptor alpha in inflammatory cells influence macrophage activation during tissue repair?"
+            },
+            {
+              "passage_id": "11411060#1",
+              "question": "How does pharmacological inhibition of bromodomain proteins compromise immune evasion in trypanosomes?"
+            },
+            {
+              "passage_id": "10765888#0",
+              "question": "Which immune system cells are critical for maintaining hippocampal neurogenesis and spatial memory in adults?"
+            },
+            {
+              "passage_id": "8318922#1",
+              "question": "How is urinary albumin excretion related to daytime heart rate variability in hypertensive patients?"
+            },
+            {
+              "passage_id": "10692948#4",
+              "question": "What effect does repeated dietary counseling of parents during early childhood have on a child's neurological development?"
+            },
+            {
+              "passage_id": "37296667#1",
+              "question": "What concentration of trehalose in semen extenders produces the best cryosurvival rates for boar sperm?"
+            },
+            {
+              "passage_id": "18374364#1",
+              "question": "Approximately what percentage of long-term hematopoietic stem cells enter the cell cycle each day?"
+            },
+            {
+              "passage_id": "10029970#1",
+              "question": "What resource tracks 3D macromolecular structures to provide fine-grained classifications of protein domain families?"
+            },
+            {
+              "passage_id": "2787558#2",
+              "question": "How does chronic oxidative stress related to lifestyle and nutrition influence in vitro fertilization success?"
+            },
+            {
+              "passage_id": "33872649#0",
+              "question": "How do active office conditions affect the secondary aerosolization of Bacillus anthracis spores compared to quiet conditions?"
+            },
+            {
+              "passage_id": "12258338#2",
+              "question": "By what percentage did preventable prescribing errors fall after implementing pharmacist interventions?"
+            },
+            {
+              "passage_id": "36721932#2",
+              "question": "What proportion of German men and women suffer from back pain that includes a neuropathic component?"
+            },
+            {
+              "passage_id": "3113630#2",
+              "question": "What mechanism causes HDAC4 to accumulate in the nucleus when ATM is deficient?"
+            },
+            {
+              "passage_id": "8708082#0",
+              "question": "Which lifestyle modification provides the largest reduction in incident type 2 diabetes risk?"
+            },
+            {
+              "passage_id": "4886637#1",
+              "question": "In which demographic group of women is the correlation between type 2 diabetes and breast cancer most reliable?"
+            },
+            {
+              "passage_id": "43483151#1",
+              "question": "What electrocardiographic parameter has been studied to evaluate the risk of cardiac death in newly diagnosed diabetic individuals?"
+            },
+            {
+              "passage_id": "37297740#0",
+              "question": "What specific cell cycle allows megakaryocytes to become polyploid without undergoing cytokinesis?"
+            },
+            {
+              "passage_id": "5035827#1",
+              "question": "What term is used to describe the persistent, low-grade inflammatory state commonly seen in aging individuals?"
+            },
+            {
+              "passage_id": "20372201#0",
+              "question": "What biological theory accounts for intratumoral heterogeneity and metastatic competence in gastrointestinal tumors?"
+            },
+            {
+              "passage_id": "10641162#1",
+              "question": "Which eukaryotic protein complex is homologous to the archaeal division proteins CdvB and CdvC?"
+            },
+            {
+              "passage_id": "19561411#2",
+              "question": "Which junctional calcium-sensing protein interacts with JP4 to control store-operated calcium entry in T cells?"
+            },
+            {
+              "passage_id": "8318286#0",
+              "question": "What biological roles do adult neural stem cells play in maintaining tissue health?"
+            },
+            {
+              "passage_id": "7165938#2",
+              "question": "Through which molecular pathway does Bmal1 induce G2-M cell cycle arrest in colorectal cancer cells?"
+            },
+            {
+              "passage_id": "26297042#0",
+              "question": "Which reactive chemical species can act directly as a chemical attractant to recruit immune cells toward injured tissue?"
+            },
+            {
+              "passage_id": "21260231#1",
+              "question": "Does directly observing nurses administering medications cause a significant change in drug administration error rates?"
+            },
+            {
+              "passage_id": "4460880#1",
+              "question": "How does the absence of p53 in cardiac fibroblasts affect neovascularization and heart recovery after infarction?"
+            },
+            {
+              "passage_id": "19701340#2",
+              "question": "Why do different melanoma cell lines vary in their antiproliferative sensitivity to melatonin?"
+            },
+            {
+              "passage_id": "3330111#0",
+              "question": "What types of effector mechanisms allow neutrophils to participate in adaptive and chronic immune responses?"
+            },
+            {
+              "passage_id": "20187433#0",
+              "question": "Why is structured communication between healthcare teams, patients, and relatives recommended during cancer treatment?"
+            },
+            {
+              "passage_id": "17693849#3",
+              "question": "How does poor health literacy influence physical function outcomes in patients living with ischemic heart disease?"
+            },
+            {
+              "passage_id": "15790930#0",
+              "question": "What experimental framework was used to determine the rules for selecting effective siRNA sequences?"
+            },
+            {
+              "passage_id": "36288526#1",
+              "question": "How does hydroxyethyl starch affect surgical bleeding and reoperation rates relative to albumin?"
+            },
+            {
+              "passage_id": "22003328#0",
+              "question": "What specific sequence regions are selectively cleaved by CAS2 family endoribonucleases?"
+            },
+            {
+              "passage_id": "36904081#0",
+              "question": "Which mammalian ribosomal protein shows structural homology to yeast L32?"
+            },
+            {
+              "passage_id": "3444507#0",
+              "question": "What kinds of high-throughput datasets can be simultaneously integrated and explored using the Integrative Genomics Viewer?"
+            },
+            {
+              "passage_id": "8354687#2",
+              "question": "How is IRBP transferred between cells in the thymus to facilitate Aire-dependent negative selection of T cells?"
+            },
+            {
+              "passage_id": "6106004#0",
+              "question": "What physical differences make it possible to distinguish newly formed daughter cells from mother yeast cells?"
+            },
+            {
+              "passage_id": "1398021#0",
+              "question": "What genetic pattern of inheritance was confirmed in a large pedigree affected by familial hiatal hernia?"
+            },
+            {
+              "passage_id": "37641175#0",
+              "question": "What structural and molecular characteristics define the DNA spontaneously released by healthy living cells?"
+            },
+            {
+              "passage_id": "6945285#0",
+              "question": "Did clinical trial results show that bezafibrate lowers the incidence of stroke or heart disease in men with peripheral artery disease?"
+            },
+            {
+              "passage_id": "16626264#0",
+              "question": "Which protein complex is required to deposit the histone variant Htz1 at basal yeast gene promoters?"
+            },
+            {
+              "passage_id": "29098525#0",
+              "question": "Which single amino acid position accounts for the difference in ssDNA-binding behavior between Salmonella and E. coli PriB?"
+            },
+            {
+              "passage_id": "14376683#2",
+              "question": "What structural feature of the CoYMV transcript suggests that the virus replicates through reverse transcription?"
+            },
+            {
+              "passage_id": "20977638#3",
+              "question": "How does BSO treatment alter the developmental deformities produced by hydroxyurea in embryos?"
+            }
+          ],
+          "graded": 50,
+          "copied_wording": 0,
+          "modes": {
+            "dense": {
+              "found_first": 0.7,
+              "found_in_top_5": 0.92,
+              "right_document_first": 0.92,
+              "spread_at_20": {
+                "questions": 20,
+                "low": 0.8,
+                "high": 1.0
+              }
+            },
+            "lexical": {
+              "found_first": 0.58,
+              "found_in_top_5": 0.9,
+              "right_document_first": 0.84,
+              "spread_at_20": {
+                "questions": 20,
+                "low": 0.75,
+                "high": 1.0
+              }
+            },
+            "rrf": {
+              "found_first": 0.64,
+              "found_in_top_5": 0.94,
+              "right_document_first": 0.88,
+              "spread_at_20": {
+                "questions": 20,
+                "low": 0.85,
+                "high": 1.0
+              }
+            },
+            "rerank": {
+              "found_first": 0.7,
+              "found_in_top_5": 0.96,
+              "right_document_first": 0.92,
+              "spread_at_20": {
+                "questions": 20,
+                "low": 0.9,
+                "high": 1.0
+              }
+            }
+          }
+        }
+      }
+    },
+    "nfcorpus": {
+      "set": "nfcorpus",
+      "sampled": 50,
+      "seed": 29,
+      "true_ndcg@10": {
+        "dense": 0.3139,
+        "lexical": 0.2993,
+        "rrf": 0.3383,
+        "rerank": 0.3639
+      },
+      "writers": {
+        "gemini-3.1-flash-lite": {
+          "questions": [
+            {
+              "passage_id": "MED-1636#1",
+              "question": "Does drinking coffee affect the amount of fats found in the blood?"
+            },
+            {
+              "passage_id": "MED-1060#1",
+              "question": "What are the specific genes and proteins that become active when cells undergo stress from palm oil components?"
+            },
+            {
+              "passage_id": "MED-3197#0",
+              "question": "What is the purpose of the study investigating different amounts of beef intake on cholesterol levels?"
+            },
+            {
+              "passage_id": "MED-4812#0",
+              "question": "How does the hepatitis E virus get into the human body?"
+            },
+            {
+              "passage_id": "MED-1867#1",
+              "question": "What were the health impacts on people who drank sour tea daily for a month?"
+            },
+            {
+              "passage_id": "MED-1498#0",
+              "question": "Why is it difficult to make firm recommendations for preventing mental decline through lifestyle changes?"
+            },
+            {
+              "passage_id": "MED-2598#2",
+              "question": "What role does FLIP play in the process of programmed cell death?"
+            },
+            {
+              "passage_id": "MED-3386#0",
+              "question": "What are the potential respiratory side effects for people treated with radiation for chest tumors?"
+            },
+            {
+              "passage_id": "MED-1272#0",
+              "question": "Is there a possible link between a high number of nerve disease cases and contaminated water in New Hampshire?"
+            },
+            {
+              "passage_id": "MED-4536#2",
+              "question": "Can an extract from a specific plant help in shrinking tumors in laboratory mice?"
+            },
+            {
+              "passage_id": "MED-3659#1",
+              "question": "What caused the rise in allergic skin reactions to lavender oil in Japan during the late nineties?"
+            },
+            {
+              "passage_id": "MED-5041#2",
+              "question": "Why do island populations that consume large amounts of cocoa have lower rates of heart disease and diabetes?"
+            },
+            {
+              "passage_id": "MED-2771#0",
+              "question": "Is there a statistical connection between dairy product intake and the likelihood of developing prostate cancer?"
+            },
+            {
+              "passage_id": "MED-2346#1",
+              "question": "What progress has been made in understanding the allergic reactions caused by Anisakis parasites?"
+            },
+            {
+              "passage_id": "MED-4447#2",
+              "question": "Do current food databases accurately reflect the levels of certain plant compounds found in common vegetables?"
+            },
+            {
+              "passage_id": "MED-1478#0",
+              "question": "How did the diet and lifestyle of ancient humans differ from the eating and activity patterns common in today's society?"
+            },
+            {
+              "passage_id": "MED-2757#2",
+              "question": "Do vitamin and mineral supplements have a significant impact on an individual's risk of passing away?"
+            },
+            {
+              "passage_id": "MED-898#1",
+              "question": "Should individuals concerned about their body's iron levels avoid consuming tea with their food?"
+            },
+            {
+              "passage_id": "MED-1029#1",
+              "question": "Is it physically easier to empty the bowels while squatting than while sitting?"
+            },
+            {
+              "passage_id": "MED-3281#0",
+              "question": "How are scientists utilizing the inability of some cancer cells to create their own amino acids for treatment?"
+            },
+            {
+              "passage_id": "MED-118#1",
+              "question": "What kinds of foods consumed by breastfeeding mothers might influence the levels of certain chemicals in their breast milk?"
+            },
+            {
+              "passage_id": "MED-4766#0",
+              "question": "Could viral infections be a hidden reason behind why some people struggle with obesity?"
+            },
+            {
+              "passage_id": "MED-907#2",
+              "question": "Which specific health habits and physical factors are most strongly linked to the risk of various diseases?"
+            },
+            {
+              "passage_id": "MED-2580#2",
+              "question": "Did increasing the amount of dried beans in a diet impact the return of advanced precancerous growths in the colon?"
+            },
+            {
+              "passage_id": "MED-1552#0",
+              "question": "How does swapping saturated fats for other types of carbohydrates influence blood cholesterol markers?"
+            },
+            {
+              "passage_id": "MED-4511#1",
+              "question": "What is the best way to detect if someone is not getting enough vitamin B12 in their body?"
+            },
+            {
+              "passage_id": "MED-4150#0",
+              "question": "Why might a newborn baby sometimes have urine that smells like maple syrup if the mother took a specific herbal supplement?"
+            },
+            {
+              "passage_id": "MED-4835#2",
+              "question": "Can eating whole-grain oat cereal as part of a calorie-controlled diet improve cholesterol readings?"
+            },
+            {
+              "passage_id": "MED-4799#0",
+              "question": "Is the bacteria that causes severe bowel infections found in meat products sold at the store?"
+            },
+            {
+              "passage_id": "MED-4309#2",
+              "question": "Which vegetables contain the highest concentrations of compounds that affect the nervous system?"
+            },
+            {
+              "passage_id": "MED-3956#1",
+              "question": "Does eating a diet heavy in plant-based proteins and isoflavones affect the timing of puberty in girls?"
+            },
+            {
+              "passage_id": "MED-1951#1",
+              "question": "Should children born late-preterm be studied differently than those born full-term regarding their developmental progress?"
+            },
+            {
+              "passage_id": "MED-1007#0",
+              "question": "How common is the gastrointestinal condition known as irritable bowel syndrome in the United States?"
+            },
+            {
+              "passage_id": "MED-5354#1",
+              "question": "Are there substances in flaxseed that help protect against cancer?"
+            },
+            {
+              "passage_id": "MED-1517#0",
+              "question": "Does getting up to move regularly while at work help control blood sugar levels after a meal?"
+            },
+            {
+              "passage_id": "MED-2056#2",
+              "question": "Can skin irritation around the anal area in children be a sign of a reaction to cow's milk?"
+            },
+            {
+              "passage_id": "MED-1716#1",
+              "question": "How do insulin and related hormones contribute to the growth of cancer in diabetic or overweight patients?"
+            },
+            {
+              "passage_id": "MED-4604#0",
+              "question": "Which category of food additives shows the highest level of genetic damage in laboratory testing?"
+            },
+            {
+              "passage_id": "MED-4787#1",
+              "question": "Can engaging in frequent moderate-to-vigorous exercise reduce the chance of developing breast cancer after menopause?"
+            },
+            {
+              "passage_id": "MED-5122#1",
+              "question": "Are harmful chemicals present in tea infusions made from yerba mate leaves?"
+            },
+            {
+              "passage_id": "MED-4920#1",
+              "question": "How prevalent is celiac disease among family members of individuals who have already been diagnosed with the condition?"
+            },
+            {
+              "passage_id": "MED-3487#0",
+              "question": "Why is the research supporting the safety and efficacy of weight loss aids potentially unreliable?"
+            },
+            {
+              "passage_id": "MED-1445#2",
+              "question": "Does switching to a low-fat vegan diet help postmenopausal women lose weight without needing to restrict calorie intake?"
+            },
+            {
+              "passage_id": "MED-1981#0",
+              "question": "Why is it urgent for countries to work together to address the problem of antibiotic-resistant bacteria?"
+            },
+            {
+              "passage_id": "MED-3026#2",
+              "question": "Is measuring IQ a sufficient way to understand the impact of mercury exposure on brain development?"
+            },
+            {
+              "passage_id": "MED-3534#1",
+              "question": "Does drinking cherry juice help reduce muscle soreness after a heavy workout?"
+            },
+            {
+              "passage_id": "MED-3944#2",
+              "question": "Can improving antioxidant levels in the body help people feel physically better and reduce pain?"
+            },
+            {
+              "passage_id": "MED-1281#1",
+              "question": "What is the result of using a new method to scan for proteins that bind to calcium in the body?"
+            },
+            {
+              "passage_id": "MED-4803#0",
+              "question": "How common is antibiotic-resistant staph bacteria in retail meat samples?"
+            },
+            {
+              "passage_id": "MED-980#0",
+              "question": "Can taking B vitamin supplements help older people with memory issues prevent their brain from shrinking?"
+            }
+          ],
+          "graded": 50,
+          "copied_wording": 0,
+          "modes": {
+            "dense": {
+              "found_first": 0.22,
+              "found_in_top_5": 0.66,
+              "right_document_first": 0.58,
+              "spread_at_20": {
+                "questions": 20,
+                "low": 0.5,
+                "high": 0.85
+              }
+            },
+            "lexical": {
+              "found_first": 0.14,
+              "found_in_top_5": 0.48,
+              "right_document_first": 0.32,
+              "spread_at_20": {
+                "questions": 20,
+                "low": 0.3,
+                "high": 0.65
+              }
+            },
+            "rrf": {
+              "found_first": 0.24,
+              "found_in_top_5": 0.6,
+              "right_document_first": 0.42,
+              "spread_at_20": {
+                "questions": 20,
+                "low": 0.4,
+                "high": 0.8
+              }
+            },
+            "rerank": {
+              "found_first": 0.32,
+              "found_in_top_5": 0.74,
+              "right_document_first": 0.66,
+              "spread_at_20": {
+                "questions": 20,
+                "low": 0.6,
+                "high": 0.9
+              }
+            }
+          }
+        },
+        "gemini-3.7-flash": {
+          "questions": [
+            {
+              "passage_id": "MED-1636#1",
+              "question": "How does the consumption of unfiltered coffee compare to filtered coffee in terms of its effect on blood cholesterol levels?"
+            },
+            {
+              "passage_id": "MED-1060#1",
+              "question": "Which signaling pathway components regulate the induction of PUMA during palmitate-induced endoplasmic reticulum stress in beta cells?"
+            },
+            {
+              "passage_id": "MED-3197#0",
+              "question": "How does the daily amount of lean beef in the DASH diet compare to the amounts provided in the BOLD and BOLD+ diets?"
+            },
+            {
+              "passage_id": "MED-4812#0",
+              "question": "What animal species act as primary reservoirs for zoonotic transmission of the hepatitis E virus to humans?"
+            },
+            {
+              "passage_id": "MED-1867#1",
+              "question": "What impact does drinking sour tea twice daily have on HDL cholesterol and triglyceride levels?"
+            },
+            {
+              "passage_id": "MED-1498#0",
+              "question": "Why did the US Agency for Healthcare Research and Quality determine that public health recommendations for preventing dementia could not be made?"
+            },
+            {
+              "passage_id": "MED-2598#2",
+              "question": "How does the cellular protein FLIP inhibit death receptor signaling while simultaneously promoting alternative cascades?"
+            },
+            {
+              "passage_id": "MED-3386#0",
+              "question": "What medication is standardly used to treat bronchiolitis obliterans organizing pneumonia occurring after chest radiotherapy?"
+            },
+            {
+              "passage_id": "MED-1272#0",
+              "question": "What toxin produced by blue-green algae has been suggested as a possible contributor to ALS clusters?"
+            },
+            {
+              "passage_id": "MED-4536#2",
+              "question": "How does the traditional herbal formulation Triphala affect transplanted tumors in mice without damaging normal tissue?"
+            },
+            {
+              "passage_id": "MED-3659#1",
+              "question": "What lifestyle trend accounted for the increase in positive patch tests to lavender oil among Japanese patients in the late 1990s?"
+            },
+            {
+              "passage_id": "MED-5041#2",
+              "question": "What dietary factor is hypothesized to explain the lower rates of cardiovascular disease and diabetes in island-dwelling Kuna compared to mainlanders?"
+            },
+            {
+              "passage_id": "MED-2771#0",
+              "question": "What does meta-analysis of cohort studies indicate regarding the relationship between high dairy intake and prostate cancer risk?"
+            },
+            {
+              "passage_id": "MED-2346#1",
+              "question": "Which granulocytes and immune cells are activated during allergic reactions caused by exposure to Anisakis simplex antigens?"
+            },
+            {
+              "passage_id": "MED-4447#2",
+              "question": "Which plant family contains surprisingly rich amounts of the enterolignan precursors pinoresinol and lariciresinol?"
+            },
+            {
+              "passage_id": "MED-1478#0",
+              "question": "How did the nutrient profile of ancestral hunter-gatherer diets differ from modern Western diets regarding sodium and fiber?"
+            },
+            {
+              "passage_id": "MED-2757#2",
+              "question": "What effect do multivitamin and multimineral supplements have on cancer mortality and cardiovascular mortality according to trials?"
+            },
+            {
+              "passage_id": "MED-898#1",
+              "question": "What dietary timing guidance should be provided to individuals vulnerable to iron deficiency regarding tea consumption?"
+            },
+            {
+              "passage_id": "MED-1029#1",
+              "question": "How does the act of squatting during defecation influence straining compared to sitting on a conventional toilet?"
+            },
+            {
+              "passage_id": "MED-3281#0",
+              "question": "Which cancers have shown clinical responses to therapies that target arginine and asparagine dependency?"
+            },
+            {
+              "passage_id": "MED-118#1",
+              "question": "Which dietary items have been significantly linked to elevated concentrations of 4-nonylphenol in breast milk?"
+            },
+            {
+              "passage_id": "MED-4766#0",
+              "question": "What physiological changes in animal models of adenovirus-36 infection lead to increases in body fat?"
+            },
+            {
+              "passage_id": "MED-907#2",
+              "question": "Which modifiable behavioral factors demonstrate significant population attributable risk in multivariable analyses of disease incidence?"
+            },
+            {
+              "passage_id": "MED-2580#2",
+              "question": "How does an increase in dry bean consumption influence the recurrence risk of advanced colorectal adenomas?"
+            },
+            {
+              "passage_id": "MED-1552#0",
+              "question": "What drop in LDL cholesterol occurs when complex carbohydrates replace ten percent of dietary energy from saturated fats?"
+            },
+            {
+              "passage_id": "MED-4511#1",
+              "question": "Which supplemental sources successfully lower elevated urinary methylmalonic acid levels caused by vitamin B12 deficiency?"
+            },
+            {
+              "passage_id": "MED-4150#0",
+              "question": "What maternal herbal ingestion during labor can produce a false-positive suspicion of maple syrup urine disease in newborns?"
+            },
+            {
+              "passage_id": "MED-4835#2",
+              "question": "How does incorporating ready-to-eat whole-grain oat cereal affect LDL cholesterol reductions in an energy-restricted diet?"
+            },
+            {
+              "passage_id": "MED-4799#0",
+              "question": "What proportion of retail meat products sampled in Tucson, Arizona was found to harbor toxigenic Clostridium difficile?"
+            },
+            {
+              "passage_id": "MED-4309#2",
+              "question": "Which vegetables have been identified as containing the highest levels of the biogenic amine tyramine?"
+            },
+            {
+              "passage_id": "MED-3956#1",
+              "question": "How does high dietary intake of soy isoflavones influence the timing of puberty and breast development in young girls?"
+            },
+            {
+              "passage_id": "MED-1951#1",
+              "question": "How do late preterm infants compare neurodevelopmentally to children born at full term versus very preterm children?"
+            },
+            {
+              "passage_id": "MED-1007#0",
+              "question": "What diagnostic frameworks were utilized in community telephone surveys to identify undiagnosed irritable bowel syndrome cases?"
+            },
+            {
+              "passage_id": "MED-5354#1",
+              "question": "Why are epidemiological findings regarding the health benefits of dietary enterolactone precursors often inconsistent across countries?"
+            },
+            {
+              "passage_id": "MED-1517#0",
+              "question": "How frequently should prolonged sitting be interrupted with brief walking intervals to modulate postprandial insulin levels?"
+            },
+            {
+              "passage_id": "MED-2056#2",
+              "question": "Which clinical signs can help identify an allergy to cow's milk as the cause of chronic perianal inflammation in children?"
+            },
+            {
+              "passage_id": "MED-1716#1",
+              "question": "How do insulin and IGF ligands interact with receptor isoforms to influence tumor development in patients with type 2 diabetes?"
+            },
+            {
+              "passage_id": "MED-4604#0",
+              "question": "Which broad category of food additives exhibited the highest genotoxicity across multiple organs in mice tested with the comet assay?"
+            },
+            {
+              "passage_id": "MED-4787#1",
+              "question": "What amount of moderate-to-vigorous exercise over the prior decade is needed to substantially decrease postmenopausal breast cancer risk?"
+            },
+            {
+              "passage_id": "MED-5122#1",
+              "question": "What proportion of benzo[a]pyrene present in yerba mate dry leaves is transferred into hot water infusions during repeated brewing?"
+            },
+            {
+              "passage_id": "MED-4920#1",
+              "question": "What is the expected prevalence of celiac disease among first-degree relatives of affected individuals compared to second-degree relatives?"
+            },
+            {
+              "passage_id": "MED-3487#0",
+              "question": "Why are clinical safety and efficacy studies on commercially available weight loss supplements frequently criticized?"
+            },
+            {
+              "passage_id": "MED-1445#2",
+              "question": "Can overweight postmenopausal women achieve significant weight reduction on a low-fat vegan diet without portion restrictions?"
+            },
+            {
+              "passage_id": "MED-1981#0",
+              "question": "Which modern medical advances are reliant on effective antimicrobial treatments to prevent life-threatening infections?"
+            },
+            {
+              "passage_id": "MED-3026#2",
+              "question": "Why does measuring IQ fail to capture the entire spectrum of neurodevelopmental injury resulting from fetal mercury exposure?"
+            },
+            {
+              "passage_id": "MED-3534#1",
+              "question": "How effective is tart cherry juice at preventing strength loss following bouts of strenuous eccentric exercise?"
+            },
+            {
+              "passage_id": "MED-3944#2",
+              "question": "Which bioassay measurement of antioxidant capacity correlated best with reductions in pain and improvements in range of motion?"
+            },
+            {
+              "passage_id": "MED-1281#1",
+              "question": "What molecular screening strategy was employed to uncover novel calmodulin-interacting proteins across the human proteome?"
+            },
+            {
+              "passage_id": "MED-4803#0",
+              "question": "What percentage of retail pork items sampled in Baton Rouge carried Staphylococcus aureus bacteria?"
+            },
+            {
+              "passage_id": "MED-980#0",
+              "question": "What combination of B vitamins was evaluated in the VITACOG clinical trial to slow brain shrinkage in mild cognitive impairment?"
+            }
+          ],
+          "graded": 50,
+          "copied_wording": 1,
+          "modes": {
+            "dense": {
+              "found_first": 0.56,
+              "found_in_top_5": 0.82,
+              "right_document_first": 0.8,
+              "spread_at_20": {
+                "questions": 20,
+                "low": 0.7,
+                "high": 0.95
+              }
+            },
+            "lexical": {
+              "found_first": 0.46,
+              "found_in_top_5": 0.82,
+              "right_document_first": 0.8,
+              "spread_at_20": {
+                "questions": 20,
+                "low": 0.65,
+                "high": 0.95
+              }
+            },
+            "rrf": {
+              "found_first": 0.5,
+              "found_in_top_5": 0.9,
+              "right_document_first": 0.84,
+              "spread_at_20": {
+                "questions": 20,
+                "low": 0.8,
+                "high": 1.0
+              }
+            },
+            "rerank": {
+              "found_first": 0.58,
+              "found_in_top_5": 0.94,
+              "right_document_first": 0.94,
+              "spread_at_20": {
+                "questions": 20,
+                "low": 0.85,
+                "high": 1.0
+              }
+            }
+          }
+        }
+      }
+    },
+    "fiqa": {
+      "set": "fiqa",
+      "sampled": 50,
+      "seed": 29,
+      "true_ndcg@10": {
+        "dense": 0.3734,
+        "lexical": 0.2157,
+        "rrf": 0.343,
+        "rerank": 0.375
+      },
+      "writers": {
+        "gemini-3.1-flash-lite": {
+          "questions": [
+            {
+              "passage_id": "430409#0",
+              "question": "What are the primary career paths for those studying financial theory in college?"
+            },
+            {
+              "passage_id": "277857#0",
+              "question": "Is it accurate to say the national mail system operates entirely without federal funding?"
+            },
+            {
+              "passage_id": "529509#0",
+              "question": "What steps should I take if I incorrectly handled a retirement distribution code in my tax software?"
+            },
+            {
+              "passage_id": "426624#0",
+              "question": "Why might taking out an auto loan be considered a poor financial decision beyond just interest costs?"
+            },
+            {
+              "passage_id": "194584#0",
+              "question": "What is the author's opinion on the hypocrisy regarding how different retailers are treated in online news coverage?"
+            },
+            {
+              "passage_id": "583788#0",
+              "question": "How can having a social safety net for job loss benefit the broader economy and individual workers?"
+            },
+            {
+              "passage_id": "234852#0",
+              "question": "What method can be used to protect oneself when shopping on websites that might be untrustworthy?"
+            },
+            {
+              "passage_id": "528077#1",
+              "question": "How can one determine an appropriate amount of life insurance for a spouse who does not earn a paycheck?"
+            },
+            {
+              "passage_id": "86532#0",
+              "question": "What should I do if I am worried about the security of a electronic fund transfer to a debit-linked account?"
+            },
+            {
+              "passage_id": "543856#0",
+              "question": "Can I pull out retirement funds before hitting retirement age if I feel my money is currently underperforming?"
+            },
+            {
+              "passage_id": "238215#0",
+              "question": "What restrictions or changes might I encounter if I hold employee stock options before my firm goes public?"
+            },
+            {
+              "passage_id": "389672#2",
+              "question": "Where can I find instructions on how to remove an automated message from a forum thread?"
+            },
+            {
+              "passage_id": "211094#0",
+              "question": "Why does the author believe that new government regulations won't kill the hobby of target shooting?"
+            },
+            {
+              "passage_id": "69909#0",
+              "question": "What is the argument for why the government must impose restrictions on businesses to protect society?"
+            },
+            {
+              "passage_id": "10634#0",
+              "question": "Does the passage from the famous personal finance book suggest that skepticism is a trait of successful people?"
+            },
+            {
+              "passage_id": "540292#0",
+              "question": "Can a taxpayer execute a transaction similar to a prohibited tax maneuver if they live in a different country?"
+            },
+            {
+              "passage_id": "97924#0",
+              "question": "What does the author believe is the true state of consumer financial health when you exclude the wealthiest individuals?"
+            },
+            {
+              "passage_id": "181447#0",
+              "question": "What is the speaker's reaction to a company complaining about a competitor's superior offering?"
+            },
+            {
+              "passage_id": "191110#0",
+              "question": "What can happen when you try to use a store's system for buying items online for local pickup?"
+            },
+            {
+              "passage_id": "16543#1",
+              "question": "Is it better to purchase long-term care insurance while younger or wait until you are older?"
+            },
+            {
+              "passage_id": "469835#1",
+              "question": "Why is regular portfolio adjustment a useful strategy for managing volatility in the market?"
+            },
+            {
+              "passage_id": "563122#0",
+              "question": "How does someone go about setting up an account for making international calls through a web-based service?"
+            },
+            {
+              "passage_id": "156297#0",
+              "question": "What are the concerns regarding economic recovery in nations facing strict government spending cuts?"
+            },
+            {
+              "passage_id": "377007#0",
+              "question": "What happens to my investment earnings if the company managing my assets changes the available options?"
+            },
+            {
+              "passage_id": "402051#3",
+              "question": "What considerations should be made regarding the future sale of current investments?"
+            },
+            {
+              "passage_id": "568111#0",
+              "question": "Why have real wages not seen a massive decline despite significant changes in the makeup of the labor force?"
+            },
+            {
+              "passage_id": "224231#3",
+              "question": "How can I figure out if it is worth the cost to switch my funds to an investment with a higher return?"
+            },
+            {
+              "passage_id": "68472#0",
+              "question": "Why might it be beneficial to switch an existing car loan from a large bank to a member-owned institution?"
+            },
+            {
+              "passage_id": "38159#0",
+              "question": "Why is it difficult to implement a tax system based on net worth rather than income?"
+            },
+            {
+              "passage_id": "348232#0",
+              "question": "What factors led to the decline of gambling-centered tourism in certain coastal areas?"
+            },
+            {
+              "passage_id": "544256#0",
+              "question": "What is a common reason for a decrease in computing speed for home and office equipment?"
+            },
+            {
+              "passage_id": "516797#0",
+              "question": "Is looking at profit margins by itself a reliable way to gauge if a business is doing well?"
+            },
+            {
+              "passage_id": "413966#0",
+              "question": "What were some of the ideas proposed during a discussion about the future of the economy at a top business school?"
+            },
+            {
+              "passage_id": "395800#0",
+              "question": "Are there financial assets you can hold that won't reduce your eligibility for university tuition support?"
+            },
+            {
+              "passage_id": "90066#0",
+              "question": "What should someone do if they are concerned about giving a large sum of money to a relative who is not good with finances?"
+            },
+            {
+              "passage_id": "337683#0",
+              "question": "How do you decide if an item is truly priced fairly, regardless of what the store labels it as?"
+            },
+            {
+              "passage_id": "10584#0",
+              "question": "How are historic price figures adjusted so that they can be compared in terms of modern purchasing power?"
+            },
+            {
+              "passage_id": "359979#0",
+              "question": "Why is it challenging to evaluate a teacher's performance based strictly on student outcomes?"
+            },
+            {
+              "passage_id": "257404#0",
+              "question": "What are the necessary steps to create and list a new exchange-traded fund?"
+            },
+            {
+              "passage_id": "511159#0",
+              "question": "Why is holding onto a poorly performing asset to reach the breakeven point considered a flawed psychological habit?"
+            },
+            {
+              "passage_id": "372196#0",
+              "question": "What is the typical average balance in a bank account used specifically for saving to pay recurring bills?"
+            },
+            {
+              "passage_id": "495898#1",
+              "question": "How did credit rating firms enable banks to profit from repackaging mortgages into complex financial products?"
+            },
+            {
+              "passage_id": "10673#0",
+              "question": "Is it a good idea to sign up for a contract that requires paying back a portion of future earnings?"
+            },
+            {
+              "passage_id": "487190#0",
+              "question": "What is the author's critique regarding the accuracy of a specific market analyst's predictions?"
+            },
+            {
+              "passage_id": "192726#0",
+              "question": "Why is it important to keep personal and business transactions separated in your financial records?"
+            },
+            {
+              "passage_id": "448578#0",
+              "question": "Why is using a standard performance metric often insufficient when evaluating hedge fund managers for investors?"
+            },
+            {
+              "passage_id": "362663#0",
+              "question": "What is the author's primary argument against the claim that young people are responsible for the failure of chain restaurants?"
+            },
+            {
+              "passage_id": "497436#0",
+              "question": "Is it reasonable to refinance a loan simply because the current lender has poor administrative processes?"
+            },
+            {
+              "passage_id": "394374#0",
+              "question": "Should one's choice of academic field be determined solely by the expected financial payoff of the degree?"
+            },
+            {
+              "passage_id": "328499#0",
+              "question": "Why would an investor purchase a bond that effectively pays them a negative return?"
+            }
+          ],
+          "graded": 50,
+          "copied_wording": 0,
+          "modes": {
+            "dense": {
+              "found_first": 0.14,
+              "found_in_top_5": 0.24,
+              "right_document_first": 0.14,
+              "spread_at_20": {
+                "questions": 20,
+                "low": 0.1,
+                "high": 0.4
+              }
+            },
+            "lexical": {
+              "found_first": 0.02,
+              "found_in_top_5": 0.06,
+              "right_document_first": 0.02,
+              "spread_at_20": {
+                "questions": 20,
+                "low": 0.0,
+                "high": 0.15
+              }
+            },
+            "rrf": {
+              "found_first": 0.04,
+              "found_in_top_5": 0.16,
+              "right_document_first": 0.04,
+              "spread_at_20": {
+                "questions": 20,
+                "low": 0.05,
+                "high": 0.3
+              }
+            },
+            "rerank": {
+              "found_first": 0.12,
+              "found_in_top_5": 0.22,
+              "right_document_first": 0.12,
+              "spread_at_20": {
+                "questions": 20,
+                "low": 0.1,
+                "high": 0.4
+              }
+            }
+          }
+        },
+        "gemini-3.7-flash": {
+          "questions": [
+            {
+              "passage_id": "430409#0",
+              "question": "Which field of academic finance relies predominantly on solving differential equations?"
+            },
+            {
+              "passage_id": "277857#0",
+              "question": "How much taxpayer money does Congress set aside each year for the Postal Service Fund?"
+            },
+            {
+              "passage_id": "529509#0",
+              "question": "Which tax form must be included with your return when reporting a code 2 distribution in TurboTax?"
+            },
+            {
+              "passage_id": "426624#0",
+              "question": "What is an estimated resale worth for a thirty thousand dollar vehicle after five to seven years?"
+            },
+            {
+              "passage_id": "194584#0",
+              "question": "Which retailers did Gawker suggest shoppers target instead of smaller businesses to save money?"
+            },
+            {
+              "passage_id": "583788#0",
+              "question": "In what way can mandatory unemployment insurance contributions encourage people to launch new businesses?"
+            },
+            {
+              "passage_id": "234852#0",
+              "question": "What kind of payment card alternative cannot be debited or billed?"
+            },
+            {
+              "passage_id": "528077#1",
+              "question": "How should someone calculate the life insurance policy amount needed for a stay-at-home spouse?"
+            },
+            {
+              "passage_id": "86532#0",
+              "question": "What outcome can be expected if money is routed directly to a sixteen-digit debit card number?"
+            },
+            {
+              "passage_id": "543856#0",
+              "question": "What is the minimum age threshold required to access funds stored in a UK pension?"
+            },
+            {
+              "passage_id": "238215#0",
+              "question": "What restriction prevents company insiders from immediately offloading equity after a firm goes public?"
+            },
+            {
+              "passage_id": "389672#2",
+              "question": "Which Reddit username has permission to trigger the deletion of the bot's post?"
+            },
+            {
+              "passage_id": "211094#0",
+              "question": "What customer tier is the company Freedom focusing on in the firearms and shooting market?"
+            },
+            {
+              "passage_id": "69909#0",
+              "question": "Why does the author argue that state regulation is necessary regarding human selfishness?"
+            },
+            {
+              "passage_id": "10634#0",
+              "question": "According to the excerpts from Rich Dad Poor Dad, what mindset prevents people from escaping poverty?"
+            },
+            {
+              "passage_id": "540292#0",
+              "question": "Do United States tax regulations regarding wash sales pertain to capital gains?"
+            },
+            {
+              "passage_id": "97924#0",
+              "question": "Which wealthy individuals are referenced to show the skewed distribution of surplus income in the US?"
+            },
+            {
+              "passage_id": "181447#0",
+              "question": "Why was Orbitz lodging complaints regarding Google's entry into the travel market?"
+            },
+            {
+              "passage_id": "191110#0",
+              "question": "What product did the customer attempt to order online for in-store pickup at Lowe's?"
+            },
+            {
+              "passage_id": "16543#1",
+              "question": "Why is it inadvisable to check future rate charts when shopping for long-term care insurance?"
+            },
+            {
+              "passage_id": "469835#1",
+              "question": "How does portfolio rebalancing benefit an investor during unpredictable market swings?"
+            },
+            {
+              "passage_id": "563122#0",
+              "question": "How many minutes of mobile calling to Pakistan are offered in the twenty-nine dollar VoIP bundle?"
+            },
+            {
+              "passage_id": "156297#0",
+              "question": "How many public sector employees was Greece planning to dismiss under its austerity package?"
+            },
+            {
+              "passage_id": "377007#0",
+              "question": "What must an employer legally disclose when workplace retirement investment options are modified?"
+            },
+            {
+              "passage_id": "402051#3",
+              "question": "What tax complication might occur with a mutual fund even if its overall value does not increase?"
+            },
+            {
+              "passage_id": "568111#0",
+              "question": "According to the passage, by about how much have modern wages dropped compared to previous earnings?"
+            },
+            {
+              "passage_id": "224231#3",
+              "question": "When does it make sense to invest immediately despite incurring a transaction charge from a broker?"
+            },
+            {
+              "passage_id": "68472#0",
+              "question": "Why was moving an auto loan from Wells Fargo to a credit union financially beneficial despite a slight rate hike?"
+            },
+            {
+              "passage_id": "38159#0",
+              "question": "What specific asset is targeted for taxation under a Georgian revenue system?"
+            },
+            {
+              "passage_id": "348232#0",
+              "question": "What mistaken assumption led to the development of massive casino resorts along the Atlantic City coast?"
+            },
+            {
+              "passage_id": "544256#0",
+              "question": "What negative consequence can arise from using desktop computers and laptops continuously for daily duties?"
+            },
+            {
+              "passage_id": "516797#0",
+              "question": "Which electronics corporation is noted as an outlier for maintaining steep profit margins on widespread retail goods?"
+            },
+            {
+              "passage_id": "413966#0",
+              "question": "What tax reform was suggested by a Harvard Business School professor to replace ordinary income taxation?"
+            },
+            {
+              "passage_id": "395800#0",
+              "question": "What recommendation is given to parents looking for ways to protect funds from student financial aid evaluations?"
+            },
+            {
+              "passage_id": "90066#0",
+              "question": "Who should be consulted when attempting to create a trust for a financially reckless relative?"
+            },
+            {
+              "passage_id": "337683#0",
+              "question": "How does the commenter decide if an item is reasonably priced rather than looking at promotional discounts?"
+            },
+            {
+              "passage_id": "10584#0",
+              "question": "What formula converts historical nominal index numbers into modern purchasing power using the CPI?"
+            },
+            {
+              "passage_id": "359979#0",
+              "question": "Why is judging an educator's effectiveness more challenging than evaluating manufacturing or sales personnel?"
+            },
+            {
+              "passage_id": "257404#0",
+              "question": "What asset threshold is typically required when securing a custodian bank to launch an ETF?"
+            },
+            {
+              "passage_id": "511159#0",
+              "question": "What downside occurs when a trader refuses to sell a losing stock in hopes of breaking even?"
+            },
+            {
+              "passage_id": "372196#0",
+              "question": "About how much money typically stays inside an account dedicated to saving periodically for multiple upcoming bills?"
+            },
+            {
+              "passage_id": "495898#1",
+              "question": "Which insurance company did financial institutions use to hedge risk when packaging mortgage bonds into CDOs?"
+            },
+            {
+              "passage_id": "10673#0",
+              "question": "What maximum multiple of the initial investment must be repaid under the described funding contract?"
+            },
+            {
+              "passage_id": "487190#0",
+              "question": "How long has analyst Douglas Kass maintained losing short positions against market indexes?"
+            },
+            {
+              "passage_id": "192726#0",
+              "question": "Why should small business operators avoid paying personal costs directly out of their commercial accounts?"
+            },
+            {
+              "passage_id": "448578#0",
+              "question": "Why do hedge fund investors generally disregard information ratios that compare funds to peer groups?"
+            },
+            {
+              "passage_id": "362663#0",
+              "question": "What does the author suggest is the real reason casual restaurant chains are seeing declining business?"
+            },
+            {
+              "passage_id": "497436#0",
+              "question": "What poor administrative practices prompted the homeowner to switch lenders and refinance their mortgage?"
+            },
+            {
+              "passage_id": "394374#0",
+              "question": "What is the occupation of the speaker who believes college degrees should have worth beyond pure financial ROI?"
+            },
+            {
+              "passage_id": "328499#0",
+              "question": "How do purchasers expect to profit when buying fixed-income securities that carry negative interest yields?"
+            }
+          ],
+          "graded": 50,
+          "copied_wording": 0,
+          "modes": {
+            "dense": {
+              "found_first": 0.26,
+              "found_in_top_5": 0.52,
+              "right_document_first": 0.26,
+              "spread_at_20": {
+                "questions": 20,
+                "low": 0.35,
+                "high": 0.7
+              }
+            },
+            "lexical": {
+              "found_first": 0.26,
+              "found_in_top_5": 0.34,
+              "right_document_first": 0.26,
+              "spread_at_20": {
+                "questions": 20,
+                "low": 0.15,
+                "high": 0.5
+              }
+            },
+            "rrf": {
+              "found_first": 0.3,
+              "found_in_top_5": 0.56,
+              "right_document_first": 0.3,
+              "spread_at_20": {
+                "questions": 20,
+                "low": 0.4,
+                "high": 0.75
+              }
+            },
+            "rerank": {
+              "found_first": 0.4,
+              "found_in_top_5": 0.64,
+              "right_document_first": 0.42,
+              "spread_at_20": {
+                "questions": 20,
+                "low": 0.45,
+                "high": 0.8
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "verdict": {
+    "writers": {
+      "gemini-3.1-flash-lite": {
+        "conditions": 12,
+        "spearman": 0.5849,
+        "rule_1_tracks_true_score": false,
+        "rule_2_good_set_scores_highest": true,
+        "rule_3_keyword_lowest_on_fiqa": true,
+        "passes": false,
+        "no_guide": false
+      },
+      "gemini-3.7-flash": {
+        "conditions": 12,
+        "spearman": 0.6503,
+        "rule_1_tracks_true_score": true,
+        "rule_2_good_set_scores_highest": true,
+        "rule_3_keyword_lowest_on_fiqa": true,
+        "passes": true,
+        "no_guide": false
+      }
+    },
+    "outcome": "rough guide"
+  }
+}
