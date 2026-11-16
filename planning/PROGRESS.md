@@ -5,6 +5,12 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-16 — milestone 29 item 4: one suggestion, backed by a number (₹0)
+
+- The self-test's report now ends with at most one **Fix first** line, only when the grade gives it a number, and naming the files it is about (all kept in the result). Copies that cost questions come first, then PDFs with no text, files sharing a name, files that would not open, copies that cost nothing. Missed questions beaten by a copy say so and are shown first. **Milestone 29 built, 24 of 37 (65%)**.
+- On item 3's library: "Remove the copy: 1 of the 6 missed questions was beaten by a copy of its own document"; 18 lines. Item 3's "two lost to the copy" corrected to one. Planted defects (loose copy match, order, cited questions hidden, empty notes as scans, unbounded names) each caught.
+- Does not prove: that removing the copy raises the score (not re-graded), or that the order of suggestions is the one a person would choose.
+
 ## 2026-11-16 — milestone 29 item 3: the self-test's report (₹0)
 
 - The grade now ends in a short report the assistant shows as written: one score with how far chance could move it, the missed questions named by file (saying so when another passage of the same file came first), and the documents search cannot use: a PDF with no text is called probably scanned, an empty file empty, and copies of another document are found word by word. **23 of 37 (62%)**.

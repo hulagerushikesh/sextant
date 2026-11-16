@@ -308,6 +308,79 @@ class TestTheReport:
         assert "report" in selftest.INSTRUCTIONS and "exactly" in selftest.INSTRUCTIONS
 
 
+def _advice(unusable: list, lost: list, missed: int) -> dict:
+    got = selftest.suggestion(unusable, lost, missed)
+    assert got is not None
+    return got
+
+
+class TestTheSuggestion:
+    def _with_copy(self) -> dict[str, tuple[str, dict]]:
+        return TestWhatCannotBeSearched()._with_copy()
+
+    def _graded(self) -> dict:
+        order = {
+            "q1": ["notes-copy#0"],
+            "q2": ["notes-copy#1"],
+            "q3": ["other#0"],
+            "hit": ["notes#0"],
+        }
+        # The miss that is not a copy's fault is asked first, so the report
+        # has to move the cited ones up to show them.
+        questions = [
+            {"passage_id": "notes#0", "question": "q3"},
+            {"passage_id": "notes#0", "question": "q1"},
+            {"passage_id": "notes#1", "question": "q2"},
+            {"passage_id": "notes#0", "question": "hit"},
+        ]
+        return selftest.grade(self._with_copy(), questions, _search_returning(order), [])
+
+    def test_copies_that_cost_questions_are_backed_by_the_count(self):
+        got = self._graded()
+        advice = got["suggestion"]
+        assert advice is not None
+        assert advice["kind"] == "remove_copies" and advice["count"] == 2
+        assert "**2 of the 3 missed questions**" in advice["text"]
+        assert advice["evidence"] == {"files": ["Notes copy"], "questions": ["q1", "q2"]}
+        assert f"**Fix first:** {advice['text']}" in got["report"]
+
+    def test_the_cited_questions_are_shown_and_marked(self):
+        report = self._graded()["report"]
+        lines = [line for line in report.splitlines() if line.startswith('- "')]
+        assert lines[0].startswith('- "q1"') and lines[1].startswith('- "q2"')
+        assert report.count("a copy of the same text") == 2
+        assert "the first result was from other#0." in report
+
+    def test_a_copy_that_cost_nothing_gives_way_to_a_scanned_pdf(self):
+        copy = {"name": "notes copy.md", "kind": "duplicate", "why": ""}
+        scan = {"name": "scan.pdf", "kind": "no_text", "why": ""}
+        assert _advice([scan, copy], [], 3)["kind"] == "recognise_text"
+        lost = [{"question": "q"}]
+        assert _advice([scan, copy], lost, 3)["kind"] == "remove_copies"
+        assert _advice([copy], [], 3)["kind"] == "remove_copies"
+
+    def test_the_order_after_that(self):
+        def kinds(*present: str) -> str:
+            unusable = [{"name": f"{k}.md", "kind": k, "why": ""} for k in present]
+            return _advice(unusable, [], 0)["kind"]
+
+        assert kinds("duplicate", "unreadable", "same_name") == "rename"
+        assert kinds("duplicate", "unreadable") == "check_unreadable"
+
+    def test_an_empty_note_or_nothing_found_suggests_nothing(self):
+        empty = [{"name": "blank.txt", "kind": "no_text", "why": "is empty"}]
+        assert selftest.suggestion(empty, [], 2) is None
+        got = TestTheReport()._grade(5, 2, [])
+        assert got["suggestion"] is None and "Fix first" not in got["report"]
+
+    def test_it_names_a_few_files_and_keeps_them_all(self):
+        scans = [{"name": f"scan{i}.pdf", "kind": "no_text", "why": ""} for i in range(6)]
+        advice = _advice(scans, [], 0)
+        assert advice["count"] == 6 and len(advice["evidence"]["files"]) == 6
+        assert "**6 PDFs with no readable text**" in advice["text"]
+        assert "scan3.pdf and 2 more" in advice["text"] and "scan4.pdf" not in advice["text"]
+
+
 class TestOnARealLibrary:
     """End to end through the knowledge base, with real models."""
 

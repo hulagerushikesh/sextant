@@ -106,3 +106,45 @@ empty store (models cached): indexed in 9 s, 20 questions I wrote graded in
 3. **Only a chosen folder's failures are known.** A file loaded with the
    ingest command that failed was never recorded, so without a folder the
    report says it cannot see them.
+
+## One suggestion (milestone 29, item 4)
+
+The report now closes with at most one line, **Fix first:**, and only when it
+can back the line with a number from the same grade. It names the files it is
+about (four, then "and N more"; every name stays in the result's `suggestion`),
+so the evidence is on the same screen. In order:
+
+1. **Copies that cost questions.** A missed question whose first result was a
+   copy of its own document. The missed lines say "a copy of the same text"
+   for each one and are moved to the top of the list, so the questions the
+   number counts are the ones shown.
+2. **PDFs with no text** — probably scanned; run them through text
+   recognition (OCR).
+3. **Files sharing a name** with another, of which only one is indexed.
+4. **Files that would not open.**
+5. **Copies that cost nothing measured.**
+
+Nothing else is ever suggested: an empty text file has no fix worth naming,
+and a miss within the right document has none a person can make. With none of
+these, the line is left out.
+
+**Tried on the same fresh library** as item 3, the same 20 questions: 18
+lines, ending *"Fix first: Remove the copy (selftest-copy.md): 1 of the 6
+missed questions was beaten by a copy of its own document."* Planted defects
+(any wrong first result counted as a copy's fault, scanned files put ahead of a
+costly copy, the cited questions not moved up, empty notes treated as scans,
+the name list unbounded) were each caught by a test.
+
+**Reading it honestly.**
+
+1. **A correction to item 3.** That section said two misses were lost to the
+   planted copy. By this rule it is one: the other question came from a
+   different note and the copy merely ranked first. Whether a copy crowds out
+   unrelated documents is not measured, so it is not counted.
+2. **The order is a judgement, not a measurement.** A copy that cost one
+   question beat a scanned PDF that search cannot read at all. A measured
+   effect on the score was put first because it is the only kind the grade
+   observes; a person could reasonably weigh it the other way.
+3. **"Would raise the score" is not claimed.** Removing the copy is likely to
+   help those questions, but the report does not re-grade without it, so it
+   says what happened, not what would.
