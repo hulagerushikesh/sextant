@@ -27,10 +27,12 @@ import json
 import re
 import sys
 from dataclasses import dataclass
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from typing import Any
 
 from sextant import settings
+from sextant.eval import public_sets
 from sextant.eval.harness import CORPUS_DIR, REGRESSION_TOLERANCE
 
 EVAL_DIR = Path(__file__).resolve().parent
@@ -262,6 +264,171 @@ def _cost(root: Path) -> list[str]:
 
 
 SET_NAMES = {"fiqa": "FiQA", "nfcorpus": "NFCorpus", "scifact": "SciFact"}
+PUBLIC_SETS = ("nfcorpus", "scifact", "fiqa")  # smallest first
+# The set a stranger is told to reproduce: the smallest download.
+REPRODUCE_SET = "nfcorpus"
+BASELINES = {
+    "bm25": "plain BM25 (the BEIR paper's)",
+    "minilm_dense": "the published score of the same meaning model",
+    "bm25_ce": "the paper's BM25 + re-reading baseline",
+}
+# Each stage against the plain baselines it could be replaced by. `None` is
+# the stage before it in the product: fusion must beat meaning search alone.
+COMPARED = (
+    ("dense", "Its meaning search", ("minilm_dense",)),
+    ("lexical", "Its keyword search", ("bm25",)),
+    ("rrf", "Fusing keyword with meaning search", (None,)),
+    ("rerank", "The full search", ("bm25", "minilm_dense", "bm25_ce")),
+)
+
+
+def _where(names: list[str]) -> str:
+    if len(names) == len(PUBLIC_SETS):
+        return "all three sets"
+    labels = [SET_NAMES[name] for name in names]
+    return labels[0] if len(labels) == 1 else " and ".join(labels)
+
+
+def _public() -> tuple[dict[str, Any], dict[str, Any]]:
+    loaded = _measurement("public-sets.json")
+    return loaded["sets"], loaded["published"]
+
+
+def _score(run: dict[str, Any], mode: str) -> float:
+    return float(run["modes"][mode]["ndcg@10"])
+
+
+def _three(value: float) -> str:
+    """Three places, halves rounded up as the notes round them (0.3635 -> 0.364)."""
+    return str(Decimal(str(value)).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP))
+
+
+def public_losses() -> list[str]:
+    """Every place a stage scores below a plain baseline, one line per pairing.
+
+    Computed, so a re-run that changes who wins changes the page's first
+    screen with it -- the milestone's rule is that a loss is said there.
+    """
+    runs, published = _public()
+    lines = []
+    for mode, subject, baselines in COMPARED:
+        for baseline in baselines:
+            lost = []
+            for name in PUBLIC_SETS:
+                ours = _score(runs[name], mode)
+                theirs = (
+                    _score(runs[name], "dense") if baseline is None else published[name][baseline]
+                )
+                if ours < theirs:
+                    lost.append((name, ours, theirs))
+            if not lost:
+                continue
+            against = "meaning search alone" if baseline is None else BASELINES[baseline]
+            figures = "; ".join(
+                f"{SET_NAMES[name]} {_three(ours)} against {_three(theirs)}"
+                for name, ours, theirs in lost
+            )
+            verb = "lowers the score below" if baseline is None else "loses to"
+            everywhere = " on all three sets" if len(lost) == len(PUBLIC_SETS) else ""
+            lines.append(f"- **{subject} {verb} {against}**{everywhere}: {figures}.")
+    return lines
+
+
+def _beats_bm25_ce() -> str:
+    """Where the shipped pipeline beats the strongest published baseline."""
+    runs, published = _public()
+    won = [n for n in PUBLIC_SETS if _score(runs[n], "rerank") > published[n]["bm25_ce"]]
+    return _where(won) if won else "none of them"
+
+
+def _public_wins() -> str:
+    where = _beats_bm25_ce()
+    if where == "none of them":
+        return "The full search beats the paper's BM25 + re-reading baseline on none of them."
+    return (
+        f"The full search, as shipped, beats the paper's BM25 + re-reading baseline on "
+        f"{where}, so the losses above are in stages the product does not stop at."
+    )
+
+
+def _first_screen() -> list[str]:
+    losses = public_losses()
+    return [
+        "## Where it loses to a plain baseline",
+        "",
+        "On three public test sets (NFCorpus, SciFact and FiQA from BEIR, scored with",
+        "the field's standard measure, nDCG@10, beside published figures):",
+        "",
+        *(losses or ["- Nowhere: every stage beats the plain baseline it is compared with."]),
+        "",
+        _public_wins() + " The tables are [below](#on-public-test-sets).",
+    ]
+
+
+def _reproduce_minutes(run: dict[str, Any]) -> int:
+    searching = sum(m["ms_per_question"] for m in run["modes"].values()) * run["questions"]
+    return max(1, round((run["ingest_seconds"] + searching / 1000) / 60))
+
+
+def _public_tables() -> list[str]:
+    runs, published = _public()
+    lines = [
+        "| Set | documents | questions | meaning | keyword | fused | full search |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for name in PUBLIC_SETS:
+        run = runs[name]
+        cells = " | ".join(_three(_score(run, mode)) for mode, _ in MODES)
+        lines.append(
+            f"| {SET_NAMES[name]} | {run['stored']['documents']:,} | {run['questions']} "
+            f"| {cells} |"
+        )
+    lines += [
+        "",
+        "Published, same measure and split:",
+        "",
+        "| Set | plain BM25 | same meaning model | BM25 + re-reading |",
+        "| --- | --- | --- | --- |",
+    ]
+    for name in PUBLIC_SETS:
+        row = published[name]
+        lines.append(
+            f"| {SET_NAMES[name]} | {_three(row['bm25'])} | {_three(row['minilm_dense'])} "
+            f"| {_three(row['bm25_ce'])} |"
+        )
+    return lines
+
+
+def _public_section() -> list[str]:
+    runs, _ = _public()
+    run = runs[REPRODUCE_SET]
+    _, size = public_sets.ARCHIVES[REPRODUCE_SET]
+    return [
+        "Fixed documents and questions, judged by people who never saw this code. "
+        "Scores are nDCG@10 on each set's test questions, graded, as the BEIR paper "
+        "reports them:",
+        "",
+        *_public_tables(),
+        "",
+        "Two things differ from the published runs: sextant's keyword search is its own "
+        "index, not the paper's Elasticsearch, and each stage hands on at most "
+        f"{run['candidates_per_stage']} passages. Plain BM25 and BM25 + re-reading are "
+        "from the BEIR paper (Table 2); the meaning model's figure is from the MTEB "
+        "results. Method and sources: "
+        "[`public-sets.md`](../learning/public-sets.md).",
+        "",
+        "Reproduce one set:",
+        "",
+        "```bash",
+        f"python -m sextant.eval.public_sets --set {REPRODUCE_SET} --check",
+        "```",
+        "",
+        f"That downloads {SET_NAMES[REPRODUCE_SET]} ({size / 1e6:.1f} MB) from the BEIR "
+        "host, refuses it unless its checksum is the one BEIR publishes, scores all four "
+        "stages and fails if any lands more than "
+        f"{public_sets.REPRODUCE_TOLERANCE} from the table above. About "
+        f"{_reproduce_minutes(run)} minutes on a MacBook Air; no key, nothing spent.",
+    ]
 
 
 def _speed() -> list[str]:
@@ -321,6 +488,8 @@ def render() -> str:
         "> measurement files. Do not edit it by hand: a test fails when this page and",
         "> the files disagree.",
         "",
+        *_first_screen(),
+        "",
         "## How good is it",
         "",
         f"On {small['questions']} test questions over {documents} documents, the shipped "
@@ -335,6 +504,10 @@ def render() -> str:
         f"paper, {large_answerable} with an answer, graded by page:",
         "",
         *_comparison(large),
+        "",
+        "## On public test sets",
+        "",
+        *_public_section(),
         "",
         "## Knowing when not to answer",
         "",
@@ -370,9 +543,9 @@ def render() -> str:
         "compares the run against the committed figures and fails on any drop over "
         f"{REGRESSION_TOLERANCE}; that check runs on every change to the project.",
         "",
-        "What these numbers do **not** show: the questions and the documents were",
-        "written together, so this grades the search pipeline, not how it will do on",
-        "someone else's library.",
+        "What these numbers do **not** show: the first two tables' questions and",
+        "documents were written together, and the public sets are three particular",
+        "collections, so neither says how the search will do on someone else's library.",
         "",
     ]
     return "\n".join(lines)
@@ -392,6 +565,14 @@ def render_summary() -> str:
         "",
         f"{small['questions']} test questions over {documents} documents. Asked "
         f"{unanswerable} questions those documents cannot answer, it declines {blocked}.",
+        "",
+        f"On three public test sets (BEIR) the full search beats the published BM25 + "
+        f"re-reading baseline on {_beats_bm25_ce()}"
+        + (
+            "; where a stage loses to a plain baseline is the first thing on the results page."
+            if public_losses()
+            else ", and no stage loses to a plain baseline."
+        ),
     ]
     return "\n".join(lines)
 

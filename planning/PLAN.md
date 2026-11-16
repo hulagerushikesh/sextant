@@ -278,8 +278,8 @@ If a record needs more than its limit, the extra goes in the commit message.
 ## 8 · Scoreboard
 
 **Build goal:** complete (phases 0–15, milestones 16–22).
-**Plan:** **19 of 37 items (51%).**
-**Current item:** milestone 28, item 4 — the results page and its one command cover the public sets.
+**Plan:** **20 of 37 items (54%).**
+**Current item:** the milestone 28 decision point (section 5) is the owner's; then milestone 29, item 1 — the self-test. Milestone 26 waits on the owner.
 
 | Milestone | Items | Done | State |
 | --- | --- | --- | --- |
@@ -288,7 +288,7 @@ If a record needs more than its limit, the extra goes in the commit message.
 | 25 · Proof on one screen | 3 | 3 | done 2026-11-13: [`docs/RESULTS.md`](../docs/RESULTS.md) is generated and tested; the owner chose screenshots only. **Rule not yet ticked — the owner confirms** |
 | 27 · One click | 5 | 5 | done 2026-11-15: 0.10.0 on the index with working links, listed in the official MCP registry. **Rule not yet ticked: it needs the owner's own 3-minute try in Claude Desktop**; item 3: no torch, 166 MB download (476 MB on disk), first answer 7 s, every figure unchanged. Item 4: a cold first run (empty model cache) prints nothing on stderr, then the server's log is four ordinary lines |
 | 26 · Three people | 3 | 0 | runs after 27, so they get the one-click version |
-| 28 · Numbers anyone can compare | 4 | 3 | item 3 done 2026-11-16: 150-token passages and bge-small both stay rejected on the public sets; after the reranker bge moves the answer by at most 0.011 ([`rejected-retest.md`](../learning/rejected-retest.md)). Item 2 done 2026-11-16: 650 ms for the slowest 1 in 20 searches at 85,000 passages, 1.0 GB — not slow, faster index types stay parked. Item 1 done 2026-11-16: the full pipeline beats the paper's BM25 + cross-encoder on all three sets; sextant's keyword stage loses to the paper's BM25 on all three, and on FiQA fusing it in lowers the score ([`public-sets.md`](../learning/public-sets.md)) |
+| 28 · Numbers anyone can compare | 4 | 4 | done 2026-11-16. **Rule not yet ticked — the owner confirms.** Item 4: the results page opens with where a stage loses to a plain baseline (computed, so a re-run that changes it changes the page), carries the public tables, and gives one command that fetches NFCorpus, checks BEIR's checksum and fails on any stage more than 0.005 off. Item 3 done 2026-11-16: 150-token passages and bge-small both stay rejected on the public sets; after the reranker bge moves the answer by at most 0.011 ([`rejected-retest.md`](../learning/rejected-retest.md)). Item 2 done 2026-11-16: 650 ms for the slowest 1 in 20 searches at 85,000 passages, 1.0 GB — not slow, faster index types stay parked. Item 1 done 2026-11-16: the full pipeline beats the paper's BM25 + cross-encoder on all three sets; sextant's keyword stage loses to the paper's BM25 on all three, and on FiQA fusing it in lowers the score ([`public-sets.md`](../learning/public-sets.md)) |
 | 29 · Report card for your library | 4 | 0 | — |
 | 30 · What the first users stopped at | 3 | 0 | items chosen from milestone 26's evidence |
 | 31 · Launch | 4 | 0 | — |

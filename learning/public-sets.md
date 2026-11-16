@@ -87,3 +87,14 @@ search and costs the same at 9,600 chunks as at 85,000 (636, 941, 743 ms per
 question across the three sets — it tracks passage length, not library size);
 the keyword stage is the part that grows (4 ms → 67 ms). The figures are on
 the results page, generated from `sextant/eval/scale.json`.
+
+## Reproduced with one command (milestone 28, item 4)
+
+`python -m sextant.eval.public_sets --set nfcorpus --check` fetches the
+archive, refuses it unless its MD5 is BEIR's, scores all four stages and
+fails if any is more than 0.005 from the committed run. Run 2026-11-16 from a
+fresh cache (the archive copied in, so nothing was downloaded): 401 s, 0.6 GB
+peak, passed. Keyword search came out identical (0.2993); the others moved:
+meaning 0.3116 → 0.3155, fused 0.3377 → 0.3389, full 0.3635 → 0.3632. So a
+rerun is not bit-for-bit, and NFCorpus meaning search's 0.004 shortfall
+against the published MiniLM figure is the size of that run-to-run drift.

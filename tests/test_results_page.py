@@ -13,7 +13,7 @@ import re
 import pytest
 
 from sextant import settings
-from sextant.eval import results_page
+from sextant.eval import public_sets, results_page
 
 
 def _page() -> str:
@@ -128,3 +128,53 @@ class TestThePageSaysWhereItCameFrom:
         with pytest.raises(results_page.StaleSource, match="checkout"):
             results_page.render()
         assert results_page.main([]) == 1
+
+
+class TestTheFirstScreenSaysWhereItLoses:
+    """Milestone 28's rule: a loss to a plain baseline is said in the first screen."""
+
+    def test_it_comes_before_everything_else(self):
+        page = _page()
+        assert page.index("## Where it loses to a plain baseline") < page.index(
+            "## How good is it"
+        )
+        first_screen = "\n".join(page.splitlines()[:30])
+        for line in results_page.public_losses():
+            assert line in first_screen
+
+    def test_the_two_known_losses_are_said(self):
+        losses = "\n".join(results_page.public_losses())
+        assert "**Its keyword search loses to plain BM25 (the BEIR paper's)** on all three" in (
+            losses
+        )
+        assert "below meaning search alone**: FiQA 0.341 against 0.372" in losses
+
+    def test_a_new_loss_in_the_measurement_appears(self, monkeypatch):
+        real = results_page._measurement
+
+        def worse(name: str):
+            loaded = real(name)
+            if name == "public-sets.json":
+                loaded["sets"]["scifact"]["modes"]["rerank"]["ndcg@10"] = 0.5
+            return loaded
+
+        monkeypatch.setattr(results_page, "_measurement", worse)
+        losses = "\n".join(results_page.public_losses())
+        assert "**The full search loses to the paper's BM25 + re-reading baseline**" in losses
+        assert "SciFact 0.500 against 0.688" in losses
+        assert results_page.render() != _page()
+
+    def test_no_loss_is_said_as_none(self, monkeypatch):
+        monkeypatch.setattr(results_page, "public_losses", lambda: [])
+        assert "- Nowhere" in "\n".join(results_page._first_screen())
+
+    def test_figures_round_as_the_notes_do(self):
+        assert results_page._three(0.3635) == "0.364"
+        assert results_page._three(0.31594) == "0.316"
+
+
+class TestAStrangerCanReproduceOneSet:
+    def test_the_page_gives_the_one_command_for_a_set_it_can_fetch(self):
+        command = f"python -m sextant.eval.public_sets --set {results_page.REPRODUCE_SET} --check"
+        assert command in _page()
+        assert results_page.REPRODUCE_SET in public_sets.ARCHIVES

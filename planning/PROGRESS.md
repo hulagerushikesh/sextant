@@ -5,6 +5,12 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-16 — milestone 28 item 4: the public sets on the results page, one command to reproduce (₹0)
+
+- The results page now opens with **where a stage loses to a plain baseline**: keyword search below plain BM25 on all three sets, fusion below meaning search alone on FiQA, and meaning search 0.004 below the published figure on NFCorpus. It is computed, so a re-run that changes who wins changes the first screen. Public tables follow. **Milestone 28 done, 20 of 37 (54%)**; its rule is the owner's to tick.
+- One command fetches NFCorpus, checks BEIR's checksum, scores, and fails on any stage more than 0.005 off. Run from a fresh cache: passed in 7 minutes, 0.6 GB; meaning search moved 0.004 between runs, so reruns are close, not identical. Planted defects (checksum, unsafe unzip, hidden loss) each caught.
+- Does not prove: that a stranger has run it, or that the download works from another network; the download path was tested on a local file only.
+
 ## 2026-11-16 — milestone 28 item 3: the two closest rejected ideas, re-tested (₹0)
 
 - Rules written and pushed before any run. **Both stay rejected.** 150-token passages: the full search fell 0.005 on NFCorpus where it had to gain 0.03, so the larger sets were not needed. bge-small: meaning search gained on all three sets (+0.036, +0.049, +0.014) but FiQA missed the 0.03 bar; **after the reranker it moves the answer by at most 0.011.** **19 of 37 (51%)**.
