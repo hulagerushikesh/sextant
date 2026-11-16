@@ -118,7 +118,7 @@ Cursor yet.
 | `kb_ingest` | Adds documents; re-using an id replaces the old version |
 | `kb_stats` | Library size, search model, where it is stored |
 | `kb_ann_benchmark`, `kb_ann_compare` | Compare index types on your own library |
-| `kb_selftest_sample`, `kb_selftest_grade` | A self-test: your assistant writes a question for a sample of passages and sextant checks whether search finds each one. Ask *"how well does search work on my documents?"*. A rough guide until it is checked against known answers |
+| `kb_selftest_sample`, `kb_selftest_grade` | A self-test: your assistant writes a question for a sample of passages and sextant checks whether search finds each one. Ask *"how well does search work on my documents?"*. It answers with a short report: one score with how far chance could move it, the questions it missed, and the files search cannot use (scanned, empty or copies). A rough guide: on public test sets it followed true quality only roughly |
 
 Your library is stored in your user-data folder (set `SEXTANT_CHROMA_DIR` to
 move it), never inside the install, so reinstalling does not lose it.

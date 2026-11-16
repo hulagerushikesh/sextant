@@ -55,3 +55,54 @@ Grading took 10 s.
 at an empty one, mount `sextant-kb`, and ask the assistant *"how well does
 search work on my documents?"*. Pass `seed: 29`, size 20, to get this sample
 of this folder.
+
+---
+
+## The report (milestone 29, item 3), 2026-11-16
+
+**What changed.** `kb_selftest_grade` now ends in a `report` the assistant is
+told to show exactly as written, in three parts:
+
+1. **One score with its chance range.** "14 of 20 questions (70%)", then how
+   far chance alone could move a score from that many questions: the graded
+   questions resampled 2,000 times with a fixed seed, 5th to 95th percentile.
+   It is the same calculation item 2 used for its spread, now one function.
+   Then item 2's verdict in one sentence: a rough guide, comparable only with
+   the same assistant's earlier scores.
+2. **The questions it missed**, five written out and the rest counted. Each
+   names its file and what came first instead; when another passage of the
+   same file came first, it says so, since that is a near miss and not a
+   wrong document.
+3. **Documents search cannot use.** Files the folder pass could not store,
+   now with a kind as well as a reason: a PDF that loads to no words is called
+   probably scanned and needing text recognition (OCR), an empty text file
+   is called empty, and two files with one name or a file that will not open
+   keep their old reasons. Then documents holding the same words as another
+   (compared word by word, so other capitals or line breaks still count).
+   Every file is counted, not only the first twenty `kb_stats` lists.
+
+Documents are named by file, not title: a person knows their folder by file
+names, and a copy shares its original's title.
+
+**Tried on a fresh library.** This folder's 23 notes plus three planted
+problems (an empty text file, a one-page PDF holding only a drawn shape, and
+a copy of this note under another name), indexed by the folder pass into an
+empty store (models cached): indexed in 9 s, 20 questions I wrote graded in
+10 s. The report came to 17 lines:
+
+- **14 of 20 (70%)**, chance range 55% to 85%;
+- 6 missed: two lost to another passage of the same note, and two lost to
+  the planted copy, which is the copy problem showing up in the score;
+- all three planted problems listed, scanned PDF and empty file first.
+
+**Reading it honestly.**
+
+1. **"One screen" is checked by a test, not by a reader.** A test caps the
+   report at 25 lines with 50 misses and 30 unreadable files. Whether a
+   non-engineer understands it is the item's done-when, and the owner's call.
+2. **"Probably scanned" is a guess from no text at all.** A PDF with a few
+   scanned pages among typed ones is stored without them and is not listed
+   here. Counting those pages is item 4's kind of suggestion.
+3. **Only a chosen folder's failures are known.** A file loaded with the
+   ingest command that failed was never recorded, so without a folder the
+   report says it cannot see them.

@@ -5,6 +5,12 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-16 — milestone 29 item 3: the self-test's report (₹0)
+
+- The grade now ends in a short report the assistant shows as written: one score with how far chance could move it, the missed questions named by file (saying so when another passage of the same file came first), and the documents search cannot use: a PDF with no text is called probably scanned, an empty file empty, and copies of another document are found word by word. **23 of 37 (62%)**.
+- On a fresh 23-note library with three planted problems: 14 of 20 (70%, chance 55–85%), all three problems listed, two misses lost to the planted copy; 17 lines. Planted defects (copy match, order, same-file wording, bound, lost kind) each caught.
+- Does not prove: that a non-engineer reads it in one screen (the owner's call), or anything about PDFs with only some scanned pages, which are stored without them and not listed.
+
 ## 2026-11-16 — milestone 29 item 2: is the self-test honest? Rough guide (₹6.5)
 
 - Rule written and pushed before the run. On SciFact, NFCorpus and FiQA, 50 sampled passages each, two Gemini models wrote one question per passage; each set of questions was graded under all four search modes beside the true nDCG@10, which reproduced within 0.005. **22 of 37 (59%)**.

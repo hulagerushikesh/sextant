@@ -156,6 +156,158 @@ class TestTheGrade:
         assert "rough guide" in got["how_to_read"]
 
 
+class TestTheChanceRange:
+    def test_all_found_cannot_move(self):
+        assert selftest.chance_range([1] * 20) == (1.0, 1.0)
+
+    def test_half_found_moves_both_ways_and_more_questions_narrow_it(self):
+        ranks = [1, None] * 25
+        low20, high20 = selftest.chance_range(ranks, n=20) or (0, 0)
+        low50, high50 = selftest.chance_range(ranks, n=50) or (0, 0)
+        assert low20 < 0.5 < high20
+        assert high50 - low50 < high20 - low20
+
+    def test_rank_six_is_a_miss_and_nothing_graded_is_no_range(self):
+        assert selftest.chance_range([6] * 10) == (0.0, 0.0)
+        assert selftest.chance_range([]) is None
+
+    def test_one_grade_always_reports_one_range(self):
+        ranks = [1, 3, None, 7, 2] * 4
+        assert selftest.chance_range(ranks) == selftest.chance_range(ranks)
+
+
+class TestWhatCannotBeSearched:
+    def _with_copy(self) -> dict[str, tuple[str, dict]]:
+        corpus = _corpus({"notes": 2, "other": 2})
+        for i in range(2):
+            text, meta = corpus[f"notes#{i}"]
+            # Same words, other capitals and line breaks: still a copy.
+            corpus[f"notes-copy#{i}"] = (
+                text.upper().replace(" ", "\n"),
+                {**meta, "document_id": "notes-copy", "title": "Notes copy"},
+            )
+        return corpus
+
+    def test_a_copy_is_found_against_the_first_in_order(self):
+        assert selftest.duplicates(self._with_copy()) == [
+            {
+                "document_id": "notes-copy",
+                "name": "Notes copy",
+                "same_as": "notes",
+                "same_as_name": "Notes",
+            }
+        ]
+
+    def test_a_copy_is_named_by_its_file_when_it_has_one(self):
+        corpus = self._with_copy()
+        for chunk_id, (text, meta) in list(corpus.items()):
+            # Two copies of one note share a title; only the file tells them apart.
+            corpus[chunk_id] = (
+                text,
+                {**meta, "title": "Notes", "source": f"{meta['document_id']}.md"},
+            )
+        got = selftest.cannot_search(corpus, None)
+        assert got[0]["name"] == "notes-copy.md" and "same text as notes.md" in got[0]["why"]
+
+    def test_a_shared_passage_is_not_a_copy(self):
+        corpus = _corpus({"a": 2, "b": 2})
+        corpus["b#0"] = (corpus["a#0"][0], corpus["b#0"][1])
+        assert selftest.duplicates(corpus) == []
+
+    def test_an_overview_does_not_make_two_documents_differ(self):
+        corpus = self._with_copy()
+        corpus["notes#summary"] = ("an overview", {"document_id": "notes", "kind": SUMMARY_KIND})
+        assert [d["document_id"] for d in selftest.duplicates(corpus)] == ["notes-copy"]
+
+    def test_scanned_and_empty_files_come_first_then_copies(self):
+        skipped = [
+            {"file": "same/notes.md", "reason": "has the same name", "kind": "same_name"},
+            {"file": "scan.pdf", "reason": "probably a scanned PDF", "kind": "no_text"},
+        ]
+        got = selftest.cannot_search(self._with_copy(), skipped)
+        assert [d["kind"] for d in got] == ["no_text", "same_name", "duplicate"]
+        assert got[2]["name"] == "Notes copy" and "same text as Notes" in got[2]["why"]
+
+
+class TestTheReport:
+    CORPUS = _corpus({"a": 3, "b": 3})
+
+    def _grade(self, ranks_found: int, missed: int, not_indexed=None) -> dict:
+        order = {f"hit{i}": ["a#0"] for i in range(ranks_found)}
+        order |= {f"miss{i}": ["b#0"] for i in range(missed)}
+        questions = [{"passage_id": "a#0", "question": q} for q in order]
+        return selftest.grade(self.CORPUS, questions, _search_returning(order), not_indexed)
+
+    def test_one_score_with_its_chance_range_and_the_rough_guide(self):
+        got = self._grade(15, 5)
+        assert got["score"]["found_in_top_5"] == 15 and got["score"]["of"] == 20
+        low, high = got["score"]["chance_low"], got["score"]["chance_high"]
+        assert low < 0.75 < high
+        report = got["report"]
+        assert "**15 of 20 questions (75%)**" in report
+        assert f"from {round(100 * low)}% to {round(100 * high)}%" in report
+        assert selftest.ROUGH_GUIDE in report
+
+    def test_the_missed_questions_are_named_and_bounded(self):
+        report = self._grade(10, 8)["report"]
+        assert "**Questions it missed (8):**" in report
+        assert report.count('- "miss') == selftest.REPORTED_MISSES
+        assert "- and 3 more." in report
+        assert "the first result was from b#0" in report
+
+    def test_another_passage_of_the_same_document_is_said_plainly(self):
+        order = {"q": ["a#2", "a#0"] * 3}
+        got = selftest.grade(
+            self.CORPUS,
+            [{"passage_id": "a#1", "question": "q"}],
+            _search_returning(order),
+        )
+        assert "another passage of the same document came first" in got["report"]
+
+    def test_every_unusable_document_is_counted_and_a_screenful_shown(self):
+        skipped = [
+            {"file": f"scan{i}.pdf", "reason": "probably a scanned PDF", "kind": "no_text"}
+            for i in range(selftest.REPORTED_DOCUMENTS + 4)
+        ]
+        got = self._grade(20, 0, skipped)
+        assert len(got["cannot_search"]) == selftest.REPORTED_DOCUMENTS + 4
+        assert (
+            f"**Documents search cannot use ({selftest.REPORTED_DOCUMENTS + 4}):**"
+            in (got["report"])
+        )
+        assert "- and 4 more." in got["report"]
+        assert "**No question missed.**" in got["report"]
+
+    def test_a_clean_folder_says_so_and_no_folder_says_what_it_cannot_see(self):
+        assert "Every file in the folder was indexed" in self._grade(5, 0, [])["report"]
+        assert "only when the library is a folder" in self._grade(5, 0, None)["report"]
+
+    def test_copied_questions_are_counted_in_the_caveat(self):
+        text = self.CORPUS["a#0"][0]
+        copied = "Why does " + " ".join(text.split()[3:12]) + "?"
+        got = selftest.grade(
+            self.CORPUS,
+            [{"passage_id": "a#0", "question": copied}],
+            _search_returning({copied: ["a#0"]}),
+        )
+        assert "1 of the questions copied the passage's wording" in got["report"]
+
+    def test_nothing_graded_is_no_score_not_zero(self):
+        got = selftest.grade(
+            self.CORPUS, [{"passage_id": "nope", "question": "q"}], _search_returning({})
+        )
+        assert got["report"].startswith("No question could be graded")
+        assert got["score"]["chance_low"] is None
+
+    def test_it_fits_one_screen(self):
+        skipped = [{"file": f"f{i}.pdf", "reason": "x" * 60, "kind": "no_text"} for i in range(30)]
+        report = self._grade(0, selftest.MAX_SIZE, skipped)["report"]
+        assert len(report.splitlines()) <= 25
+
+    def test_the_assistant_is_told_to_show_it_as_it_is(self):
+        assert "report" in selftest.INSTRUCTIONS and "exactly" in selftest.INSTRUCTIONS
+
+
 class TestOnARealLibrary:
     """End to end through the knowledge base, with real models."""
 
@@ -188,6 +340,14 @@ class TestOnARealLibrary:
         assert got["questions"] == len(questions)
         assert got["found_first"] == 1.0, got["results"]
         assert got["copied_wording"] == 0
+        assert f"**{len(questions)} of {len(questions)} questions (100%)**" in got["report"]
+        assert got["cannot_search"] == []
+
+    async def test_a_file_with_no_words_is_flagged_empty_for_the_folder(self, kb):
+        # The folder pass tells "scanned or empty" from "could not open" by this
+        # flag, so the report can say which.
+        got = await kb.add_documents([{"id": "blank", "content": "   \n\n  "}])
+        assert got["success"] is False and got.get("empty") is True
 
     async def test_the_grade_searches_without_the_floor(self, kb):
         # A question the reranker dislikes still gets a rank: the floor would
@@ -205,6 +365,31 @@ class TestThroughTheServer:
         names = {t.name for t in asyncio.run(server.mcp.list_tools())}
         assert {"kb_selftest_sample", "kb_selftest_grade"} <= names
         assert "kb_selftest_sample" in (server.mcp.instructions or "")
+
+    def test_the_grade_carries_the_folders_unreadable_files(self, monkeypatch):
+        from sextant.vector_db import server
+
+        seen: dict = {}
+
+        class Store:
+            async def selftest_grade(self, questions, not_indexed=None):
+                seen["not_indexed"] = not_indexed
+                return {"report": "r"}
+
+        class Folder:
+            def not_indexed(self):
+                return [{"file": "scan.pdf", "reason": "scanned", "kind": "no_text"}]
+
+            def note(self):
+                return None
+
+        monkeypatch.setattr(server, "_store", lambda: Store())
+        monkeypatch.setattr(server, "_folder", Folder())
+        asyncio.run(server.kb_selftest_grade([{"passage_id": "a#0", "question": "q"}]))
+        assert seen["not_indexed"][0]["file"] == "scan.pdf"
+        monkeypatch.setattr(server, "_folder", None)
+        asyncio.run(server.kb_selftest_grade([{"passage_id": "a#0", "question": "q"}]))
+        assert seen["not_indexed"] is None
 
     def test_the_hosted_agent_does_not_offer_them(self):
         from sextant.mcp_server.agent import READABLE_TOOLS
