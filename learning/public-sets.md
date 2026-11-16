@@ -9,13 +9,13 @@ own measure. Raw output: `sextant/eval/public-sets.json`.
 Downloaded 2026-11-15 with the owner's yes: 23 MB from the BEIR host,
 checksums equal to the ones BEIR publishes.
 
-## Results so far (2 of 3 sets)
+## Results (3 sets)
 
 | set | questions | dense | lexical | fused | full pipeline |
 | --- | --- | --- | --- | --- | --- |
 | NFCorpus (3,633 docs) | 323 | 0.312 | 0.299 | 0.338 | **0.364** |
 | SciFact (5,183 docs) | 300 | 0.671 | 0.635 | 0.688 | **0.700** |
-| FiQA (57,638 docs) | 648 | not yet scored (see below) | | | |
+| FiQA (57,638 docs) | 648 | 0.372 | 0.216 | 0.341 | **0.375** |
 
 Published, same measure and split:
 
@@ -27,15 +27,20 @@ Published, same measure and split:
 
 ## What it says
 
-- **The full pipeline beats the paper's BM25 + cross-encoder on both sets**
-  (+0.014, +0.012), with a 25-candidate rerank against the paper's 100.
-- **sextant's own BM25 loses to the published BM25 on both sets** (−0.026,
-  −0.030). It is the weakest stage. The paper's BM25 is Elasticsearch with
-  its own analyser and stemming; sextant's is hand-written. The page must say
-  so on its first screen (the milestone's rule).
-- Dense matches its published figure (−0.004 on NFCorpus, +0.026 on SciFact;
+- **The full pipeline beats the paper's BM25 + cross-encoder on all three
+  sets** (+0.014, +0.012, +0.028), with a 25-candidate rerank against the
+  paper's 100.
+- **sextant's own BM25 loses to the published BM25 on all three** (−0.026,
+  −0.030, −0.020). It is the weakest stage. The paper's BM25 is Elasticsearch
+  with its own analyser and stemming; sextant's is hand-written. The page
+  must say so on its first screen (the milestone's rule).
+- **On FiQA, fusion makes things worse:** dense alone scores 0.372, dense
+  fused with the weak keyword stage 0.341, and the reranker only climbs back
+  to 0.375 — barely above dense alone. On the two smaller sets fusion helped.
+  Where the keyword stage is this weak, it drags the pipeline down; fixing it
+  first is what the plan's fallback row says to do.
+- Dense matches its published figure on all three (−0.004, +0.026, +0.003;
   sextant indexes chunks, MTEB whole documents truncated at 256 tokens).
-- Fusion beats either half alone on both sets.
 
 ## Not like-for-like
 
@@ -51,11 +56,13 @@ Published, same measure and split:
 | --- | --- | --- | --- | --- | --- |
 | SciFact | 12,988 | 507 s | 812 s | 0.7 GB | 941 ms |
 | NFCorpus | 9,578 | 239 s | 452 s | 0.9 GB | 636 ms |
+| FiQA | 85,362 | 2,143 s | 2,748 s | 1.1 GB | 743 ms |
 
 Embedding is the whole of indexing (cProfile: 41 of 47 s). Batching texts
 shortest first now cuts it by about a quarter (16.1 s against 21.9 s for 800
 FiQA documents); the vectors are unchanged and a test holds the order.
-SciFact ran before that change, NFCorpus after.
+SciFact ran before that change, NFCorpus and FiQA after. FiQA ran under a
+watchdog (memory, swap, battery, time); none of its limits was reached.
 
 ## The large set broke the product first (2026-11-16)
 
@@ -65,5 +72,5 @@ by binding every id into one SQLite statement, and SQLite allows 32,766. The
 keyword index is built the same way on the first search, so **any library
 past about 32,000 chunks could not be searched at all**. Nothing this size had
 been tried before. Whole-library reads are now paged (`read_all`), with a
-40,000-row test. FiQA's scores wait on a second run; `--store` now keeps the
+40,000-row test. The second run (2026-11-16) scored it; `--store` kept the
 index so a later failure does not cost the indexing again.

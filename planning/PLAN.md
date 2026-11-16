@@ -278,8 +278,8 @@ If a record needs more than its limit, the extra goes in the commit message.
 ## 8 · Scoreboard
 
 **Build goal:** complete (phases 0–15, milestones 16–22).
-**Plan:** **16 of 37 items (43%).**
-**Current item:** milestone 28, item 1 — score the four search stages on three public test sets (needs one download the owner approves).
+**Plan:** **17 of 37 items (46%).**
+**Current item:** milestone 28, item 2 — speed and memory at 57,000 documents.
 
 | Milestone | Items | Done | State |
 | --- | --- | --- | --- |
@@ -288,7 +288,7 @@ If a record needs more than its limit, the extra goes in the commit message.
 | 25 · Proof on one screen | 3 | 3 | done 2026-11-13: [`docs/RESULTS.md`](../docs/RESULTS.md) is generated and tested; the owner chose screenshots only. **Rule not yet ticked — the owner confirms** |
 | 27 · One click | 5 | 5 | done 2026-11-15: 0.10.0 on the index with working links, listed in the official MCP registry. **Rule not yet ticked: it needs the owner's own 3-minute try in Claude Desktop**; item 3: no torch, 166 MB download (476 MB on disk), first answer 7 s, every figure unchanged. Item 4: a cold first run (empty model cache) prints nothing on stderr, then the server's log is four ordinary lines |
 | 26 · Three people | 3 | 0 | runs after 27, so they get the one-click version |
-| 28 · Numbers anyone can compare | 4 | 0 | — |
+| 28 · Numbers anyone can compare | 4 | 1 | item 1 done 2026-11-16: the full pipeline beats the paper's BM25 + cross-encoder on all three sets; sextant's keyword stage loses to the paper's BM25 on all three, and on FiQA fusing it in lowers the score ([`public-sets.md`](../learning/public-sets.md)) |
 | 29 · Report card for your library | 4 | 0 | — |
 | 30 · What the first users stopped at | 3 | 0 | items chosen from milestone 26's evidence |
 | 31 · Launch | 4 | 0 | — |

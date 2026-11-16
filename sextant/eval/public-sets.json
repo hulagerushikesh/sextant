@@ -100,6 +100,45 @@
           "ms_per_question": 940.6
         }
       }
+    },
+    "fiqa": {
+      "set": "fiqa",
+      "split": "test",
+      "questions": 648,
+      "measure": "nDCG@10, graded, linear gain",
+      "stored": {
+        "documents": 57600,
+        "chunks": 85362,
+        "empty_skipped": 38
+      },
+      "ingest_seconds": 2143,
+      "embedding_model": "all-MiniLM-L6-v2",
+      "chunk_limit": 30,
+      "candidates_per_stage": 30,
+      "rerank_depth": 25,
+      "max_per_document": 2,
+      "modes": {
+        "dense": {
+          "ndcg@10": 0.3722,
+          "recall@10": 0.4405,
+          "ms_per_question": 22.9
+        },
+        "lexical": {
+          "ndcg@10": 0.2157,
+          "recall@10": 0.2744,
+          "ms_per_question": 71.7
+        },
+        "rrf": {
+          "ndcg@10": 0.3414,
+          "recall@10": 0.4244,
+          "ms_per_question": 78.7
+        },
+        "rerank": {
+          "ndcg@10": 0.3752,
+          "recall@10": 0.4403,
+          "ms_per_question": 743.0
+        }
+      }
     }
   }
 }
