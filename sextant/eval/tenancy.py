@@ -106,8 +106,10 @@ def subset(source: Any, doc_ids: set[str], kb_class: Any) -> Any:
 
     Copied rather than re-ingested so that the two arms differ in one thing.
     """
+    from sextant.vector_db.vector_search import read_all
+
     kb = kb_class(collection_name=SUBSET_COLLECTION)
-    got = source.collection.get(include=["embeddings", "documents", "metadatas"])
+    got = read_all(source.collection, ["embeddings", "documents", "metadatas"])
     keep = [
         i
         for i, meta in enumerate(got["metadatas"])
