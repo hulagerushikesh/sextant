@@ -5,6 +5,12 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-16 — milestone 28 item 2: speed and memory at 57,000 documents (₹0)
+
+- On the kept FiQA index (85,362 passages), in a fresh process: a full search takes 582 ms typically and 650 ms for the slowest 1 in 20; the first answer after opening takes 8.7 s; memory peaks at 1.0 GB. **Not slow** by the rule written before measuring, so faster index types stay parked. **18 of 37 (49%)**.
+- The figures are a generated section of the results page; tests tie its verdict to the rule and fail if the page and file disagree (both planted defects caught).
+- Does not prove: speed through Claude Desktop (the tool call adds its own time), a cold first answer with models still to download, or any machine but this one.
+
 ## 2026-11-16 — milestone 28 item 1 done: all three public sets scored (₹0)
 
 - With the owner's yes, FiQA re-run under the same watchdog: 46 minutes, 1.1 GB peak, no limit reached. The first real search of an 85,000-chunk library worked. **17 of 37 (46%)**.

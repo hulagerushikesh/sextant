@@ -170,6 +170,12 @@ def _baseline(name: str) -> dict[str, Any]:
     return loaded
 
 
+def _measurement(name: str) -> dict[str, Any]:
+    """A measurement file that is not a quality baseline (speed, public sets)."""
+    loaded: dict[str, Any] = json.loads((EVAL_DIR / name).read_text())
+    return loaded
+
+
 def _split(golden: str) -> tuple[int, int]:
     """(answerable, unanswerable) questions in a golden set."""
     lines = (EVAL_DIR / golden).read_text().splitlines()
@@ -239,6 +245,49 @@ def _cost(root: Path) -> list[str]:
     ]
 
 
+SET_NAMES = {"fiqa": "FiQA", "nfcorpus": "NFCorpus", "scifact": "SciFact"}
+
+
+def _speed() -> list[str]:
+    """Search time and memory on the largest library measured (milestone 28, item 2)."""
+    m = _measurement("scale.json")
+    stages, rule = m["stages"], m["rule"]
+    slow = m["verdict"]["slow"]
+    name = SET_NAMES.get(m["set"], m["set"])
+    return [
+        f"Measured on a library of {m['chunks']:,} passages (the public {name} set) "
+        f"on a {m['machine']}, over {m['questions']} of its questions:",
+        "",
+        "| | typical | slowest 1 in 20 |",
+        "| --- | --- | --- |",
+        f"| Full search, as shipped | {stages['rerank']['p50_ms']:.0f} ms "
+        f"| {stages['rerank']['p95_ms']:.0f} ms |",
+        f"| Meaning search alone | {stages['dense']['p50_ms']:.0f} ms "
+        f"| {stages['dense']['p95_ms']:.0f} ms |",
+        f"| Keyword search alone | {stages['lexical']['p50_ms']:.0f} ms "
+        f"| {stages['lexical']['p95_ms']:.0f} ms |",
+        "",
+        f"The first answer after opening the library takes **{m['first_answer_s']:.1f} s** "
+        "with the search models already downloaded (they load, and the keyword index is "
+        "built). The process peaks at "
+        f"**{m['peak_memory_mb'] / 1024:.1f} GB** of memory, and the index takes "
+        f"{m['index_on_disk_mb']} MB of disk. Most of a search is the final reranking "
+        "step, whose cost does not grow with the library.",
+        "",
+        (
+            "**This counts as slow** by the rule set before measuring: "
+            + "; ".join(m["verdict"]["reasons"])
+            + "."
+            if slow
+            else "This is **not slow** by the rule set before measuring (slow would be "
+            f"the slowest 1 in 20 full searches over {rule['full_p95_ms_max'] / 1000:.0f} s "
+            f"or meaning searches over {rule['dense_p95_ms_max']:.0f} ms, or a first "
+            f"answer over {rule['first_answer_s_max']:.0f} s), so faster index types "
+            "stay parked."
+        ),
+    ]
+
+
 def render() -> str:
     """The page, or `StaleSource` if a source stopped supporting it."""
     root = _root()
@@ -289,6 +338,10 @@ def render() -> str:
         "## What a question costs",
         "",
         *_cost(root),
+        "",
+        "## How fast it is on a big library",
+        "",
+        *_speed(),
         "",
         "## Check it yourself",
         "",

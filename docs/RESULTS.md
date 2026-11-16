@@ -55,6 +55,20 @@ new fact; the linked note has the method and the full tables.
 
 **About ₹0.13 a question** ($0.0015): 110 complete answers cost $0.164 in the whole-set run that note records, converted at the note's own rate of ₹84 to the dollar ([`floor-fallback-cost.md`](../learning/floor-fallback-cost.md)). Searching alone costs nothing: the search models run on your machine, and only writing the answer calls a paid model.
 
+## How fast it is on a big library
+
+Measured on a library of 85,362 passages (the public FiQA set) on a MacBook Air M2, 8 GB, over 200 of its questions:
+
+| | typical | slowest 1 in 20 |
+| --- | --- | --- |
+| Full search, as shipped | 582 ms | 650 ms |
+| Meaning search alone | 15 ms | 25 ms |
+| Keyword search alone | 67 ms | 100 ms |
+
+The first answer after opening the library takes **8.7 s** with the search models already downloaded (they load, and the keyword index is built). The process peaks at **1.0 GB** of memory, and the index takes 521 MB of disk. Most of a search is the final reranking step, whose cost does not grow with the library.
+
+This is **not slow** by the rule set before measuring (slow would be the slowest 1 in 20 full searches over 2 s or meaning searches over 200 ms, or a first answer over 30 s), so faster index types stay parked.
+
 ## Check it yourself
 
 ```bash

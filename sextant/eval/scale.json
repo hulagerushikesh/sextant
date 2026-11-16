@@ -1,0 +1,43 @@
+{
+  "set": "fiqa",
+  "chunks": 85362,
+  "index_on_disk_mb": 521,
+  "questions": 200,
+  "limit": 5,
+  "open_s": 1.4,
+  "first_search_s": 7.3,
+  "first_answer_s": 8.7,
+  "peak_memory_mb": 1011,
+  "stages": {
+    "dense": {
+      "p50_ms": 15.3,
+      "p95_ms": 24.8,
+      "max_ms": 84.3
+    },
+    "lexical": {
+      "p50_ms": 66.7,
+      "p95_ms": 100.1,
+      "max_ms": 137.3
+    },
+    "rrf": {
+      "p50_ms": 74.6,
+      "p95_ms": 104.7,
+      "max_ms": 130.2
+    },
+    "rerank": {
+      "p50_ms": 581.9,
+      "p95_ms": 649.8,
+      "max_ms": 963.9
+    }
+  },
+  "rule": {
+    "full_p95_ms_max": 2000.0,
+    "dense_p95_ms_max": 200.0,
+    "first_answer_s_max": 30.0
+  },
+  "verdict": {
+    "slow": false,
+    "reasons": []
+  },
+  "machine": "MacBook Air M2, 8 GB"
+}
