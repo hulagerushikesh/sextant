@@ -26,7 +26,6 @@ import asyncio
 import gc
 import json
 import os
-import random
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -140,17 +139,10 @@ def outcome(writers: Mapping[str, Mapping[str, Any]]) -> str:
 
 
 def spread(ranks: Sequence[int | None], n: int = SPREAD_QUESTIONS, seed: int = SEED) -> dict:
-    """The 5th to 95th percentile of a top-5 share from `n` questions, resampled."""
-    hits = [1 if r is not None and r <= 5 else 0 for r in ranks]
-    if not hits:
-        return {"questions": n, "low": None, "high": None}
-    rng = random.Random(seed)
-    shares = sorted(sum(rng.choices(hits, k=n)) / n for _ in range(SPREAD_DRAWS))
-    return {
-        "questions": n,
-        "low": shares[int(0.05 * SPREAD_DRAWS)],
-        "high": shares[int(0.95 * SPREAD_DRAWS) - 1],
-    }
+    """The 5th to 95th percentile of a top-5 share from `n` questions, resampled
+    -- the same range the user's report shows (`selftest.chance_range`)."""
+    span = selftest.chance_range(ranks, n=n, seed=seed, draws=SPREAD_DRAWS)
+    return {"questions": n, "low": span[0] if span else None, "high": span[1] if span else None}
 
 
 def _check_budget(ledger: Mapping[str, float]) -> None:

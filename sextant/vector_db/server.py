@@ -356,10 +356,11 @@ async def kb_selftest_sample(
     description=(
         "Step 2 of the library self-test. Takes the questions written for "
         "kb_selftest_sample's passages, each with its passage_id, searches every "
-        "question exactly as kb_search does, and reports how often the passage a "
-        "question was written from comes back first and in the first five, plus "
-        "the questions it missed. Present the score as a rough guide: it depends "
-        "on how the questions were written."
+        "question exactly as kb_search does, and returns a short report: one "
+        "score with how far chance could move it, the questions it missed, and "
+        "the documents search cannot use (scanned, empty, unreadable or copies). "
+        "Show the user the 'report' field exactly as it is; it already says the "
+        "score is a rough guide."
     )
 )
 async def kb_selftest_grade(
@@ -377,7 +378,8 @@ async def kb_selftest_grade(
 ) -> dict[str, Any]:
     """Grade the questions against the passages they were written from."""
     try:
-        return await _store().selftest_grade(questions)
+        not_indexed = _folder.not_indexed() if _folder is not None else None
+        return _with_folder(await _store().selftest_grade(questions, not_indexed))
     except KnowledgeBaseUnavailable as e:
         return {"error": str(e), "questions": 0}
 

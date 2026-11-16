@@ -17,8 +17,9 @@ What it does, each time the server starts:
 - walks the folder for the suffixes the loaders read;
 - stores every file that is new or has changed since it was last stored, and
   leaves the rest alone -- a 400-file folder is not re-embedded on every launch;
-- records what it could not store, and says so through `kb_stats`, because a
-  file that silently is not in the corpus reads as "the answer is not there".
+- records what it could not store, and why, and says so through `kb_stats`
+  and the self-test's report, because a file that silently is not in the
+  corpus reads as "the answer is not there".
 
 What it does not do: remove a document whose file was deleted, or watch for
 changes while running. Both are "keep a folder in sync", which is a later
@@ -70,6 +71,20 @@ def configured() -> Path | None:
     if not raw or raw.startswith("${"):
         return None
     return Path(raw).expanduser()
+
+
+def no_text_reason(path: Path) -> str:
+    """Why a file that loaded but held no words is not searchable, in plain words.
+
+    A PDF with no text at all is nearly always a scan: pictures of pages, with
+    no text layer for search to read.
+    """
+    if path.suffix.lower() in PDF_SUFFIXES:
+        return (
+            "has no text that can be read, so it is probably a scanned PDF; it "
+            "needs text recognition (OCR) before it can be searched"
+        )
+    return "is empty"
 
 
 def _signature(path: Path) -> list[int]:
@@ -226,6 +241,7 @@ class FolderSync:
                     path,
                     f"has the same name as {first.relative_to(self.folder)}, "
                     "which is the one indexed; rename one to index both",
+                    "same_name",
                 )
                 self.done += 1
                 continue
@@ -239,12 +255,16 @@ class FolderSync:
                 if not known.get("stored"):
                     # Failed last time and has not changed since: same result,
                     # so report it again without paying to find out again.
-                    self._skip(path, str(known.get("reason") or "could not be indexed"))
+                    self._skip(
+                        path,
+                        str(known.get("reason") or "could not be indexed"),
+                        str(known.get("kind") or "unreadable"),
+                    )
                     self.done += 1
                     continue
 
             try:
-                reason = await self._store_one(kb, path)
+                reason, kind = await self._store_one(kb, path)
             except Exception as e:  # noqa: BLE001 - one file must not end the pass
                 # A file the loaders did not expect. Until 2026-11-15 this
                 # escaped to `run`, and one locked PDF in a real Downloads
@@ -258,8 +278,13 @@ class FolderSync:
                 ledger[key] = {"signature": signature, "stored": True}
                 self.stored += 1
             else:
-                ledger[key] = {"signature": signature, "stored": False, "reason": reason}
-                self._skip(path, reason)
+                ledger[key] = {
+                    "signature": signature,
+                    "stored": False,
+                    "reason": reason,
+                    "kind": kind,
+                }
+                self._skip(path, reason, kind)
             self.done += 1
             # Written as it goes: a first run over a large folder that is
             # interrupted should resume, not start again.
@@ -283,18 +308,21 @@ class FolderSync:
             for doc in listing.get("documents") or []
         }
 
-    async def _store_one(self, kb: Any, path: Path) -> str | None:
-        """Store one file. Returns why not, or `None` when it is in the corpus."""
+    async def _store_one(self, kb: Any, path: Path) -> tuple[str | None, str]:
+        """Store one file. Returns why not and what kind of failure it was,
+        or `(None, "")` when it is in the corpus."""
         try:
             result = await kb.add_file(str(path))
         except UnsupportedDocument as e:
-            return str(e)
+            return str(e), "unreadable"
         if not result.get("success"):
-            return str(result.get("message") or "could not be indexed")
+            if result.get("empty"):
+                return no_text_reason(path), "no_text"
+            return str(result.get("message") or "could not be indexed"), "unreadable"
         lost = result.get("unreadable_pages") or {}
         if lost:
             self.warnings.append(unreadable_line(lost))
-        return None
+        return None, ""
 
     @staticmethod
     async def _warm(kb: Any) -> None:
@@ -304,9 +332,13 @@ class FolderSync:
         except RerankerUnavailable as e:
             logger.warning("search model not fetched (%s); the first question will fetch it", e)
 
-    def _skip(self, path: Path, reason: str) -> None:
+    def not_indexed(self) -> list[dict[str, str]]:
+        """Every file this pass could not store -- all of them, unlike `status`."""
+        return list(self.skipped)
+
+    def _skip(self, path: Path, reason: str, kind: str = "unreadable") -> None:
         try:
             name = str(path.relative_to(self.folder))
         except ValueError:
             name = path.name
-        self.skipped.append({"file": name, "reason": reason})
+        self.skipped.append({"file": name, "reason": reason, "kind": kind})

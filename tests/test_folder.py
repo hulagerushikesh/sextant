@@ -44,12 +44,14 @@ class FakeKB:
         refuse: dict[str, str] | None = None,
         broken: set[str] | None = None,
         crash: set[str] | None = None,
+        empty: set[str] | None = None,
     ):
         self.added: list[str] = []
         self.docs: set[str] = set()
         self.refuse = refuse or {}
         self.broken = broken or set()
         self.crash = crash or set()
+        self.empty = empty or set()
         self.tried: list[str] = []
         self.reranker = FakeReranker()
 
@@ -62,6 +64,9 @@ class FakeKB:
             # What PyMuPDF raised on a locked PDF in a real Downloads folder.
             raise ValueError("document closed or encrypted")
         self.added.append(name)
+        if name in self.empty:
+            # What the real store answers when a file loads to no words.
+            return {"success": False, "message": "Nothing to store", "empty": True}
         if name in self.refuse:
             return {"success": False, "message": self.refuse[name]}
         self.docs.add(Path(path).stem)
@@ -180,7 +185,7 @@ class TestWhatIsNotIndexedIsSaid:
         status = sync.status()
         assert status["not_indexed"] == 1
         assert status["not_indexed_files"] == [
-            {"file": "plan.txt", "reason": "no text could be extracted"}
+            {"file": "plan.txt", "reason": "no text could be extracted", "kind": "unreadable"}
         ]
 
     async def test_a_parse_error_is_reported_not_raised(self, library, store):
@@ -200,6 +205,7 @@ class TestWhatIsNotIndexedIsSaid:
             {
                 "file": "notes.md",
                 "reason": "could not be read (ValueError: document closed or encrypted)",
+                "kind": "unreadable",
             }
         ]
 
@@ -229,6 +235,24 @@ class TestWhatIsNotIndexedIsSaid:
         reason = sync.status()["not_indexed_files"][0]["reason"]
         assert "same name" in reason and "notes.md" in reason
 
+    async def test_a_pdf_with_no_text_is_called_scanned_and_a_text_file_empty(self, library, store):
+        _write(library, "scan.pdf")
+        kb = FakeKB(empty={"scan.pdf", "plan.txt"})
+        sync = await _run(library, store, kb)
+        got = {f["file"]: f for f in sync.not_indexed()}
+        assert got["scan.pdf"]["kind"] == got["plan.txt"]["kind"] == "no_text"
+        assert "scanned" in got["scan.pdf"]["reason"] and "OCR" in got["scan.pdf"]["reason"]
+        assert got["plan.txt"]["reason"] == "is empty"
+
+    async def test_the_kind_survives_a_second_launch(self, library, store):
+        _write(library, "scan.pdf")
+        kb = FakeKB(empty={"scan.pdf"})
+        await _run(library, store, kb)
+        kb.tried.clear()
+        again = await _run(library, store, kb)
+        assert "scan.pdf" not in kb.tried
+        assert again.not_indexed()[0]["kind"] == "no_text"
+
     async def test_the_report_is_bounded(self, tmp_path, store):
         root = tmp_path / "many"
         names = {f"f{i:03}.txt": "empty" for i in range(MAX_REPORTED + 5)}
@@ -238,6 +262,8 @@ class TestWhatIsNotIndexedIsSaid:
         status = sync.status()
         assert len(status["not_indexed_files"]) == MAX_REPORTED
         assert status["not_indexed_more"] == 5
+        # The self-test's report counts every one, not the first twenty.
+        assert len(sync.not_indexed()) == MAX_REPORTED + 5
 
     async def test_a_missing_folder_is_a_state_and_a_note(self, tmp_path, store):
         sync = await _run(tmp_path / "nowhere", store, FakeKB())

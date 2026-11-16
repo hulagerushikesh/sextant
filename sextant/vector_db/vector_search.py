@@ -852,7 +852,10 @@ class KnowledgeBase:
                 )
 
         if not ids:
-            return self._ingest_failure("Nothing to store: all documents were empty")
+            # Flagged, not only worded: the folder pass tells a scanned PDF
+            # from a file it could not open by this, not by the message.
+            empty = self._ingest_failure("Nothing to store: all documents were empty")
+            return {**empty, "empty": True}
 
         try:
             if (self.collection.metadata or {}).get("embedding_model") is None:
@@ -1089,11 +1092,16 @@ class KnowledgeBase:
         self._ensure_index()
         return selftest.sample(self._corpus, size=size, seed=seed)
 
-    async def selftest_grade(self, questions: list[dict[str, Any]]) -> dict[str, Any]:
-        """Where each question's own passage lands in a `kb_search` (`selftest.py`)."""
-        return await asyncio.to_thread(self._selftest_grade_sync, questions)
+    async def selftest_grade(
+        self, questions: list[dict[str, Any]], not_indexed: list[dict[str, Any]] | None = None
+    ) -> dict[str, Any]:
+        """Where each question's own passage lands in a `kb_search` (`selftest.py`).
+        `not_indexed` is the folder pass's list of files it could not store."""
+        return await asyncio.to_thread(self._selftest_grade_sync, questions, not_indexed)
 
-    def _selftest_grade_sync(self, questions: list[dict[str, Any]]) -> dict[str, Any]:
+    def _selftest_grade_sync(
+        self, questions: list[dict[str, Any]], not_indexed: list[dict[str, Any]] | None = None
+    ) -> dict[str, Any]:
         self._ensure_index()
 
         def search(question: str) -> list[dict[str, Any]]:
@@ -1103,7 +1111,7 @@ class KnowledgeBase:
                 question, limit=selftest.SEARCH_DEPTH, min_score=0.0, mode=DEFAULT_MODE
             )["results"]
 
-        return selftest.grade(self._corpus, questions, search)
+        return selftest.grade(self._corpus, questions, search, not_indexed)
 
     async def health_check(self) -> dict[str, Any]:
         """Report what the store actually contains."""

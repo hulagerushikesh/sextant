@@ -16,6 +16,12 @@ property of the library *and* of that model's question-writing. Whether it
 tracks the true score at all is item 2's job, on the public sets, where the
 true answers are known; until that passes, this is a rough guide and says so.
 
+The grade ends in a report a person can read in one screen (item 3): one
+score with how far chance alone could move it, the questions whose passage
+was missed, and the documents search cannot use at all -- files the folder
+pass could not store (scanned, empty, unreadable) and documents that hold the
+same text as another. The assistant is told to show it as it is.
+
 One shortcut is checked rather than trusted: a question that copies a long run
 of the passage's words verbatim is a keyword match in disguise and flatters
 the score. Such questions are graded and flagged, and the headline says how
@@ -24,6 +30,7 @@ many there were.
 
 from __future__ import annotations
 
+import hashlib
 import random
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -41,6 +48,23 @@ MIN_WORDS = 25
 SEARCH_DEPTH = 10
 # Eight words in a row taken from the passage is copying, not asking.
 COPIED_RUN = 8
+# How the chance range is drawn: the graded questions resampled this many
+# times, with a fixed seed so one grade always reports one range.
+CHANCE_DRAWS = 2000
+CHANCE_SEED = 29
+# One screen: this many missed questions and unusable documents are written
+# out in the report; the rest are counted, and every one stays in the result.
+REPORTED_MISSES = 5
+REPORTED_DOCUMENTS = 8
+
+# What item 2 found on three public sets (`learning/selftest-honesty.md`): the
+# score followed the true one only roughly, and its level belongs to the writer.
+ROUGH_GUIDE = (
+    "This is a rough guide, not a measurement. Checked on three public test "
+    "sets, this score followed true search quality only roughly, and it "
+    "depends on who writes the questions: compare it only with earlier scores "
+    "from this same assistant."
+)
 
 INSTRUCTIONS = (
     "For each passage below, write ONE question that the passage answers, the "
@@ -48,11 +72,20 @@ INSTRUCTIONS = (
     "do not copy a phrase of eight or more words from the passage, and do not "
     "mention the document's title or file name. Then call kb_selftest_grade once "
     "with every question, each paired with its passage_id. Show the user the "
-    "score and the missed questions it returns, and say this is a rough guide: "
-    "the score depends on the questions you wrote."
+    "report it returns exactly as it is written -- it is a rough guide, and it "
+    "already says so."
 )
 
 Corpus = Mapping[str, tuple[str, Mapping[str, Any]]]
+
+
+def _name(meta: Mapping[str, Any], fallback: str) -> str:
+    """What a person calls a document: its file name, else its title. A file
+    name is what they see in their folder, and two copies can share a title."""
+    source = meta.get("source")
+    if source and source != "unknown":
+        return str(source)
+    return str(meta.get("title") or fallback)
 
 
 def _words(text: str) -> list[str]:
@@ -124,17 +157,172 @@ def copied(question: str, passage: str, run: int = COPIED_RUN) -> bool:
     return any(tuple(asked[i : i + run]) in windows for i in range(len(asked) - run + 1))
 
 
+def chance_range(
+    ranks: Sequence[int | None],
+    n: int | None = None,
+    seed: int = CHANCE_SEED,
+    draws: int = CHANCE_DRAWS,
+) -> tuple[float, float] | None:
+    """The 5th to 95th percentile of the first-five share from `n` questions,
+    resampled from these ranks (`n` defaults to as many as there are)."""
+    hits = [1 if r is not None and r <= 5 else 0 for r in ranks]
+    if not hits:
+        return None
+    n = n or len(hits)
+    rng = random.Random(seed)
+    shares = sorted(sum(rng.choices(hits, k=n)) / n for _ in range(draws))
+    return shares[int(0.05 * draws)], shares[int(0.95 * draws) - 1]
+
+
+def duplicates(corpus: Corpus) -> list[dict[str, Any]]:
+    """Documents whose text is the same as an earlier document's.
+
+    Compared on the words, in order, so a copy saved with other line breaks
+    or capitals still counts. The first id in sorted order is the original;
+    every later one is listed against it.
+    """
+    chunks: dict[str, list[tuple[int, str]]] = {}
+    names: dict[str, str] = {}
+    for chunk_id, (text, meta) in corpus.items():
+        if meta.get("kind") == SUMMARY_KIND:
+            continue
+        doc = str(meta.get("document_id", chunk_id))
+        chunks.setdefault(doc, []).append((int(meta.get("chunk_index") or 0), text))
+        names.setdefault(doc, _name(meta, doc))
+    first: dict[str, str] = {}
+    found: list[dict[str, Any]] = []
+    for doc in sorted(chunks):
+        words = " ".join(" ".join(_words(t)) for _, t in sorted(chunks[doc]))
+        if not words:
+            continue
+        key = hashlib.sha256(words.encode()).hexdigest()
+        if key in first:
+            found.append(
+                {
+                    "document_id": doc,
+                    "name": names[doc],
+                    "same_as": first[key],
+                    "same_as_name": names[first[key]],
+                }
+            )
+        else:
+            first[key] = doc
+    return found
+
+
+def cannot_search(
+    corpus: Corpus, not_indexed: Sequence[Mapping[str, Any]] | None
+) -> list[dict[str, str]]:
+    """Every document search cannot use: files the folder pass could not
+    store, then copies of another document. Each with a reason in plain words."""
+    found = [
+        {
+            "name": str(item.get("file") or ""),
+            "kind": str(item.get("kind") or "unreadable"),
+            "why": str(item.get("reason") or "could not be indexed"),
+        }
+        for item in not_indexed or []
+    ]
+    found.sort(key=lambda d: d["kind"] != "no_text")  # scanned and empty first
+    for dup in duplicates(corpus):
+        found.append(
+            {
+                "name": dup["name"],
+                "kind": "duplicate",
+                "why": (
+                    f"has the same text as {dup['same_as_name']}, so the two "
+                    "compete for the same results; one copy is enough"
+                ),
+            }
+        )
+    return found
+
+
+def report(graded: Mapping[str, Any], unusable: Sequence[Mapping[str, str]], folder: bool) -> str:
+    """The grade for a person: one score, what it missed, what cannot be searched."""
+    n = graded["questions"]
+    ranks = [g["rank"] for g in graded["results"]]
+    sections: list[str] = []
+
+    if not n:
+        sections.append("No question could be graded, so there is no score.")
+    else:
+        found = sum(1 for r in ranks if r is not None and r <= 5)
+        lines = [
+            f"Search brought back the right passage in its first five results for "
+            f"**{found} of {n} questions ({round(100 * found / n)}%)**."
+        ]
+        span = chance_range(ranks)
+        if span and span[0] != span[1]:
+            lines.append(
+                f"With {n} questions, chance alone could move this score anywhere "
+                f"from {round(100 * span[0])}% to {round(100 * span[1])}%."
+                + (
+                    f" Testing more passages (up to {MAX_SIZE}) narrows that."
+                    if n < MAX_SIZE
+                    else ""
+                )
+            )
+        sections.append(" ".join(lines))
+        caveat = ROUGH_GUIDE
+        if graded["copied_wording"]:
+            caveat += (
+                f" {graded['copied_wording']} of the questions copied the passage's "
+                "wording, which makes the score look better than it is."
+            )
+        sections.append(caveat)
+
+    missed = graded["missed"]
+    if missed:
+        lines = [f"**Questions it missed ({len(missed)}):**"]
+        for g in missed[:REPORTED_MISSES]:
+            first = g["first_result"]
+            if not first:
+                instead = "nothing came back"
+            elif g["document_rank"] == 1:
+                instead = "another passage of the same document came first"
+            else:
+                instead = f"the first result was from {first['name']}"
+            lines.append(f'- "{g["question"]}" (from {g["name"]}); {instead}.')
+        if len(missed) > REPORTED_MISSES:
+            lines.append(f"- and {len(missed) - REPORTED_MISSES} more.")
+        sections.append("\n".join(lines))
+    elif n:
+        sections.append("**No question missed.**")
+
+    if unusable:
+        lines = [f"**Documents search cannot use ({len(unusable)}):**"]
+        for d in unusable[:REPORTED_DOCUMENTS]:
+            lines.append(f"- {d['name']}: {d['why']}.")
+        if len(unusable) > REPORTED_DOCUMENTS:
+            lines.append(f"- and {len(unusable) - REPORTED_DOCUMENTS} more.")
+        sections.append("\n".join(lines))
+    elif folder:
+        sections.append(
+            "**Every file in the folder was indexed**, and no two documents are copies."
+        )
+    else:
+        sections.append(
+            "**No two documents are copies.** Files that failed to load are "
+            "listed here only when the library is a folder chosen at install."
+        )
+    return "\n\n".join(sections)
+
+
 def grade(
     corpus: Corpus,
     questions: Iterable[Mapping[str, Any]],
     search: Callable[[str], Sequence[Mapping[str, Any]]],
+    not_indexed: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Search each question and find where its passage lands.
 
     `search` takes a question and returns hits in rank order, each with `id`
     and `document_id` -- `kb_search`'s own results, so the grade sees what a
-    user would. A question naming a passage the library does not hold is not
-    graded and is listed, so a typo cannot pass as a miss or a hit.
+    user would. `not_indexed` is the folder pass's list of files it could not
+    store, or `None` when the library is not a chosen folder. A question
+    naming a passage the library does not hold is not graded and is listed,
+    so a typo cannot pass as a miss or a hit.
     """
     graded: list[dict[str, Any]] = []
     refused: list[dict[str, Any]] = []
@@ -157,13 +345,18 @@ def grade(
                 "passage_id": passage_id,
                 "question": question,
                 "title": meta.get("title", "Untitled document"),
+                "name": _name(meta, passage_id),
                 "rank": ids.index(passage_id) + 1 if passage_id in ids else None,
                 "document_rank": (
                     documents.index(document_id) + 1 if document_id in documents else None
                 ),
                 "copied_wording": copied(question, text),
                 "first_result": (
-                    {"passage_id": hits[0].get("id"), "title": hits[0].get("title")}
+                    {
+                        "passage_id": hits[0].get("id"),
+                        "title": hits[0].get("title"),
+                        "name": _name(hits[0], str(hits[0].get("id"))),
+                    }
                     if hits
                     else None
                 ),
@@ -182,8 +375,16 @@ def grade(
         return g["rank"] is not None and g["rank"] <= 5
 
     missed = [g for g in graded if not top5(g)]
-    return {
+    ranks = [g["rank"] for g in graded]
+    span = chance_range(ranks)
+    result: dict[str, Any] = {
         "questions": n,
+        "score": {
+            "found_in_top_5": sum(1 for g in graded if top5(g)),
+            "of": n,
+            "chance_low": span[0] if span else None,
+            "chance_high": span[1] if span else None,
+        },
         "found_first": share(first),
         "found_in_top_5": share(top5),
         "right_document_first": share(lambda g: g["document_rank"] == 1),
@@ -200,3 +401,6 @@ def grade(
             "it look better than it is."
         ),
     }
+    result["cannot_search"] = cannot_search(corpus, not_indexed)
+    result["report"] = report(result, result["cannot_search"], folder=not_indexed is not None)
+    return result
