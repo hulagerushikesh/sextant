@@ -6,6 +6,17 @@ How good the search is, how that is known, and what was tried and rejected.
 > measurement files. Do not edit it by hand: a test fails when this page and
 > the files disagree.
 
+## Where it loses to a plain baseline
+
+On three public test sets (NFCorpus, SciFact and FiQA from BEIR, scored with
+the field's standard measure, nDCG@10, beside published figures):
+
+- **Its meaning search loses to the published score of the same meaning model**: NFCorpus 0.312 against 0.316.
+- **Its keyword search loses to plain BM25 (the BEIR paper's)** on all three sets: NFCorpus 0.299 against 0.325; SciFact 0.635 against 0.665; FiQA 0.216 against 0.236.
+- **Fusing keyword with meaning search lowers the score below meaning search alone**: FiQA 0.341 against 0.372.
+
+The full search, as shipped, beats the paper's BM25 + re-reading baseline on all three sets, so the losses above are in stages the product does not stop at. The tables are [below](#on-public-test-sets).
+
 ## How good is it
 
 On 65 test questions over 21 documents, the shipped pipeline puts the right passage first **93%** of the time. Plain meaning search manages 87%. Each stage below is in the product because this table says it earns its place.
@@ -25,6 +36,34 @@ Scored on the 55 questions that have an answer. The same four stages on a harder
 | Keyword search only | 0.824 | 0.971 | 0.971 | 0.892 | 0.910 |
 | Both, fused | 0.882 | 0.956 | 0.985 | 0.934 | 0.937 |
 | Both, fused, then re-read (the shipped pipeline) | 0.912 | 0.956 | 0.985 | 0.947 | 0.953 |
+
+## On public test sets
+
+Fixed documents and questions, judged by people who never saw this code. Scores are nDCG@10 on each set's test questions, graded, as the BEIR paper reports them:
+
+| Set | documents | questions | meaning | keyword | fused | full search |
+| --- | --- | --- | --- | --- | --- | --- |
+| NFCorpus | 3,633 | 323 | 0.312 | 0.299 | 0.338 | 0.364 |
+| SciFact | 5,183 | 300 | 0.671 | 0.635 | 0.688 | 0.700 |
+| FiQA | 57,600 | 648 | 0.372 | 0.216 | 0.341 | 0.375 |
+
+Published, same measure and split:
+
+| Set | plain BM25 | same meaning model | BM25 + re-reading |
+| --- | --- | --- | --- |
+| NFCorpus | 0.325 | 0.316 | 0.350 |
+| SciFact | 0.665 | 0.645 | 0.688 |
+| FiQA | 0.236 | 0.369 | 0.347 |
+
+Two things differ from the published runs: sextant's keyword search is its own index, not the paper's Elasticsearch, and each stage hands on at most 30 passages. Plain BM25 and BM25 + re-reading are from the BEIR paper (Table 2); the meaning model's figure is from the MTEB results. Method and sources: [`public-sets.md`](../learning/public-sets.md).
+
+Reproduce one set:
+
+```bash
+python -m sextant.eval.public_sets --set nfcorpus --check
+```
+
+That downloads NFCorpus (2.4 MB) from the BEIR host, refuses it unless its checksum is the one BEIR publishes, scores all four stages and fails if any lands more than 0.005 from the table above. About 8 minutes on a MacBook Air; no key, nothing spent.
 
 ## Knowing when not to answer
 
@@ -77,6 +116,6 @@ sextant-eval
 
 That rebuilds the index from the 21 committed documents and prints the first table above. It needs no key and spends nothing. `sextant-eval --check` compares the run against the committed figures and fails on any drop over 0.02; that check runs on every change to the project.
 
-What these numbers do **not** show: the questions and the documents were
-written together, so this grades the search pipeline, not how it will do on
-someone else's library.
+What these numbers do **not** show: the first two tables' questions and
+documents were written together, and the public sets are three particular
+collections, so neither says how the search will do on someone else's library.

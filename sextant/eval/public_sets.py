@@ -19,14 +19,20 @@ Two things differ from a published run and are said wherever a figure is:
     reported at 10, not BEIR's customary 100;
   * BM25 here is sextant's own index, not the Elasticsearch run in the paper.
 
-Usage:
+Reproduce one committed set with one command (NFCorpus: a 2.4 MB download,
+about seven minutes on a laptop, no key, nothing spent):
 
-    python -m sextant.eval.public_sets --data DIR/scifact --out scifact.json
+    python -m sextant.eval.public_sets --set nfcorpus --check
 
-`DIR/<set>` is an unzipped BEIR archive: corpus.jsonl, queries.jsonl and
-qrels/test.tsv. Nothing here downloads; the index goes to a throwaway
-directory and is deleted afterwards, unless `--store DIR` keeps it so that a
-later run grades it without indexing again (FiQA takes half an hour to index).
+`--set` fetches the archive from the BEIR host into `--cache` (default
+`~/.cache/sextant/beir`) unless it is already there, and refuses it unless
+its MD5 is the one BEIR publishes. `--check` then compares every stage with
+the committed run and exits 1 on a difference over `REPRODUCE_TOLERANCE`.
+`--data DIR/scifact` grades an archive somebody already unzipped instead
+(corpus.jsonl, queries.jsonl and qrels/test.tsv), and downloads nothing.
+The index goes to a throwaway directory and is deleted afterwards, unless
+`--store DIR` keeps it so that a later run grades it without indexing again
+(FiQA takes half an hour to index).
 """
 
 from __future__ import annotations
@@ -34,12 +40,15 @@ from __future__ import annotations
 import argparse
 import asyncio
 import csv
+import hashlib
 import json
 import math
 import shutil
 import sys
 import tempfile
 import time
+import urllib.request
+import zipfile
 from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Any
@@ -51,6 +60,32 @@ K = 10
 # to documents, there are still K distinct documents to grade.
 CHUNK_LIMIT = 30
 INGEST_BATCH = 256
+
+EVAL_DIR = Path(__file__).resolve().parent
+COMMITTED = EVAL_DIR / "public-sets.json"
+BEIR_URL = "https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/{name}.zip"
+# BEIR's published MD5 and the size of each archive. A file that differs is
+# refused before anything reads it.
+ARCHIVES = {
+    "nfcorpus": ("a89dba18a62ef92f7d323ec890a0d38d", 2_448_432),
+    "scifact": ("5f7d1de60b170fc8027bb7898e2efca1", 2_816_079),
+    "fiqa": ("17918ed23cd04fb15047f73e6c3bd9d9", 17_948_027),
+}
+DEFAULT_CACHE = Path.home() / ".cache" / "sextant" / "beir"
+# How far a rerun may land from the committed figure and still count as the
+# same result.
+REPRODUCE_TOLERANCE = 0.005
+# What must match the committed run for a comparison to mean anything.
+SETTINGS_COMPARED = (
+    "embedding_model",
+    "chunk_tokens",
+    "candidates_per_stage",
+    "rerank_depth",
+    "max_per_document",
+)
+# The first committed runs predate recording the passage size; they used the
+# default, 200 tokens (the control in `learning/rejected-retest.md`).
+UNRECORDED = {"chunk_tokens": 200}
 
 
 def graded_ndcg_at_k(retrieved: Sequence[str], gains: dict[str, float], k: int = K) -> float:
@@ -123,6 +158,72 @@ def iter_corpus(path: Path) -> Iterator[dict[str, str]]:
             text = (item.get("text") or "").strip()
             content = f"{title}\n\n{text}" if title and text else (title or text)
             yield {"id": item["_id"], "title": title or item["_id"], "content": content}
+
+
+def _md5(path: Path) -> str:
+    digest = hashlib.md5(usedforsecurity=False)
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _unzip(archive: Path, into: Path) -> None:
+    """Extract, refusing any member that would land outside `into`."""
+    target = into.resolve()
+    with zipfile.ZipFile(archive) as bundle:
+        for member in bundle.namelist():
+            if not (target / member).resolve().is_relative_to(target):
+                raise ValueError(f"{archive.name} holds a path outside its folder: {member}")
+        bundle.extractall(target)
+
+
+def fetch(name: str, cache: Path, url: str = BEIR_URL) -> Path:
+    """The unzipped set, downloading the archive only if it is not cached.
+
+    Nothing is read from a download whose MD5 is not the one BEIR publishes.
+    """
+    if name not in ARCHIVES:
+        raise ValueError(f"unknown set {name!r}: choose from {', '.join(ARCHIVES)}")
+    md5, size = ARCHIVES[name]
+    cache.mkdir(parents=True, exist_ok=True)
+    archive = cache / f"{name}.zip"
+    if not archive.is_file() or _md5(archive) != md5:
+        source = url.format(name=name)
+        print(f"downloading {name} ({size / 1e6:.1f} MB) from {source}", file=sys.stderr)
+        partial = archive.with_suffix(".part")
+        with urllib.request.urlopen(source, timeout=60) as response, partial.open("wb") as out:
+            shutil.copyfileobj(response, out)
+        got = _md5(partial)
+        if got != md5:
+            partial.unlink()
+            raise ValueError(f"{name}.zip has MD5 {got}, BEIR publishes {md5}: refused")
+        partial.replace(archive)
+    folder = cache / name
+    if not (folder / "corpus.jsonl").is_file():
+        _unzip(archive, cache)
+    return folder
+
+
+def compare(run: dict[str, Any], committed: dict[str, Any]) -> list[str]:
+    """Every way `run` fails to reproduce `committed`; empty when it does."""
+    problems = [
+        f"{key} is {run.get(key)!r}, the committed run used {want!r}"
+        for key in SETTINGS_COMPARED
+        if run.get(key) != (want := committed.get(key, UNRECORDED.get(key)))
+    ]
+    if problems:
+        return problems
+    if run["questions"] != committed["questions"]:
+        return [f"{run['questions']} questions, the committed run had {committed['questions']}"]
+    for mode, scores in committed["modes"].items():
+        if mode not in run["modes"]:
+            problems.append(f"{mode}: not run")
+            continue
+        got, want = run["modes"][mode]["ndcg@10"], scores["ndcg@10"]
+        if abs(got - want) > REPRODUCE_TOLERANCE:
+            problems.append(f"{mode}: nDCG@10 {got:.4f}, committed {want:.4f}")
+    return problems
 
 
 async def ingest(kb: Any, corpus: Path) -> dict[str, int]:
@@ -232,7 +333,17 @@ def main() -> None:
         prog="python -m sextant.eval.public_sets",
         description="Score the search stages on one unzipped BEIR test set.",
     )
-    parser.add_argument("--data", type=Path, required=True, help="unzipped BEIR set directory")
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--set", choices=list(ARCHIVES), help="fetch this BEIR set and grade it")
+    source.add_argument("--data", type=Path, help="an unzipped BEIR set directory")
+    parser.add_argument(
+        "--cache", type=Path, default=DEFAULT_CACHE, help="where --set keeps archives"
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="exit 1 unless every stage matches the committed run for this set",
+    )
     parser.add_argument(
         "--modes", nargs="+", default=list(RETRIEVAL_MODES), choices=RETRIEVAL_MODES
     )
@@ -244,11 +355,19 @@ def main() -> None:
         "directory, deleted afterwards)",
     )
     args = parser.parse_args()
+    data = fetch(args.set, args.cache) if args.set else args.data
+    committed = None
+    if args.check:
+        # A checkout tool: the committed runs are not in the wheel.
+        if COMMITTED.is_file():
+            committed = json.loads(COMMITTED.read_text())["sets"].get(data.name)
+    if args.check and committed is None:
+        raise SystemExit(f"no committed run for {data.name!r} to check against")
 
     store = args.store or Path(tempfile.mkdtemp(prefix="sextant-beir-"))
     settings.setenv("CHROMA_DIR", str(store))
     try:
-        payload = asyncio.run(run(args.data, args.modes, reuse=args.store is not None))
+        payload = asyncio.run(run(data, args.modes, reuse=args.store is not None))
     finally:
         if args.store is None:
             shutil.rmtree(store, ignore_errors=True)
@@ -256,6 +375,15 @@ def main() -> None:
     if args.out:
         args.out.write_text(text)
     print(text)
+    if committed is not None:
+        problems = compare(payload, committed)
+        if problems:
+            print("FAILED: " + "; ".join(problems), file=sys.stderr)
+            raise SystemExit(1)
+        print(
+            f"{data.name}: every stage within {REPRODUCE_TOLERANCE} of the committed run",
+            file=sys.stderr,
+        )
 
 
 if __name__ == "__main__":

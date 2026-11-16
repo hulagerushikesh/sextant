@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
+import zipfile
 from pathlib import Path
 
 import pytest
 
+from sextant.eval import public_sets
 from sextant.eval.public_sets import (
     documents_in_order,
     graded_ndcg_at_k,
@@ -77,3 +80,95 @@ class TestTheFilesAreReadAsBEIRWritesThem:
         docs = list(iter_corpus(path))
         assert [d["content"] for d in docs] == ["T\n\nbody", "only body", ""]
         assert docs[1]["title"] == "2"
+
+
+def _archive(tmp_path: Path, members: dict[str, str]) -> Path:
+    path = tmp_path / "source" / "tiny.zip"
+    path.parent.mkdir()
+    with zipfile.ZipFile(path, "w") as bundle:
+        for name, text in members.items():
+            bundle.writestr(name, text)
+    return path
+
+
+def _publish(monkeypatch, archive: Path) -> str:
+    """Make `tiny` a known set whose published checksum is this archive's."""
+    md5 = hashlib.md5(archive.read_bytes(), usedforsecurity=False).hexdigest()
+    monkeypatch.setitem(public_sets.ARCHIVES, "tiny", (md5, archive.stat().st_size))
+    return archive.parent.as_uri() + "/{name}.zip"
+
+
+TINY = {"tiny/corpus.jsonl": "{}\n", "tiny/queries.jsonl": "", "tiny/qrels/test.tsv": ""}
+
+
+class TestOneCommandFetchesASet:
+    def test_the_archive_is_fetched_checked_and_unzipped(self, tmp_path, monkeypatch):
+        url = _publish(monkeypatch, _archive(tmp_path, TINY))
+        folder = public_sets.fetch("tiny", tmp_path / "cache", url=url)
+        assert folder == tmp_path / "cache" / "tiny"
+        assert (folder / "corpus.jsonl").read_text() == "{}\n"
+
+    def test_a_cached_archive_is_not_fetched_again(self, tmp_path, monkeypatch):
+        url = _publish(monkeypatch, _archive(tmp_path, TINY))
+        public_sets.fetch("tiny", tmp_path / "cache", url=url)
+        (tmp_path / "source" / "tiny.zip").unlink()  # a second fetch would fail
+        assert public_sets.fetch("tiny", tmp_path / "cache", url=url).is_dir()
+
+    def test_an_archive_without_the_published_checksum_is_refused(self, tmp_path, monkeypatch):
+        url = _publish(monkeypatch, _archive(tmp_path, TINY))
+        monkeypatch.setitem(public_sets.ARCHIVES, "tiny", ("0" * 32, 1))
+        with pytest.raises(ValueError, match="refused"):
+            public_sets.fetch("tiny", tmp_path / "cache", url=url)
+        assert not list((tmp_path / "cache").iterdir()), "nothing of it may be kept"
+
+    def test_a_member_outside_the_folder_is_refused(self, tmp_path, monkeypatch):
+        url = _publish(monkeypatch, _archive(tmp_path, {"../escaped.txt": "x"}))
+        with pytest.raises(ValueError, match="outside"):
+            public_sets.fetch("tiny", tmp_path / "cache", url=url)
+        assert not (tmp_path / "escaped.txt").exists()
+
+    def test_an_unknown_set_is_refused_before_anything_is_fetched(self, tmp_path):
+        with pytest.raises(ValueError, match="unknown set"):
+            public_sets.fetch("msmarco", tmp_path)
+
+    def test_every_committed_set_has_a_published_checksum(self):
+        committed = json.loads(public_sets.COMMITTED.read_text())["sets"]
+        assert set(committed) == set(public_sets.ARCHIVES)
+
+
+def _run(**ndcg: float) -> dict:
+    return {
+        "questions": 10,
+        "embedding_model": "m",
+        "chunk_tokens": 200,
+        "candidates_per_stage": 30,
+        "rerank_depth": 25,
+        "max_per_document": 2,
+        "modes": {mode: {"ndcg@10": value} for mode, value in ndcg.items()},
+    }
+
+
+class TestTheCheckAgainstTheCommittedRun:
+    def test_a_rerun_within_the_tolerance_reproduces(self):
+        assert public_sets.compare(_run(dense=0.304), _run(dense=0.300)) == []
+
+    def test_a_stage_further_off_fails_and_says_which(self):
+        got = public_sets.compare(_run(dense=0.3, rerank=0.36), _run(dense=0.3, rerank=0.35))
+        assert got == ["rerank: nDCG@10 0.3600, committed 0.3500"]
+
+    def test_a_stage_not_run_fails(self):
+        assert public_sets.compare(_run(dense=0.3), _run(dense=0.3, rerank=0.35)) == [
+            "rerank: not run"
+        ]
+
+    def test_different_settings_are_not_compared_at_all(self):
+        other = {**_run(dense=0.3), "embedding_model": "another"}
+        got = public_sets.compare(other, _run(dense=0.3))
+        assert len(got) == 1 and "embedding_model" in got[0]
+
+    def test_a_committed_run_that_predates_the_passage_size_means_200(self):
+        old = _run(dense=0.3)
+        del old["chunk_tokens"]
+        assert public_sets.compare(_run(dense=0.3), old) == []
+        smaller = {**_run(dense=0.3), "chunk_tokens": 150}
+        assert "chunk_tokens" in public_sets.compare(smaller, old)[0]

@@ -135,6 +135,8 @@ Measured, on a committed test set, and re-checked on every change:
 | Both, fused, then re-read (the shipped pipeline) | **93%** |
 
 65 test questions over 21 documents. Asked 10 questions those documents cannot answer, it declines 8.
+
+On three public test sets (BEIR) the full search beats the published BM25 + re-reading baseline on all three sets; where a stage loses to a plain baseline is the first thing on the results page.
 <!-- results:end -->
 
 The full comparison, the nine ideas that were measured and rejected, and what
