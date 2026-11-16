@@ -64,6 +64,8 @@ TOOLS = [
     ("kb_ingest", "Add text to the library"),
     ("kb_ann_benchmark", "Benchmark the approximate search indexes"),
     ("kb_ann_compare", "Compare exact and approximate search on one question"),
+    ("kb_selftest_sample", "Pick passages for a self-test of search on your library"),
+    ("kb_selftest_grade", "Score how often search finds the passage each test question came from"),
 ]
 
 

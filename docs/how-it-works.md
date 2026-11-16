@@ -54,6 +54,8 @@ it to the next `pip uninstall`. `SEXTANT_CHROMA_DIR` overrides both.
 | `kb_stats` | Collection size, embedding model, storage path |
 | `kb_ann_benchmark` | Build one index — flat, HNSW or IVF-PQ — and report recall against exact search |
 | `kb_ann_compare` | The same query through every index, side by side |
+| `kb_selftest_sample` | A sample of passages, spread across documents, for the assistant to write one question each about |
+| `kb_selftest_grade` | Searches each question as `kb_search` does and reports how often its own passage comes back first and in the first five, flagging questions that copied the passage's wording |
 
 Verified against MCP Inspector:
 
