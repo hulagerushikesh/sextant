@@ -5,6 +5,11 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-16 — release 0.11.0 published and listed (₹0)
+
+- The owner uploaded 0.11.0 and published the registry entry. Checked from outside: the package index's latest is 0.11.0 and all 15 links on its page answer; the registry lists `io.github.hulagerushikesh/sextant` 0.11.0 as the active latest, 0.10.0 kept beside it.
+- Does not prove: Claude Desktop installing the 0.11.0 bundle, or the self-test asked there — the owner's reinstall and try.
+
 ## 2026-11-16 — release 0.11.0 prepared for the owner (₹0)
 
 - Version 0.11.0 carries everything since 0.10.0: the self-test (milestone 29), and reading whole collections in pages (libraries past 32,000 passages could not be searched). The wheel and source package pass the index's own checker.
