@@ -5,6 +5,13 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-16 — release 0.11.0 prepared for the owner (₹0)
+
+- Version 0.11.0 carries everything since 0.10.0: the self-test (milestone 29), and reading whole collections in pages (libraries past 32,000 passages could not be searched). The wheel and source package pass the index's own checker.
+- The Claude Desktop bundle told its host it was version "0.0.0+unknown" (0.10.0 too): it carries the source without package metadata. The build now writes the version beside the source, and two Finder `.DS_Store` files no longer ride along. Both planted back and caught. 1,120 tests pass.
+- Tried outside the checkout, installed from the local cache with no download: the wheel and the bundle (launched as Claude Desktop launches it) each reported 0.11.0, indexed a 21-file folder, returned the right passage first and ran the self-test to a report.
+- Does not prove: anything public — the upload and the registry entry are the owner's commands — or the bundle installed by Claude Desktop itself, which the owner's reinstall shows.
+
 ## 2026-11-16 — milestone 29 item 4: one suggestion, backed by a number (₹0)
 
 - The self-test's report now ends with at most one **Fix first** line, only when the grade gives it a number, and naming the files it is about (all kept in the result). Copies that cost questions come first, then PDFs with no text, files sharing a name, files that would not open, copies that cost nothing. Missed questions beaten by a copy say so and are shown first. **Milestone 29 built, 24 of 37 (65%)**.

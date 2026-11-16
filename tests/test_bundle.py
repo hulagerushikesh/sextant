@@ -15,6 +15,8 @@ from __future__ import annotations
 import ast
 import importlib.util
 import json
+import subprocess
+import sys
 import tomllib
 import zipfile
 from pathlib import Path
@@ -105,6 +107,17 @@ class TestTheSource:
         assert not [n for n in names if "/mcp_server/" in n]
         assert not [n for n in names if "__pycache__" in n or n.endswith(".pyc")]
 
+    def test_no_hidden_file_rides_along(self, tmp_path):
+        """A Finder `.DS_Store` sits in this checkout and shipped in 0.10.0.
+        Plant one so the test does not depend on what Finder left behind."""
+        planted = ROOT / "sextant" / "eval" / ".planted-hidden"
+        planted.write_text("x")
+        try:
+            names = zipfile.ZipFile(build.build(tmp_path)).namelist()
+        finally:
+            planted.unlink()
+        assert not [n for n in names if any(p.startswith(".") for p in n.split("/"))]
+
     def test_nothing_the_server_loads_needs_what_was_left_out(self, bundle):
         """Walk the server's module-level imports through the copy in the
         bundle. A module it loads that is not in the file is an install that
@@ -136,6 +149,21 @@ class TestTheSource:
                     stack.extend(a.name for a in node.names if a.name.startswith("sextant"))
         assert not missing, f"loaded by the server, absent from the bundle: {missing}"
         assert "sextant.vector_db.folder" in seen, "the walk should reach the folder indexer"
+
+    def test_the_server_reports_the_bundle_version_without_package_metadata(
+        self, bundle, tmp_path
+    ):
+        """The host installs the bundle's dependencies, never sextant itself,
+        so the version cannot come from package metadata. `-S` hides this
+        checkout's installed copy the same way."""
+        bundle.extractall(tmp_path)
+        out = subprocess.run(
+            [sys.executable, "-I", "-S", "-c",
+             f"import sys; sys.path.insert(0, {str(tmp_path / 'src')!r}); "
+             "import sextant; print(sextant.__version__)"],
+            capture_output=True, text=True, check=True,
+        )
+        assert out.stdout.strip() == __version__
 
     def test_the_entry_point_starts_the_server(self, bundle):
         entry = bundle.read("src/server.py").decode()
