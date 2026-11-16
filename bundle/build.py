@@ -143,6 +143,9 @@ def package_files() -> list[Path]:
             continue
         if EXCLUDED_DIRS & set(rel.parts):
             continue
+        # Finder's .DS_Store and any other hidden file: 0.10.0 shipped two.
+        if any(part.startswith(".") for part in rel.parts):
+            continue
         files.append(path)
     return files
 
@@ -155,6 +158,7 @@ def build(out_dir: Path = ROOT / "dist") -> Path:
         bundle.writestr("pyproject.toml", pyproject())
         bundle.writestr("src/server.py", ENTRY)
         bundle.write(ROOT / "LICENSE", "LICENSE")
+        bundle.writestr("src/sextant/_bundle_version.py", f'VERSION = "{__version__}"\n')
         for path in package_files():
             bundle.write(path, "src/" + str(path.relative_to(ROOT)))
     return target
