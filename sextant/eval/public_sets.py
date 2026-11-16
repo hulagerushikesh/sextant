@@ -25,7 +25,8 @@ Usage:
 
 `DIR/<set>` is an unzipped BEIR archive: corpus.jsonl, queries.jsonl and
 qrels/test.tsv. Nothing here downloads; the index goes to a throwaway
-directory and is deleted afterwards.
+directory and is deleted afterwards, unless `--store DIR` keeps it so that a
+later run grades it without indexing again (FiQA takes half an hour to index).
 """
 
 from __future__ import annotations
@@ -178,7 +179,7 @@ async def grade_mode(
     }
 
 
-async def run(data: Path, modes: Sequence[str]) -> dict[str, Any]:
+async def run(data: Path, modes: Sequence[str], reuse: bool = False) -> dict[str, Any]:
     from sextant.vector_db import vector_search
     from sextant.vector_db.vector_search import KnowledgeBase
 
@@ -192,7 +193,12 @@ async def run(data: Path, modes: Sequence[str]) -> dict[str, Any]:
 
     kb = KnowledgeBase()
     started = time.time()
-    stored = await ingest(kb, data / "corpus.jsonl")
+    if reuse and kb.collection.count():
+        # A kept index from an earlier run of the same set: grade it as is.
+        print(f"  reusing {kb.collection.count()} stored chunks", file=sys.stderr)
+        stored = {"chunks": kb.collection.count(), "reused": 1}
+    else:
+        stored = await ingest(kb, data / "corpus.jsonl")
     ingest_seconds = round(time.time() - started)
     health = await kb.health_check()
 
@@ -229,14 +235,21 @@ def main() -> None:
         "--modes", nargs="+", default=list(RETRIEVAL_MODES), choices=RETRIEVAL_MODES
     )
     parser.add_argument("--out", type=Path, help="write results JSON here")
+    parser.add_argument(
+        "--store",
+        type=Path,
+        help="keep the index here and reuse it on the next run (default: a throwaway "
+        "directory, deleted afterwards)",
+    )
     args = parser.parse_args()
 
-    store = Path(tempfile.mkdtemp(prefix="sextant-beir-"))
+    store = args.store or Path(tempfile.mkdtemp(prefix="sextant-beir-"))
     settings.setenv("CHROMA_DIR", str(store))
     try:
-        payload = asyncio.run(run(args.data, args.modes))
+        payload = asyncio.run(run(args.data, args.modes, reuse=args.store is not None))
     finally:
-        shutil.rmtree(store, ignore_errors=True)
+        if args.store is None:
+            shutil.rmtree(store, ignore_errors=True)
     text = json.dumps(payload, indent=2) + "\n"
     if args.out:
         args.out.write_text(text)

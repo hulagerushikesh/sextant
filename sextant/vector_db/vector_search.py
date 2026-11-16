@@ -195,6 +195,48 @@ def _locators(doc: dict[str, Any], length: int) -> list[Locator]:
     return [Locator("page", page, 0, length)] if page else []
 
 
+# Rows per read when the whole collection is wanted. An unbounded
+# `collection.get()` fails past about 32,000 chunks: Chroma binds every id as
+# one SQLite variable and SQLite caps those at 32,766. Found scoring the
+# 57,638-document FiQA set (85,000 chunks), where the first search and the
+# stats call both broke.
+READ_PAGE = 5000
+
+
+def read_all(collection: Any, include: list[str]) -> dict[str, Any]:
+    """Every row of `collection`, read in pages so size never breaks it.
+
+    Same shape as an unbounded Chroma `get`: "ids" and each included key,
+    with embeddings joined into one array as Chroma returns them.
+    """
+    import numpy as np
+
+    out: dict[str, list[Any]] = {"ids": [], **{key: [] for key in include}}
+    offset = 0
+    while True:
+        page = collection.get(include=include, limit=READ_PAGE, offset=offset)
+        ids = page.get("ids") or []
+        if not ids:
+            break
+        out["ids"].extend(ids)
+        for key in include:
+            values = page.get(key)
+            if key == "embeddings":
+                if values is not None and len(values):
+                    out[key].append(np.asarray(values))
+            else:
+                out[key].extend(values or [])
+        if len(ids) < READ_PAGE:
+            break
+        offset += READ_PAGE
+    result: dict[str, Any] = dict(out)
+    if "embeddings" in include:
+        result["embeddings"] = (
+            np.concatenate(out["embeddings"]) if out["embeddings"] else None
+        )
+    return result
+
+
 class KnowledgeBaseUnavailable(RuntimeError):
     """Raised when the store cannot be opened. Never swallowed."""
 
@@ -356,7 +398,7 @@ class KnowledgeBase:
             return index if index is not None else self._build_index()
 
     def _build_index(self) -> BM25Index:
-        stored = self.collection.get(include=["documents", "metadatas"])
+        stored = read_all(self.collection, ["documents", "metadatas"])
         ids = stored.get("ids") or []
         documents = stored.get("documents") or []
         metadatas = stored.get("metadatas") or []
@@ -607,7 +649,7 @@ class KnowledgeBase:
         from sextant.vector_db.ann.ivfpq import IvfPqIndex
         from sextant.vector_db.ann.rerank import RerankIndex
 
-        stored = self.collection.get(include=["embeddings"])
+        stored = read_all(self.collection, ["embeddings"])
         ids = list(stored.get("ids") or [])
         embeddings = stored.get("embeddings")
         if embeddings is None or len(embeddings) == 0:
@@ -905,7 +947,7 @@ class KnowledgeBase:
         the index, and would let the benchmark drift from what production
         actually searches.
         """
-        stored = self.collection.get(include=["embeddings"])
+        stored = read_all(self.collection, ["embeddings"])
         ids = stored.get("ids") or []
         embeddings = stored.get("embeddings")
         if embeddings is None or len(embeddings) == 0:
@@ -1043,7 +1085,7 @@ class KnowledgeBase:
         return await asyncio.to_thread(self._health_check_sync)
 
     def _health_check_sync(self) -> dict[str, Any]:
-        stored = self.collection.get(include=["metadatas"])
+        stored = read_all(self.collection, ["metadatas"])
         metadatas = [meta or {} for meta in (stored.get("metadatas") or [])]
         documents = {meta.get("document_id") for meta in metadatas}
         summaries = sum(1 for meta in metadatas if meta.get("kind") == SUMMARY_KIND)

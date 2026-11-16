@@ -5,6 +5,12 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-16 — milestone 28 item 1: the large set found a library-size bug (₹0)
+
+- With the owner's yes, FiQA (57,638 documents, 85,000 chunks) was indexed under a watchdog (memory, swap, battery, time); it peaked at 0.8 GB and took 33 minutes. Then it broke: **any library over about 32,000 chunks could not be searched or counted.** Every whole-library read was one unbounded Chroma call, and SQLite refuses more than 32,766 values in one statement. The first search builds the keyword index that way, so a big library failed on its first question.
+- Fixed: whole-library reads go in pages of 5,000. Tests build a 40,000-row store, show the unbounded read failing there, read it back whole, and refuse any new unbounded read; planting the old read back fails them. The scorer can now keep its index (`--store`) so a crash after indexing does not cost another half hour.
+- Does not prove: FiQA's scores — the index was deleted with the crash, and re-running is another ~40 minutes of load, which waits for the owner's yes. No library this size had ever been tried before.
+
 ## 2026-11-15 — milestone 28 item 1: two of three public sets scored (₹0)
 
 - With the owner's yes, three BEIR sets downloaded (23 MB, checksums match BEIR's). A scorer computes BEIR's own measure on each stage; hand-worked tests pin it. NFCorpus and SciFact scored; [the note](../learning/public-sets.md) has the tables.
