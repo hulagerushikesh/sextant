@@ -380,8 +380,7 @@ def _public_tables() -> list[str]:
         run = runs[name]
         cells = " | ".join(_three(_score(run, mode)) for mode, _ in MODES)
         lines.append(
-            f"| {SET_NAMES[name]} | {run['stored']['documents']:,} | {run['questions']} "
-            f"| {cells} |"
+            f"| {SET_NAMES[name]} | {run['stored']['documents']:,} | {run['questions']} | {cells} |"
         )
     lines += [
         "",
@@ -471,6 +470,72 @@ def _speed() -> list[str]:
     ]
 
 
+def _selftest() -> list[str]:
+    """How far the library self-test can be trusted (milestone 29, item 2)."""
+    from sextant.eval import selftest_honesty as honesty
+
+    m = _measurement("selftest-honesty.json")
+    sets, verdict = m["sets"], m["verdict"]
+    writers = verdict["writers"]
+    yes = {True: "yes", False: "**no**"}
+    rows = [
+        f"| {w} | {v['spearman']:.2f} | {yes[v['rule_2_good_set_scores_highest']]} "
+        f"| {yes[v['rule_3_keyword_lowest_on_fiqa']]} | {yes[v['passes']]} |"
+        for w, v in writers.items()
+    ]
+    full = honesty.FULL_MODE
+    fiqa = {w: sets["fiqa"]["writers"][w]["modes"][full]["found_in_top_5"] for w in writers}
+    widths = [
+        r["modes"][full]["spread_at_20"]["high"] - r["modes"][full]["spread_at_20"]["low"]
+        for v in sets.values()
+        for r in v["writers"].values()
+    ]
+    failed = [
+        f"{w}'s rank correlation is {v['spearman']:.2f}, under the {honesty.RULE_CORRELATION}"
+        for w, v in writers.items()
+        if not v["rule_1_tracks_true_score"]
+    ] + [
+        f"{w} {what}"
+        for w, v in writers.items()
+        for key, what in (
+            ("rule_2_good_set_scores_highest", "did not score SciFact highest"),
+            ("rule_3_keyword_lowest_on_fiqa", "did not score keyword search lowest on FiQA"),
+        )
+        if not v[key]
+    ]
+    label = {
+        "checked": "**It passed: the score follows the true score on three public sets.**",
+        "rough guide": "**It is a rough guide**, and says so: " + "; ".join(failed) + ".",
+        "no guide": "**It is no guide**: the headline score is not shown.",
+    }[verdict["outcome"]]
+    a, b = list(fiqa)
+    return [
+        "Your assistant can test the search on your own library: it writes a question "
+        "for each of a sample of passages, and sextant counts how often search brings "
+        "back the passage each question came from. Whether that count means anything "
+        "was checked on the three public sets, with a rule written before the run "
+        "([the note](../learning/selftest-honesty.md)): across the 12 setups (four "
+        "search modes on three sets), the self-test must rank them as the true score "
+        f"does (rank correlation at least {honesty.RULE_CORRELATION}), score SciFact "
+        "highest, and score keyword search lowest on FiQA, where it really is worst. "
+        f"Two models wrote {m['size']} questions per set:",
+        "",
+        "| Question writer | Rank correlation | SciFact highest | Keyword lowest on FiQA "
+        "| Passes |",
+        "| --- | --- | --- | --- | --- |",
+        *rows,
+        "",
+        label,
+        "",
+        "The level depends on who wrote the questions: on FiQA under the full search, "
+        f"{a}'s questions found their passage in the first five {_pct(fiqa[a])} of the "
+        f"time, {b}'s {_pct(fiqa[b])}. Compare a library's score with itself, written by "
+        "the same assistant, not with another library's. From the default 20 questions "
+        f"a score also moves by chance, across a range {min(widths):.2f} to "
+        f"{max(widths):.2f} wide (5th to 95th percentile).",
+    ]
+
+
 def render() -> str:
     """The page, or `StaleSource` if a source stopped supporting it."""
     root = _root()
@@ -531,6 +596,10 @@ def render() -> str:
         "## How fast it is on a big library",
         "",
         *_speed(),
+        "",
+        "## How far your own library's self-test can be trusted",
+        "",
+        *_selftest(),
         "",
         "## Check it yourself",
         "",

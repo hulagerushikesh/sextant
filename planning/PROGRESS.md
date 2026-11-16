@@ -5,6 +5,12 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-16 — milestone 29 item 2: is the self-test honest? Rough guide (₹6.5)
+
+- Rule written and pushed before the run. On SciFact, NFCorpus and FiQA, 50 sampled passages each, two Gemini models wrote one question per passage; each set of questions was graded under all four search modes beside the true nDCG@10, which reproduced within 0.005. **22 of 37 (59%)**.
+- flash writer passed all three rules (rank correlation 0.65); flash-lite missed rule 1 at 0.58, so by the rule the score stays a **rough guide**. Both rated keyword search worst on FiQA; one copied question in 300. The results page now carries a generated section saying which rule failed.
+- Does not prove: that scores compare across assistants (FiQA 22% against 64% by writer), that the self-test can tell NFCorpus from SciFact, or how a Claude writer behaves.
+
 ## 2026-11-16 — milestone 29 item 1: a self-test for the user's own library (₹0)
 
 - The owner chose milestone 29 over fixing keyword search first. Two new tools: one samples passages across the library for the user's assistant to write a question each about; the other searches each question as `kb_search` does and reports how often its passage comes back first and in the first five, flagging questions that copy the passage. No key, nothing sent anywhere new. **21 of 37 (57%)**.

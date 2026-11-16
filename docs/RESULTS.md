@@ -108,6 +108,19 @@ The first answer after opening the library takes **8.7 s** with the search model
 
 This is **not slow** by the rule set before measuring (slow would be the slowest 1 in 20 full searches over 2 s or meaning searches over 200 ms, or a first answer over 30 s), so faster index types stay parked.
 
+## How far your own library's self-test can be trusted
+
+Your assistant can test the search on your own library: it writes a question for each of a sample of passages, and sextant counts how often search brings back the passage each question came from. Whether that count means anything was checked on the three public sets, with a rule written before the run ([the note](../learning/selftest-honesty.md)): across the 12 setups (four search modes on three sets), the self-test must rank them as the true score does (rank correlation at least 0.6), score SciFact highest, and score keyword search lowest on FiQA, where it really is worst. Two models wrote 50 questions per set:
+
+| Question writer | Rank correlation | SciFact highest | Keyword lowest on FiQA | Passes |
+| --- | --- | --- | --- | --- |
+| gemini-3.1-flash-lite | 0.58 | yes | yes | **no** |
+| gemini-3.7-flash | 0.65 | yes | yes | yes |
+
+**It is a rough guide**, and says so: gemini-3.1-flash-lite's rank correlation is 0.58, under the 0.6.
+
+The level depends on who wrote the questions: on FiQA under the full search, gemini-3.1-flash-lite's questions found their passage in the first five 22% of the time, gemini-3.7-flash's 64%. Compare a library's score with itself, written by the same assistant, not with another library's. From the default 20 questions a score also moves by chance, across a range 0.10 to 0.35 wide (5th to 95th percentile).
+
 ## Check it yourself
 
 ```bash

@@ -69,3 +69,65 @@ to trust a user's number.
 estimated under ₹5 and capped at ₹20. Three downloads from the BEIR host, about
 22 MB. Indexing takes about 48 minutes of laptop load in all (FiQA alone about
 36), one set at a time, under 1.5 GB of memory.
+
+---
+
+## Result, 2026-11-16 — rough guide
+
+Run as designed: 50 passages per set, seed 29, two writers, every question
+graded under all four modes. The true scores reproduced the committed
+`public-sets.json` within 0.005 on all 12 conditions. Spent **$0.0765
+(about ₹6.5)** on questions; the run took 73 minutes of laptop load, FiQA's
+indexing about 43 of them. Every figure is in `sextant/eval/selftest-honesty.json`,
+with the questions, so a re-run grades the same ones and spends nothing.
+
+Self-test score (own passage in the first five) beside the true nDCG@10:
+
+| Set | Mode | True | flash-lite writer | flash writer |
+| --- | --- | --- | --- | --- |
+| SciFact | keyword | 0.635 | 0.60 | 0.90 |
+| SciFact | meaning | 0.675 | 0.72 | 0.92 |
+| SciFact | fused | 0.688 | 0.70 | 0.94 |
+| SciFact | full | 0.700 | 0.78 | 0.96 |
+| NFCorpus | keyword | 0.299 | 0.48 | 0.82 |
+| NFCorpus | meaning | 0.314 | 0.66 | 0.82 |
+| NFCorpus | fused | 0.338 | 0.60 | 0.90 |
+| NFCorpus | full | 0.364 | 0.74 | 0.94 |
+| FiQA | keyword | 0.216 | 0.06 | 0.34 |
+| FiQA | meaning | 0.373 | 0.24 | 0.52 |
+| FiQA | fused | 0.343 | 0.16 | 0.56 |
+| FiQA | full | 0.375 | 0.22 | 0.64 |
+
+| Rule | flash-lite | flash |
+| --- | --- | --- |
+| 1. Rank correlation ≥ 0.6 | **0.58 — fails** | 0.65 — holds |
+| 2. SciFact highest under the full search | holds (0.78 > 0.74, 0.22) | holds (0.96 > 0.94, 0.64) |
+| 3. Keyword lowest on FiQA | holds (0.06) | holds (0.34) |
+
+**Outcome, by the rule: rough guide.** One writer missed rule 1 by 0.02, so
+the score keeps its "rough guide" label, and the results page now says which
+rule failed. Neither writer came near the "no guide" line.
+
+**Reading it honestly.**
+
+1. **The trap it was built to catch did not spring.** Both writers rated
+   keyword search worst on FiQA, where it is worst, and neither copied the
+   passage's wording (one flagged question in 300).
+2. **Rule 2 held, but narrowly.** SciFact beat NFCorpus by 0.04 and 0.02 —
+   well inside chance for 50 questions — even though its true score is twice
+   as high. The self-test is a known-passage test; NFCorpus's low true score
+   comes from its many judged documents per question, which a known-passage
+   test cannot see. So the self-test does **not** say a library is half as
+   good as another; it separated FiQA from the rest, not NFCorpus.
+3. **The level belongs to the writer.** On FiQA the flash-lite writer asked
+   broad questions ("what are the career paths for finance students?") that
+   fit many of 57,600 forum posts, and found 22%; the flash writer asked
+   specific ones and found 64%. A score is only comparable with another score
+   from the same assistant. The results page says so.
+4. **Twenty questions are noisy.** Resampled from the 50, a 20-question score
+   spans a range 0.10 to 0.35 wide (5th to 95th percentile). Item 3's report
+   has to show that range beside the number.
+5. **Neither writer is the user's assistant.** Users run Claude; this used two
+   Gemini models to keep the check independent of the session that built it.
+   A Claude writer is likelier to behave like the specific one, but that is
+   not measured.
