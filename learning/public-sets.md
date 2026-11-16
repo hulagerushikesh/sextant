@@ -74,3 +74,16 @@ past about 32,000 chunks could not be searched at all**. Nothing this size had
 been tried before. Whole-library reads are now paged (`read_all`), with a
 40,000-row test. The second run (2026-11-16) scored it; `--store` kept the
 index so a later failure does not cost the indexing again.
+
+## Speed and memory at this size (item 2, 2026-11-16)
+
+Measured by `sextant.eval.scale` on the kept FiQA index (85,362 chunks), in a
+fresh process, over the first 200 test questions; the rule for "slow" was
+written into the script before it ran. Typical / slowest 1 in 20: full search
+582 / 650 ms, dense 15 / 25 ms, keyword 67 / 100 ms. First answer from a cold
+open 8.7 s with the models cached; peak memory 1.0 GB; index 521 MB on disk.
+**Not slow**, so faster index types stay parked. The reranker is most of a
+search and costs the same at 9,600 chunks as at 85,000 (636, 941, 743 ms per
+question across the three sets — it tracks passage length, not library size);
+the keyword stage is the part that grows (4 ms → 67 ms). The figures are on
+the results page, generated from `sextant/eval/scale.json`.
