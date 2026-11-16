@@ -91,7 +91,7 @@ class TestARejectedIdeaIsOnlyAsGoodAsItsNote:
     @pytest.mark.parametrize("row", results_page.REJECTED, ids=lambda row: row.note)
     def test_every_figure_in_a_finding_is_in_what_it_quotes(self, row):
         """A finding may reword its note; it may not bring its own numbers."""
-        quoted = " ".join(row.quotes)
+        quoted = " ".join(row.quotes + row.retest)
         figures = re.findall(r"\d+(?:\.\d+)?", row.finding)
         assert figures, f"{row.idea} states no figure"
         missing = [figure for figure in figures if figure not in quoted]

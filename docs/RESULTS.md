@@ -42,8 +42,8 @@ new fact; the linked note has the method and the full tables.
 | Idea | What the measurement said | Note |
 | --- | --- | --- |
 | A tree of summaries (RAPTOR) | The questions a tree would serve already scored 1.000 hit@5 without one. | [`summary-chunks.md`](../learning/summary-chunks.md) |
-| A newer embedding model (bge-small) | Gains 0.091 first-result hit rate on one test set, loses 0.04 on the other; the rule said both. | [`embedder-swap.md`](../learning/embedder-swap.md) |
-| Smaller passages (150 tokens instead of 200) | Meaning search alone fell from 0.820 to 0.720 on the handbook set. | [`chunk-size.md`](../learning/chunk-size.md) |
+| A newer embedding model (bge-small) | Gains 0.091 first-result hit rate on one test set, loses 0.04 on the other; the rule said both. Re-tested on the public sets: meaning search gains only 0.014 on FiQA against the 0.03 asked, and the full search moves by at most 0.011. | [`embedder-swap.md`](../learning/embedder-swap.md), [`rejected-retest.md`](../learning/rejected-retest.md) |
+| Smaller passages (150 tokens instead of 200) | Meaning search alone fell from 0.820 to 0.720 on the handbook set. Re-tested on the public sets: the full search fell 0.005 on NFCorpus where it had to gain 0.03. | [`chunk-size.md`](../learning/chunk-size.md), [`rejected-retest.md`](../learning/rejected-retest.md) |
 | Dropping the re-reading stage (the reranker) | On the long-paper set it scores 0.000 on every off-topic question; no other stage separates them. | [`reranker-decision.md`](../learning/reranker-decision.md) |
 | Letting the model imagine an answer first (HyDE) | Meaning search fell from 0.873 to 0.800, and after re-reading the score was 0.909 either way. | [`hyde.md`](../learning/hyde.md) |
 | Prompt caching | A 28% net saving, against the 30% the rule asked for. | [`prompt-caching.md`](../learning/prompt-caching.md) |

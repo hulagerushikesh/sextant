@@ -1,0 +1,176 @@
+{
+  "note": "learning/rejected-retest.md",
+  "control": "sextant/eval/public-sets.json",
+  "candidates": {
+    "chunk_150": {
+      "changes": "SEXTANT_CHUNK_TOKENS=150",
+      "runs": {
+        "nfcorpus": {
+          "set": "nfcorpus",
+          "split": "test",
+          "questions": 323,
+          "measure": "nDCG@10, graded, linear gain",
+          "stored": {
+            "documents": 3633,
+            "chunks": 13167,
+            "empty_skipped": 0
+          },
+          "ingest_seconds": 237,
+          "embedding_model": "all-MiniLM-L6-v2",
+          "chunk_tokens": 150,
+          "chunk_limit": 30,
+          "candidates_per_stage": 30,
+          "rerank_depth": 25,
+          "max_per_document": 2,
+          "modes": {
+            "dense": {
+              "ndcg@10": 0.3225,
+              "recall@10": 0.1494,
+              "ms_per_question": 7.2
+            },
+            "lexical": {
+              "ndcg@10": 0.2952,
+              "recall@10": 0.1394,
+              "ms_per_question": 5.1
+            },
+            "rrf": {
+              "ndcg@10": 0.3372,
+              "recall@10": 0.165,
+              "ms_per_question": 9.3
+            },
+            "rerank": {
+              "ndcg@10": 0.3588,
+              "recall@10": 0.1707,
+              "ms_per_question": 480.3
+            }
+          }
+        }
+      }
+    },
+    "bge_small": {
+      "changes": "SEXTANT_EMBEDDER=BAAI/bge-small-en-v1.5",
+      "runs": {
+        "nfcorpus": {
+          "set": "nfcorpus",
+          "split": "test",
+          "questions": 323,
+          "measure": "nDCG@10, graded, linear gain",
+          "stored": {
+            "documents": 3633,
+            "chunks": 9578,
+            "empty_skipped": 0
+          },
+          "ingest_seconds": 73,
+          "embedding_model": "BAAI/bge-small-en-v1.5",
+          "chunk_tokens": 200,
+          "chunk_limit": 30,
+          "candidates_per_stage": 30,
+          "rerank_depth": 25,
+          "max_per_document": 2,
+          "modes": {
+            "dense": {
+              "ndcg@10": 0.3477,
+              "recall@10": 0.159,
+              "ms_per_question": 17.1
+            },
+            "lexical": {
+              "ndcg@10": 0.2993,
+              "recall@10": 0.1437,
+              "ms_per_question": 3.9
+            },
+            "rrf": {
+              "ndcg@10": 0.3536,
+              "recall@10": 0.1746,
+              "ms_per_question": 17.7
+            },
+            "rerank": {
+              "ndcg@10": 0.3743,
+              "recall@10": 0.1762,
+              "ms_per_question": 552.8
+            }
+          }
+        },
+        "scifact": {
+          "set": "scifact",
+          "split": "test",
+          "questions": 300,
+          "measure": "nDCG@10, graded, linear gain",
+          "stored": {
+            "documents": 5183,
+            "chunks": 12988,
+            "empty_skipped": 0
+          },
+          "ingest_seconds": 124,
+          "embedding_model": "BAAI/bge-small-en-v1.5",
+          "chunk_tokens": 200,
+          "chunk_limit": 30,
+          "candidates_per_stage": 30,
+          "rerank_depth": 25,
+          "max_per_document": 2,
+          "modes": {
+            "dense": {
+              "ndcg@10": 0.7203,
+              "recall@10": 0.8312,
+              "ms_per_question": 20.4
+            },
+            "lexical": {
+              "ndcg@10": 0.6348,
+              "recall@10": 0.7711,
+              "ms_per_question": 11.7
+            },
+            "rrf": {
+              "ndcg@10": 0.7055,
+              "recall@10": 0.8346,
+              "ms_per_question": 27.0
+            },
+            "rerank": {
+              "ndcg@10": 0.699,
+              "recall@10": 0.8329,
+              "ms_per_question": 1037.8
+            }
+          }
+        },
+        "fiqa": {
+          "set": "fiqa",
+          "split": "test",
+          "questions": 648,
+          "measure": "nDCG@10, graded, linear gain",
+          "stored": {
+            "documents": 57600,
+            "chunks": 85362,
+            "empty_skipped": 38
+          },
+          "ingest_seconds": 1076,
+          "embedding_model": "BAAI/bge-small-en-v1.5",
+          "chunk_tokens": 200,
+          "chunk_limit": 30,
+          "candidates_per_stage": 30,
+          "rerank_depth": 25,
+          "max_per_document": 2,
+          "modes": {
+            "dense": {
+              "ndcg@10": 0.3865,
+              "recall@10": 0.4402,
+              "ms_per_question": 34.9
+            },
+            "lexical": {
+              "ndcg@10": 0.2157,
+              "recall@10": 0.2744,
+              "ms_per_question": 73.7
+            },
+            "rrf": {
+              "ndcg@10": 0.3454,
+              "recall@10": 0.4336,
+              "ms_per_question": 87.8
+            },
+            "rerank": {
+              "ndcg@10": 0.3747,
+              "recall@10": 0.4449,
+              "ms_per_question": 900.3
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -45,3 +45,55 @@ The control for both is the committed run in
 [`public-sets.json`](../sextant/eval/public-sets.json): all-MiniLM-L6-v2,
 200-token passages, same settings otherwise. Each candidate changes one
 thing.
+
+## Results
+
+Both stay rejected. Raw runs: [`retest.json`](../sextant/eval/retest.json);
+the rules above are code in `sextant/eval/retest.py`, and a test fails if
+this note's verdicts stop matching what that code computes from the runs.
+
+**150-token passages** — stopped after the first set, which settles it:
+
+| NFCorpus, nDCG@10 | 200 (control) | 150 | change |
+| --- | --- | --- | --- |
+| meaning | 0.3116 | 0.3225 | +0.011 |
+| keyword | 0.2993 | 0.2952 | −0.004 |
+| fused | 0.3377 | 0.3372 | −0.001 |
+| full pipeline | 0.3635 | 0.3588 | **−0.005** |
+
+The full pipeline had to gain 0.03 and lost 0.005 instead. The per-document
+cap did what the old note predicted for meaning search (it no longer falls;
+it rises 0.011), but the reranked gain that made the idea interesting on our
+own sets does not appear on a public one. It costs 37% more passages
+(13,167 against 9,578) for nothing.
+
+**bge-small** — all three sets, because the first two passed:
+
+| nDCG@10 | meaning: MiniLM → bge | change | full pipeline: MiniLM → bge | change |
+| --- | --- | --- | --- | --- |
+| NFCorpus | 0.3116 → 0.3477 | +0.036 | 0.3635 → 0.3743 | +0.011 |
+| SciFact | 0.6713 → 0.7203 | +0.049 | 0.7004 → 0.6990 | −0.001 |
+| FiQA | 0.3722 → 0.3865 | **+0.014** | 0.3752 → 0.3747 | −0.0005 |
+
+Meaning search gains on every set but FiQA misses the 0.03 bar, so the rule
+says rejected. The more useful finding is the right-hand column: **after the
+reranker, the better embedder changes the answer by at most 0.011**, the
+same pattern as on our own sets in milestone 16. The reranker decides the
+final order; a stronger first stage mostly changes which passages it is
+handed, not which one wins. Swapping would also force every existing
+library to be re-indexed.
+
+## What would change these decisions
+
+- **A product mode without the reranker** (a speed tier, say). Then the
+  first stage is the answer, and bge's +0.014 to +0.049 is worth having.
+- For passage size: a test set whose questions are about one sentence each,
+  where the old reranked gain came from. None of the three public sets is.
+
+## Cost
+
+₹0. No download: bge-small was already cached from milestone 16 and ran
+offline. About 49 minutes of laptop load across four runs (the longest 30), each under a
+watchdog (memory, swap, battery, 30 minutes); peak memory 0.9 GB. The FiQA
+run hit the 30-minute stop while deleting its throwaway index, a few
+seconds after its results were written; nothing was lost.

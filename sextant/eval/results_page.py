@@ -70,6 +70,11 @@ class Rejected:
     finding: str
     note: str
     quotes: tuple[str, ...]
+    # Quotes from the public-set re-test note, for the two ideas it re-ran.
+    retest: tuple[str, ...] = ()
+
+
+RETEST_NOTE = "rejected-retest.md"
 
 
 REJECTED = (
@@ -82,15 +87,24 @@ REJECTED = (
     Rejected(
         "A newer embedding model (bge-small)",
         "Gains 0.091 first-result hit rate on one test set, loses 0.04 on the other; "
-        "the rule said both.",
+        "the rule said both. Re-tested on the public sets: meaning search gains only "
+        "0.014 on FiQA against the 0.03 asked, and the full search moves by at most 0.011.",
         "embedder-swap.md",
         ("+0.091 dense hit@1", "On the handbook it loses 0.04 hit@1"),
+        (
+            "| FiQA | 0.3722 → 0.3865 | **+0.014** |",
+            "rises by **≥ 0.03 on all three sets**",
+            "the better embedder changes the answer by at most 0.011",
+        ),
     ),
     Rejected(
         "Smaller passages (150 tokens instead of 200)",
-        "Meaning search alone fell from 0.820 to 0.720 on the handbook set.",
+        "Meaning search alone fell from 0.820 to 0.720 on the handbook set. Re-tested "
+        "on the public sets: the full search fell 0.005 on NFCorpus where it had to "
+        "gain 0.03.",
         "chunk-size.md",
         ("| MiniLM | 150 | 0.720 |", "| MiniLM | 200 | **0.820** |", "**200 stays.**"),
+        ("The full pipeline had to gain 0.03 and lost 0.005 instead.",),
     ),
     Rejected(
         "Dropping the re-reading stage (the reranker)",
@@ -213,14 +227,16 @@ def _abstention(baseline: dict[str, Any], golden: str) -> str:
 def _rejected(root: Path) -> list[str]:
     lines = ["| Idea | What the measurement said | Note |", "| --- | --- | --- |"]
     for row in REJECTED:
-        note = _squash((root / NOTES / row.note).read_text())
-        for quote in row.quotes:
-            if _squash(quote) not in note:
-                raise StaleSource(
-                    f"learning/{row.note} no longer says {quote!r} -- "
-                    f"the row for {row.idea!r} is unsupported"
-                )
-        link = f"[`{row.note}`](../learning/{row.note})"
+        sources = [(row.note, row.quotes)] + ([(RETEST_NOTE, row.retest)] if row.retest else [])
+        for name, quotes in sources:
+            note = _squash((root / NOTES / name).read_text())
+            for quote in quotes:
+                if _squash(quote) not in note:
+                    raise StaleSource(
+                        f"learning/{name} no longer says {quote!r} -- "
+                        f"the row for {row.idea!r} is unsupported"
+                    )
+        link = ", ".join(f"[`{name}`](../learning/{name})" for name, _ in sources)
         lines.append(f"| {row.idea} | {row.finding} | {link} |")
     return lines
 

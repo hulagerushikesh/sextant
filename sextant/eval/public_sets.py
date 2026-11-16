@@ -181,6 +181,7 @@ async def grade_mode(
 
 async def run(data: Path, modes: Sequence[str], reuse: bool = False) -> dict[str, Any]:
     from sextant.vector_db import vector_search
+    from sextant.vector_db.chunking import configured_chunk_sizes
     from sextant.vector_db.vector_search import KnowledgeBase
 
     qrels = {
@@ -215,6 +216,7 @@ async def run(data: Path, modes: Sequence[str], reuse: bool = False) -> dict[str
         "stored": stored,
         "ingest_seconds": ingest_seconds,
         "embedding_model": health.get("embedding_model"),
+        "chunk_tokens": configured_chunk_sizes()[0],
         "chunk_limit": CHUNK_LIMIT,
         "candidates_per_stage": vector_search.CANDIDATES,
         "rerank_depth": vector_search.RERANK_DEPTH,
