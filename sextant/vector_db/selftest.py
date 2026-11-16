@@ -22,6 +22,12 @@ was missed, and the documents search cannot use at all -- files the folder
 pass could not store (scanned, empty, unreadable) and documents that hold the
 same text as another. The assistant is told to show it as it is.
 
+It closes with at most one suggestion (item 4), and only one the report can
+back with a number: copies that cost questions, PDFs with no text, files
+sharing a name, files that would not open, copies that cost nothing. It
+names the files it is about, so the evidence is in the same screen, and it
+is left out when nothing found has a clear fix.
+
 One shortcut is checked rather than trusted: a question that copies a long run
 of the passage's words verbatim is a keyword match in disguise and flatters
 the score. Such questions are graded and flagged, and the headline says how
@@ -56,6 +62,8 @@ CHANCE_SEED = 29
 # out in the report; the rest are counted, and every one stays in the result.
 REPORTED_MISSES = 5
 REPORTED_DOCUMENTS = 8
+# How many file names the suggestion writes out; the result keeps them all.
+REPORTED_EVIDENCE = 4
 
 # What item 2 found on three public sets (`learning/selftest-honesty.md`): the
 # score followed the true one only roughly, and its level belongs to the writer.
@@ -211,7 +219,9 @@ def duplicates(corpus: Corpus) -> list[dict[str, Any]]:
 
 
 def cannot_search(
-    corpus: Corpus, not_indexed: Sequence[Mapping[str, Any]] | None
+    corpus: Corpus,
+    not_indexed: Sequence[Mapping[str, Any]] | None,
+    copies: Sequence[Mapping[str, Any]] | None = None,
 ) -> list[dict[str, str]]:
     """Every document search cannot use: files the folder pass could not
     store, then copies of another document. Each with a reason in plain words."""
@@ -224,7 +234,7 @@ def cannot_search(
         for item in not_indexed or []
     ]
     found.sort(key=lambda d: d["kind"] != "no_text")  # scanned and empty first
-    for dup in duplicates(corpus):
+    for dup in duplicates(corpus) if copies is None else copies:
         found.append(
             {
                 "name": dup["name"],
@@ -236,6 +246,104 @@ def cannot_search(
             }
         )
     return found
+
+
+def lost_to_copies(
+    missed: Sequence[dict[str, Any]], copies: Sequence[Mapping[str, Any]]
+) -> list[dict[str, Any]]:
+    """Missed questions whose first result was another copy of their own text."""
+    original = {d["document_id"]: d["same_as"] for d in copies}
+    original.update({d["same_as"]: d["same_as"] for d in copies})
+    lost = []
+    for g in missed:
+        first = g["first_result"]
+        mine = g["document_id"]
+        theirs = first.get("document_id") if first else None
+        if theirs and theirs != mine and mine in original:
+            if original.get(theirs) == original[mine]:
+                lost.append(g)
+    return lost
+
+
+def _listing(names: Sequence[str]) -> str:
+    shown = ", ".join(names[:REPORTED_EVIDENCE])
+    if len(names) > REPORTED_EVIDENCE:
+        shown += f" and {len(names) - REPORTED_EVIDENCE} more"
+    return shown
+
+
+def _plural(n: int, one: str, many: str) -> str:
+    return f"{n} {one if n == 1 else many}"
+
+
+def suggestion(
+    unusable: Sequence[Mapping[str, str]],
+    lost: Sequence[Mapping[str, Any]],
+    missed: int,
+) -> dict[str, Any] | None:
+    """The one change the report can back with a number, or `None`.
+
+    In order: copies that cost questions (a measured effect on this score),
+    then files search cannot read at all -- PDFs with no text, files hidden
+    behind another of the same name, files that would not open -- then
+    copies that cost nothing measured. An empty non-PDF has no fix worth
+    suggesting, and a miss within the right document has none a person can
+    make, so neither is ever the suggestion.
+    """
+
+    def names(test: Callable[[Mapping[str, str]], bool]) -> list[str]:
+        return [d["name"] for d in unusable if test(d)]
+
+    copies = names(lambda d: d["kind"] == "duplicate")
+    scanned = names(lambda d: d["kind"] == "no_text" and d["name"].lower().endswith(".pdf"))
+    same_name = names(lambda d: d["kind"] == "same_name")
+    unreadable = names(lambda d: d["kind"] == "unreadable")
+    questions = [str(g["question"]) for g in lost]
+
+    if copies and lost:
+        kind, files, count = "remove_copies", copies, len(lost)
+        which = "the copy" if len(copies) == 1 else f"the {len(copies)} copies"
+        text = (
+            f"Remove {which} ({_listing(copies)}): **{count} of the {missed} missed "
+            f"questions** {'was' if count == 1 else 'were'} beaten by a copy of "
+            f"{'its' if count == 1 else 'their'} own document."
+        )
+    elif scanned:
+        kind, files, count = "recognise_text", scanned, len(scanned)
+        text = (
+            f"Run **{_plural(count, 'PDF', 'PDFs')} with no readable text** "
+            f"({_listing(scanned)}) through text recognition (OCR) and add "
+            "them again: until then search can find nothing in them."
+        )
+    elif same_name:
+        kind, files, count = "rename", same_name, len(same_name)
+        text = (
+            f"Rename **{_plural(count, 'file', 'files')} that share a name** "
+            f"with another ({_listing(same_name)}): only one file of each name "
+            "is indexed."
+        )
+    elif unreadable:
+        kind, files, count = "check_unreadable", unreadable, len(unreadable)
+        text = (
+            f"Open and save again **{_plural(count, 'file', 'files')} that could "
+            f"not be read** ({_listing(unreadable)}); the reason for each is "
+            "listed above."
+        )
+    elif copies:
+        kind, files, count = "remove_copies", copies, len(copies)
+        text = (
+            f"Remove **{_plural(count, 'copy', 'copies')}** ({_listing(copies)}): "
+            "each holds the same text as another document, so the two take up "
+            "each other's places in the results."
+        )
+    else:
+        return None
+    return {
+        "kind": kind,
+        "count": count,
+        "text": text,
+        "evidence": {"files": files, "questions": questions if kind == "remove_copies" else []},
+    }
 
 
 def report(graded: Mapping[str, Any], unusable: Sequence[Mapping[str, str]], folder: bool) -> str:
@@ -275,10 +383,14 @@ def report(graded: Mapping[str, Any], unusable: Sequence[Mapping[str, str]], fol
     missed = graded["missed"]
     if missed:
         lines = [f"**Questions it missed ({len(missed)}):**"]
-        for g in missed[:REPORTED_MISSES]:
+        # The questions a suggestion cites come first, so its evidence is shown.
+        shown = sorted(missed, key=lambda g: not g.get("lost_to_copy"))
+        for g in shown[:REPORTED_MISSES]:
             first = g["first_result"]
             if not first:
                 instead = "nothing came back"
+            elif g.get("lost_to_copy"):
+                instead = f"the first result was from {first['name']}, a copy of the same text"
             elif g["document_rank"] == 1:
                 instead = "another passage of the same document came first"
             else:
@@ -306,6 +418,10 @@ def report(graded: Mapping[str, Any], unusable: Sequence[Mapping[str, str]], fol
             "**No two documents are copies.** Files that failed to load are "
             "listed here only when the library is a folder chosen at install."
         )
+
+    advice = graded.get("suggestion")
+    if advice:
+        sections.append(f"**Fix first:** {advice['text']}")
     return "\n\n".join(sections)
 
 
@@ -346,6 +462,7 @@ def grade(
                 "question": question,
                 "title": meta.get("title", "Untitled document"),
                 "name": _name(meta, passage_id),
+                "document_id": document_id,
                 "rank": ids.index(passage_id) + 1 if passage_id in ids else None,
                 "document_rank": (
                     documents.index(document_id) + 1 if document_id in documents else None
@@ -354,6 +471,7 @@ def grade(
                 "first_result": (
                     {
                         "passage_id": hits[0].get("id"),
+                        "document_id": hits[0].get("document_id"),
                         "title": hits[0].get("title"),
                         "name": _name(hits[0], str(hits[0].get("id"))),
                     }
@@ -401,6 +519,11 @@ def grade(
             "it look better than it is."
         ),
     }
-    result["cannot_search"] = cannot_search(corpus, not_indexed)
+    copies = duplicates(corpus)
+    lost = lost_to_copies(missed, copies)
+    for g in lost:
+        g["lost_to_copy"] = True
+    result["cannot_search"] = cannot_search(corpus, not_indexed, copies)
+    result["suggestion"] = suggestion(result["cannot_search"], lost, len(missed))
     result["report"] = report(result, result["cannot_search"], folder=not_indexed is not None)
     return result
