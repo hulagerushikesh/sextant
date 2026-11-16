@@ -299,7 +299,7 @@ finishes an item. It is the only place progress is counted.
 
 ## 9 · Waiting on the owner
 
-1. Reinstall `dist/sextant-0.11.0.mcpb` in Claude Desktop (0.11.0 published 2026-11-16); say if anything is reported as not indexed.
+1. Publish 0.11.1 (two processes no longer break the library), reinstall `dist/sextant-0.11.1.mcpb` in Claude Desktop, and ask the self-test question; the broken store is moved aside on first start and Downloads indexed again.
 2. Confirm the rules for milestones 23 and 25 are met.
 3. Milestone 27's rule: from an empty machine, a cited answer in Claude Desktop in 3 minutes with no terminal — the owner's try decides it.
 4. Milestone 26: pick three people — after milestone 27.

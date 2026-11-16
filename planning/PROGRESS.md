@@ -5,6 +5,13 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-16 — two processes, one library: 0.11.1 prepared (₹0)
+
+- The owner's self-test in Claude Desktop failed on every tool: the store would not open ("Failed to apply logs to the hnsw segment writer"). Claude Desktop starts the server twice; on 2026-11-15 both indexed Downloads into one store at once. Reproduced with two processes replacing the same documents; a lock per write was not enough ([the note](../learning/two-processes.md)).
+- Now one process opens the store and the others forward every tool call to it over a local socket; the next one takes over when it exits. `sextant-ingest` and `sextant-forget` refuse while a server holds the store. A store Chroma cannot read is moved aside and a new one opened — on a copy of the owner's store it was. Each part planted back and caught; 1,132 tests pass.
+- Two real servers, and two copies of the 0.11.1 bundle launched as Claude Desktop launches them, over one folder: answered by one process every round, and the store opened afterwards. The wheel launched outside the checkout and ran the self-test.
+- Does not prove: Claude Desktop with 0.11.1 installed — the owner's reinstall, after publishing — nor damage that makes Chroma hang or crash instead of raising an error, which is not caught. Windows untried.
+
 ## 2026-11-16 — release 0.11.0 published and listed (₹0)
 
 - The owner uploaded 0.11.0 and published the registry entry. Checked from outside: the package index's latest is 0.11.0 and all 15 links on its page answer; the registry lists `io.github.hulagerushikesh/sextant` 0.11.0 as the active latest, 0.10.0 kept beside it.

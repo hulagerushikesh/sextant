@@ -27,8 +27,9 @@ from sextant.vector_db.loaders import (
     unreadable_line,
 )
 from sextant.vector_db.retrieval import RerankerUnavailable
+from sextant.vector_db.sharing import LibraryBusy, exclusive
 from sextant.vector_db.summaries import SummariesUnavailable, summarise
-from sextant.vector_db.vector_search import KnowledgeBase, KnowledgeBaseUnavailable
+from sextant.vector_db.vector_search import KnowledgeBase, KnowledgeBaseUnavailable, persist_dir
 
 SUPPORTED = PDF_SUFFIXES | MARKDOWN_SUFFIXES | TEXT_SUFFIXES
 
@@ -192,10 +193,11 @@ def main() -> None:
     print(f"Indexing {len(files)} file(s)...")
     summaries = _summaries_wanted(args.summaries)
     try:
-        failures = asyncio.run(
-            _ingest(files, args.category, summaries, required=args.summaries is True)
-        )
-    except (KnowledgeBaseUnavailable, SummariesUnavailable) as e:
+        with exclusive(persist_dir()):
+            failures = asyncio.run(
+                _ingest(files, args.category, summaries, required=args.summaries is True)
+            )
+    except (KnowledgeBaseUnavailable, SummariesUnavailable, LibraryBusy) as e:
         sys.exit(str(e))
     if failures:
         sys.exit(f"{failures} file(s) failed")
