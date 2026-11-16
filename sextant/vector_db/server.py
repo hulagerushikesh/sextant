@@ -34,11 +34,13 @@ graph will corrupt the protocol stream.
 from __future__ import annotations
 
 import asyncio
+import functools
+import inspect
 import logging
 import os
 import sys
 import threading
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable, Coroutine
 from contextlib import asynccontextmanager
 from typing import Annotated, Any, Literal
 
@@ -56,6 +58,7 @@ from sextant.vector_db import selftest
 # does not). A no-op when faiss is not installed; faiss_ref guards its own import.
 from sextant.vector_db.ann import faiss_ref as _faiss_preload  # noqa: F401
 from sextant.vector_db.folder import FolderSync, configured
+from sextant.vector_db.sharing import Library, LibraryBusy
 from sextant.vector_db.vector_search import (
     DEFAULT_MIN_SCORE,
     DEFAULT_MODE,
@@ -79,21 +82,71 @@ _folder: FolderSync | None = (
 )
 
 
+# The tools by name, as defined below, for the process that has the store
+# open. Every other process forwards to it (`sharing.py`).
+_LOCAL: dict[str, Callable[..., Coroutine[Any, Any, dict[str, Any]]]] = {}
+_library: Library | None = None
+_folder_task: asyncio.Task[None] | None = None
+
+
+async def _run_local(tool: str, args: dict[str, Any]) -> dict[str, Any]:
+    return await _LOCAL[tool](**args)
+
+
+def _start_folder() -> None:
+    """Index the chosen folder -- in the process that has the store open only.
+
+    Two passes over one folder were how the owner's library broke: both
+    processes stored all 141 files into one store at the same time.
+    """
+    global _folder_task
+    if _folder is not None and _folder_task is None:
+        _folder_task = asyncio.create_task(_folder.run(_store))
+
+
+def _routed(
+    fn: Callable[..., Coroutine[Any, Any, dict[str, Any]]],
+) -> Callable[..., Coroutine[Any, Any, dict[str, Any]]]:
+    """Run a tool where the library is open: here, or in the process that has it."""
+    _LOCAL[fn.__name__] = fn
+    signature = inspect.signature(fn)
+
+    @functools.wraps(fn)
+    async def tool(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        if _library is None:  # called directly, not served: nothing to share
+            return await fn(*args, **kwargs)
+        bound = signature.bind(*args, **kwargs)
+        bound.apply_defaults()
+        try:
+            return await _library.call(fn.__name__, dict(bound.arguments))
+        except LibraryBusy as e:
+            return {"success": False, "error": str(e)}
+
+    return tool
+
+
 @asynccontextmanager
 async def _lifespan(_server: Any) -> AsyncIterator[dict[str, Any]]:
-    """Start indexing the chosen folder after the handshake can be answered.
+    """Take the library if no other process has it, then serve.
 
-    In the background, not before serving: a first run downloads the search
-    models and embeds a whole folder, and a client that waits that long for
-    `initialize` decides the server is broken. Tools answer meanwhile, and
-    say the library is partial (`FolderSync.note`).
+    The process that takes it indexes the chosen folder in the background,
+    not before serving: a first run downloads the search models and embeds a
+    whole folder, and a client that waits that long for `initialize` decides
+    the server is broken. Tools answer meanwhile, and say the library is
+    partial (`FolderSync.note`). A process that finds the library taken
+    forwards every tool call to the one that has it.
     """
-    task = asyncio.create_task(_folder.run(_store)) if _folder is not None else None
+    global _library, _folder_task
+    _library = Library(persist_dir(), _run_local, on_owner=_start_folder)
+    await _library.try_own()
     try:
         yield {}
     finally:
-        if task is not None:
-            task.cancel()
+        if _folder_task is not None:
+            _folder_task.cancel()
+            _folder_task = None
+        await _library.close()
+        _library = None
 
 
 mcp = MCPServer(
@@ -163,6 +216,7 @@ def _with_folder(result: dict[str, Any]) -> dict[str, Any]:
         "reading: they are ordered by embedding similarity, not judged relevant."
     )
 )
+@_routed
 async def kb_search(
     query: Annotated[str, Field(description="The question or descriptive phrase to search for.")],
     limit: Annotated[int, Field(description="Maximum passages to return.", ge=1, le=25)] = 5,
@@ -215,6 +269,7 @@ async def kb_search(
         "sextant-ingest command instead."
     )
 )
+@_routed
 async def kb_ingest(
     documents: Annotated[
         list[dict[str, Any]],
@@ -238,6 +293,7 @@ async def kb_ingest(
         "any files that could not be read, with the reason for each."
     )
 )
+@_routed
 async def kb_stats() -> dict[str, Any]:
     """Health and size of the collection, and of the chosen folder if there is one."""
     try:
@@ -246,6 +302,9 @@ async def kb_stats() -> dict[str, Any]:
         stats = {"status": "unavailable", "error": str(e)}
     if _folder is not None:
         stats["folder"] = _folder.status()
+    # Which process answered. Every client of one library should see the same
+    # one, whichever process it launched (`sharing.py`).
+    stats["server_process"] = os.getpid()
     return _with_folder(stats)
 
 
@@ -259,6 +318,7 @@ async def kb_stats() -> dict[str, Any]:
         "inside documents and has nothing to match a question about the whole."
     )
 )
+@_routed
 async def kb_list() -> dict[str, Any]:
     """Every document and what it is about; a listing, not a search."""
     try:
@@ -277,6 +337,7 @@ async def kb_list() -> dict[str, Any]:
         "not retrieve anything for the user."
     )
 )
+@_routed
 async def kb_ann_benchmark(
     k: Annotated[
         int, Field(description="Neighbours per query to score recall over.", ge=1, le=100)
@@ -304,6 +365,7 @@ async def kb_ann_benchmark(
         "question, not for answering one."
     )
 )
+@_routed
 async def kb_ann_compare(
     query: Annotated[str, Field(description="The question or phrase to search with.")],
     k: Annotated[
@@ -335,6 +397,7 @@ async def kb_ann_compare(
         "results."
     )
 )
+@_routed
 async def kb_selftest_sample(
     size: Annotated[
         int,
@@ -363,6 +426,7 @@ async def kb_selftest_sample(
         "score is a rough guide."
     )
 )
+@_routed
 async def kb_selftest_grade(
     questions: Annotated[
         list[dict[str, Any]],
@@ -384,6 +448,7 @@ async def kb_selftest_grade(
         return {"error": str(e), "questions": 0}
 
 
+@_routed
 async def kb_forget(
     document_id: Annotated[
         str, Field(description="Id of the document to remove, as kb_list reports it.")

@@ -18,7 +18,12 @@ import argparse
 import asyncio
 import sys
 
-from sextant.vector_db.vector_search import KnowledgeBase, KnowledgeBaseUnavailable
+from sextant.vector_db.sharing import LibraryBusy, exclusive
+from sextant.vector_db.vector_search import (
+    KnowledgeBase,
+    KnowledgeBaseUnavailable,
+    persist_dir,
+)
 
 
 async def _listing(kb: KnowledgeBase) -> dict[str, dict[str, object]]:
@@ -91,11 +96,12 @@ def main() -> None:
         parser.error("give document ids to remove, or --list to see them")
 
     try:
-        if args.list:
-            failures = asyncio.run(_list(KnowledgeBase()))
-        else:
-            failures = asyncio.run(_forget(KnowledgeBase(), args.document_ids, args.yes))
-    except KnowledgeBaseUnavailable as e:
+        with exclusive(persist_dir()):
+            if args.list:
+                failures = asyncio.run(_list(KnowledgeBase()))
+            else:
+                failures = asyncio.run(_forget(KnowledgeBase(), args.document_ids, args.yes))
+    except (KnowledgeBaseUnavailable, LibraryBusy) as e:
         sys.exit(str(e))
     if failures:
         sys.exit(f"{failures} document(s) not removed")

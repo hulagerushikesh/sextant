@@ -78,7 +78,8 @@ Read [`planning/PLAN.md`](planning/PLAN.md) first: the goal, the current milesto
 
 **Store and retrieval**
 
-- Chroma goes stale after a CLI ingest: restart `:8100`. Drop one document with `sextant-forget <id>`; empty the store with `rm chroma_db/chroma.sqlite3` and a restart.
+- **One process opens a store; the rest forward to it** (`sharing.py`): Chroma breaks when two processes write it. `sextant-ingest` and `sextant-forget` refuse while a server holds the store — stop `:8100` first. Drop one document with `sextant-forget <id>`; empty the store with `rm chroma_db/chroma.sqlite3` and a restart.
+- A store Chroma cannot read is moved to `<store>.unreadable-<time>` and a new one opened; `kb_stats` → `set_aside` says so.
 - Re-ingesting an id replaces that document: its old chunks are cleared first.
 - A collection is stamped with its embedding model and refuses to open under another (`SEXTANT_EMBEDDER`).
 - Results are capped at 2 chunks per document (`SEXTANT_MAX_PER_DOCUMENT`); set it to `0` for any experiment's control.

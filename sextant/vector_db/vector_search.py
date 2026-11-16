@@ -278,15 +278,23 @@ class KnowledgeBase:
             raise KnowledgeBaseUnavailable(str(e)) from e
 
         self.persist_dir = persist_dir()
+        # Where an unreadable store was moved, when this open had to start over.
+        self.set_aside: dict[str, str] | None = None
         try:
-            self.client = chromadb.PersistentClient(path=str(self.persist_dir))
-            self.collection = self.client.get_or_create_collection(
-                name=collection_name,
-                # cast: chroma types this as a TypedDict the plain literal does
-                # not match, though it is exactly what the API documents.
-                configuration=cast(Any, {"hnsw": {"space": DISTANCE_SPACE}}),
-                metadata={"description": "Agentic RAG document collection"},
-            )
+            self._open(chromadb)
+        except chromadb.errors.InternalError as e:
+            # A store Chroma itself cannot read back -- what two processes
+            # writing one store at once left on the owner's Mac (`sharing.py`).
+            # Every tool failed with nothing a person could do. Moved aside,
+            # not deleted: the folder is indexed again from the files, and
+            # anything added another way is still in the old copy.
+            self._set_aside(e)
+            try:
+                self._open(chromadb)
+            except Exception as again:
+                raise KnowledgeBaseUnavailable(
+                    f"Could not open a new collection at {self.persist_dir}: {again}"
+                ) from again
         except Exception as e:
             raise KnowledgeBaseUnavailable(
                 f"Could not open the ChromaDB collection at {self.persist_dir}: {e}"
@@ -339,6 +347,35 @@ class KnowledgeBase:
             self.collection.count(),
             self.embedder.name,
             self.persist_dir,
+        )
+
+    def _open(self, chromadb: Any) -> None:
+        self.client: Any = chromadb.PersistentClient(path=str(self.persist_dir))
+        self.collection = self.client.get_or_create_collection(
+            name=self.collection_name,
+            # cast: chroma types this as a TypedDict the plain literal does
+            # not match, though it is exactly what the API documents.
+            configuration=cast(Any, {"hnsw": {"space": DISTANCE_SPACE}}),
+            metadata={"description": "Agentic RAG document collection"},
+        )
+        # Opening reads nothing back; counting replays the store's log into
+        # its vector index, which is where a damaged store first fails.
+        self.collection.count()
+
+    def _set_aside(self, error: Exception) -> None:
+        close = getattr(getattr(self, "client", None), "close", None)
+        if close is not None:
+            try:
+                close()
+            except Exception:  # noqa: BLE001 - it is being abandoned either way
+                pass
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        moved = self.persist_dir.with_name(f"{self.persist_dir.name}.unreadable-{stamp}")
+        self.persist_dir.rename(moved)
+        self.set_aside = {"moved_to": str(moved), "reason": str(error)}
+        logger.warning(
+            "the library at %s could not be read (%s); moved it to %s and started a new one",
+            self.persist_dir, error, moved,
         )
 
     def _check_embedding_model(self) -> None:
@@ -1122,7 +1159,7 @@ class KnowledgeBase:
         metadatas = [meta or {} for meta in (stored.get("metadatas") or [])]
         documents = {meta.get("document_id") for meta in metadatas}
         summaries = sum(1 for meta in metadatas if meta.get("kind") == SUMMARY_KIND)
-        return {
+        report: dict[str, Any] = {
             "status": "healthy",
             "database": "chromadb",
             "embedding_model": self.embedder.name,
@@ -1143,3 +1180,13 @@ class KnowledgeBase:
             "persist_dir": str(self.persist_dir),
             "timestamp": datetime.now().isoformat(),
         }
+        if self.set_aside is not None:
+            report["set_aside"] = {
+                **self.set_aside,
+                "note": (
+                    "The library could not be read, so it was moved aside and a new "
+                    "one started. The chosen folder is indexed again from its files; "
+                    "anything added another way is only in the moved copy."
+                ),
+            }
+        return report

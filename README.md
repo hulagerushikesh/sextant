@@ -47,7 +47,9 @@ The first run downloads the search models, once; after that it works
 offline. A note that it is storing text only is expected: an optional
 model-written overview per document needs a Gemini key, and nothing else
 does. Searching happens on your machine; the passages it finds go to
-whichever assistant you plug it into.
+whichever assistant you plug it into. To add more documents later, quit the
+assistant first: only one program may write the library at a time, and
+`sextant-ingest` refuses, saying so, while an assistant has it open.
 
 **3. Plug it into your assistant.** In Claude Desktop: Settings → Developer →
 Edit Config, then add this and restart the app. The command must be a full
