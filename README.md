@@ -94,21 +94,21 @@ progress and any file it could not read.
 **Claude Code:**
 
 ```bash
-uvx --from 'sextant-kb>=0.10' sextant-kb --version && claude mcp add sextant --scope user --env SEXTANT_FOLDER=~/Documents -- uvx --from 'sextant-kb>=0.10' sextant-kb
+uvx --from 'sextant-kb>=0.11.1' sextant-kb --version && claude mcp add sextant --scope user --env SEXTANT_FOLDER=~/Documents -- uvx --from 'sextant-kb>=0.11.1' sextant-kb
 ```
 
 **VS Code** (needs the `code` command: in VS Code run *Shell Command: Install
 'code' command in PATH* once):
 
 ```bash
-uvx --from 'sextant-kb>=0.10' sextant-kb --version && code --add-mcp '{"name":"sextant","command":"uvx","args":["--from","sextant-kb>=0.10","sextant-kb"],"env":{"SEXTANT_FOLDER":"~/Documents"}}'
+uvx --from 'sextant-kb>=0.11.1' sextant-kb --version && code --add-mcp '{"name":"sextant","command":"uvx","args":["--from","sextant-kb>=0.11.1","sextant-kb"],"env":{"SEXTANT_FOLDER":"~/Documents"}}'
 ```
 
 **Cursor:** add this to `~/.cursor/mcp.json`. It has not been tried in
 Cursor yet.
 
 ```json
-{"mcpServers": {"sextant": {"command": "uvx", "args": ["--from", "sextant-kb>=0.10", "sextant-kb"], "env": {"SEXTANT_FOLDER": "~/Documents"}}}}
+{"mcpServers": {"sextant": {"command": "uvx", "args": ["--from", "sextant-kb>=0.11.1", "sextant-kb"], "env": {"SEXTANT_FOLDER": "~/Documents"}}}}
 ```
 
 ## What your assistant gets
