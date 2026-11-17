@@ -5,6 +5,13 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-17 — the self-test works in Claude Desktop (₹0)
+
+- The owner published 0.11.1 and reinstalled the bundle. On first start the broken store was moved aside, one of Claude Desktop's two processes took the library, and Downloads was indexed again: 190 files, 155 searchable (5,595 passages), 35 not indexed. Every tool answered. **Milestone 29 item 1's done-when is met** — a fresh library, in Claude Desktop.
+- The self-test on the owner's own Downloads: **15 of 20 (75%, chance 60–90%)**. Four of the five misses found the right text in another version of the same résumé; the fifth was a blank form. 54 files listed as unusable (26 with no text, 7 password-protected, 19 copies, 2 sharing a name); **Fix first** named the 26 PDFs with no text.
+- Evidence for milestone 30: near-identical versions of one file cost most of the misses, and the report cannot say so — it only finds word-for-word copies. Scanned and password-protected PDFs were the largest unusable group.
+- The README's one-line installs now ask for 0.11.1 or newer. Does not prove: the 5-minute stranger try (milestone 29's rule) or whether the report reads in one screen — both the owner's call.
+
 ## 2026-11-16 — two processes, one library: 0.11.1 prepared (₹0)
 
 - The owner's self-test in Claude Desktop failed on every tool: the store would not open ("Failed to apply logs to the hnsw segment writer"). Claude Desktop starts the server twice; on 2026-11-15 both indexed Downloads into one store at once. Reproduced with two processes replacing the same documents; a lock per write was not enough ([the note](../learning/two-processes.md)).
