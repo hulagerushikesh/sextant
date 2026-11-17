@@ -23,8 +23,9 @@ pass could not store (scanned, empty, unreadable) and documents that hold the
 same text as another. The assistant is told to show it as it is.
 
 It closes with at most one suggestion (item 4), and only one the report can
-back with a number: copies that cost questions, PDFs with no text, files
-sharing a name, files that would not open, copies that cost nothing. It
+back with a number: copies that cost questions, other versions of a document
+that cost questions, PDFs with no text, files sharing a name, files that would
+not open, copies that cost nothing. It
 names the files it is about, so the evidence is in the same screen, and it
 is left out when nothing found has a clear fix.
 
@@ -54,6 +55,13 @@ MIN_WORDS = 25
 SEARCH_DEPTH = 10
 # Eight words in a row taken from the passage is copying, not asking.
 COPIED_RUN = 8
+# Another version of a document: a missed question's first result came from a
+# document that holds at least this share of the passage's five-word runs.
+# Found on the owner's own library (2026-11-17), where four of five misses
+# were the same text in another version of the same résumé, and the report,
+# which only knew word-for-word copies, could not say so.
+VERSION_RUN = 5
+VERSION_SHARE = 0.5
 # How the chance range is drawn: the graded questions resampled this many
 # times, with a fixed seed so one grade always reports one range.
 CHANCE_DRAWS = 2000
@@ -265,6 +273,48 @@ def lost_to_copies(
     return lost
 
 
+def _runs(words: Sequence[str], run: int = VERSION_RUN) -> set[tuple[str, ...]]:
+    return {tuple(words[i : i + run]) for i in range(len(words) - run + 1)}
+
+
+def lost_to_versions(missed: Sequence[dict[str, Any]], corpus: Corpus) -> list[dict[str, Any]]:
+    """Missed questions whose first result came from another version of their
+    own document: one holding most of the passage's text, and most of the
+    document's (measured against the smaller of the two).
+
+    Measured against the whole of the other document, so a version cut into
+    passages at other places still counts; the second test keeps a long
+    passage two different documents share, such as a footer, from counting.
+    A question already lost to an exact copy is left to that.
+    """
+    text_of: dict[str, list[tuple[int, str]]] = {}
+    for chunk_id, (text, meta) in corpus.items():
+        if meta.get("kind") == SUMMARY_KIND:
+            continue
+        doc = str(meta.get("document_id", chunk_id))
+        text_of.setdefault(doc, []).append((int(meta.get("chunk_index") or 0), text))
+    runs_of: dict[str, set[tuple[str, ...]]] = {}
+    lost = []
+    for g in missed:
+        first = g["first_result"]
+        theirs = str(first.get("document_id") or "") if first else ""
+        if g.get("lost_to_copy") or not theirs or theirs == str(g["document_id"]):
+            continue
+        mine = _runs(_words(corpus[g["passage_id"]][0]))
+        own = str(g["document_id"])
+        if not mine or theirs not in text_of or own not in text_of:
+            continue
+        for doc in (own, theirs):
+            if doc not in runs_of:
+                runs_of[doc] = _runs([w for _, t in sorted(text_of[doc]) for w in _words(t)])
+        passage = len(mine & runs_of[theirs]) / len(mine)
+        smaller = min(len(runs_of[own]), len(runs_of[theirs])) or 1
+        document = len(runs_of[own] & runs_of[theirs]) / smaller
+        if passage >= VERSION_SHARE and document >= VERSION_SHARE:
+            lost.append(g)
+    return lost
+
+
 def _listing(names: Sequence[str]) -> str:
     shown = ", ".join(names[:REPORTED_EVIDENCE])
     if len(names) > REPORTED_EVIDENCE:
@@ -280,12 +330,14 @@ def suggestion(
     unusable: Sequence[Mapping[str, str]],
     lost: Sequence[Mapping[str, Any]],
     missed: int,
+    versions: Sequence[Mapping[str, Any]] = (),
 ) -> dict[str, Any] | None:
     """The one change the report can back with a number, or `None`.
 
     In order: copies that cost questions (a measured effect on this score),
-    then files search cannot read at all -- PDFs with no text, files hidden
-    behind another of the same name, files that would not open -- then
+    then other versions of a document that cost questions, then files
+    search cannot read at all -- PDFs with no text, files hidden behind
+    another of the same name, files that would not open -- then
     copies that cost nothing measured. An empty non-PDF has no fix worth
     suggesting, and a miss within the right document has none a person can
     make, so neither is ever the suggestion.
@@ -298,15 +350,28 @@ def suggestion(
     scanned = names(lambda d: d["kind"] == "no_text" and d["name"].lower().endswith(".pdf"))
     same_name = names(lambda d: d["kind"] == "same_name")
     unreadable = names(lambda d: d["kind"] == "unreadable")
-    questions = [str(g["question"]) for g in lost]
+    questions: list[str] = []
 
     if copies and lost:
+        questions = [str(g["question"]) for g in lost]
         kind, files, count = "remove_copies", copies, len(lost)
         which = "the copy" if len(copies) == 1 else f"the {len(copies)} copies"
         text = (
             f"Remove {which} ({_listing(copies)}): **{count} of the {missed} missed "
             f"questions** {'was' if count == 1 else 'were'} beaten by a copy of "
             f"{'its' if count == 1 else 'their'} own document."
+        )
+    elif versions:
+        kind, count = "keep_one_version", len(versions)
+        questions = [str(g["question"]) for g in versions]
+        files = list(
+            dict.fromkeys(name for g in versions for name in (g["name"], g["first_result"]["name"]))
+        )
+        their = "its" if count == 1 else "their"
+        text = (
+            f"Keep one version of each document ({_listing(files)}): "
+            f"**{count} of the {missed} missed questions** found {their} text "
+            f"in another version of {their} own document, which came first instead."
         )
     elif scanned:
         kind, files, count = "recognise_text", scanned, len(scanned)
@@ -342,7 +407,7 @@ def suggestion(
         "kind": kind,
         "count": count,
         "text": text,
-        "evidence": {"files": files, "questions": questions if kind == "remove_copies" else []},
+        "evidence": {"files": files, "questions": questions},
     }
 
 
@@ -384,13 +449,20 @@ def report(graded: Mapping[str, Any], unusable: Sequence[Mapping[str, str]], fol
     if missed:
         lines = [f"**Questions it missed ({len(missed)}):**"]
         # The questions a suggestion cites come first, so its evidence is shown.
-        shown = sorted(missed, key=lambda g: not g.get("lost_to_copy"))
+        shown = sorted(
+            missed, key=lambda g: (not g.get("lost_to_copy"), not g.get("lost_to_version"))
+        )
         for g in shown[:REPORTED_MISSES]:
             first = g["first_result"]
             if not first:
                 instead = "nothing came back"
             elif g.get("lost_to_copy"):
                 instead = f"the first result was from {first['name']}, a copy of the same text"
+            elif g.get("lost_to_version"):
+                instead = (
+                    f"the first result was from {first['name']}, another version "
+                    "holding most of the same text"
+                )
             elif g["document_rank"] == 1:
                 instead = "another passage of the same document came first"
             else:
@@ -523,7 +595,10 @@ def grade(
     lost = lost_to_copies(missed, copies)
     for g in lost:
         g["lost_to_copy"] = True
+    versions = lost_to_versions(missed, corpus)
+    for g in versions:
+        g["lost_to_version"] = True
     result["cannot_search"] = cannot_search(corpus, not_indexed, copies)
-    result["suggestion"] = suggestion(result["cannot_search"], lost, len(missed))
+    result["suggestion"] = suggestion(result["cannot_search"], lost, len(missed), versions)
     result["report"] = report(result, result["cannot_search"], folder=not_indexed is not None)
     return result

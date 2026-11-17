@@ -148,3 +148,37 @@ the name list unbounded) were each caught by a test.
 3. **"Would raise the score" is not claimed.** Removing the copy is likely to
    help those questions, but the report does not re-grade without it, so it
    says what happened, not what would.
+
+## Another version of the same document, 2026-11-17
+
+**What the owner's library showed.** The first run in Claude Desktop, on the
+owner's Downloads: 15 of 20. Of the five misses, four had a different résumé
+come first. The report knew only word-for-word copies, so it listed them as
+plain misses and its **Fix first** went to the scanned PDFs.
+
+**The rule.** A missed question is *lost to another version* when its first
+result came from a document that holds at least half of the passage's
+five-word runs, **and** the two documents share at least half of their runs,
+measured against the smaller one. The first test is measured against the
+whole other document, so a version cut into passages at other places still
+counts. The second keeps a long passage two different documents share, such
+as a footer, from counting. Such a miss is said so in the report, and it
+ranks after copies that cost questions and before PDFs with no text:
+*keep one version of each document*.
+
+**On a copy of the owner's store** (the sampled passage ids were not kept, so
+for each miss the source passage sharing most words with the question stood
+in): two of the four résumé misses are called another version (passage 0.9
+and 1.0, documents 0.64 and 0.95); a third is close (documents 0.53, the
+closest passage 1.0, the stand-in passage 0.26); the fourth came from a
+résumé that shares 22% of its text, which is a different document, not a
+version, and is not called one. The fifth miss, the blank form, shares
+nothing.
+
+**Checked.** Five tests; each planted defect (no document test, versions
+never suggested, any overlap counting, exact copies also called versions)
+was caught.
+
+**Not proven.** That keeping one version raises the score: nothing is
+re-graded without it. Both thresholds are set from one library, not
+measured across many.

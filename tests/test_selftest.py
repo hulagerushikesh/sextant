@@ -19,7 +19,8 @@ def _corpus(documents: dict[str, int]) -> dict[str, tuple[str, dict]]:
     for doc, n in documents.items():
         for i in range(n):
             corpus[f"{doc}#{i}"] = (
-                f"{doc} passage {i} " + LONG,
+                # Each document's own words, so two documents are not versions.
+                f"{doc} passage {i} " + LONG.replace("word", f"{doc}word"),
                 {"document_id": doc, "title": doc.title(), "chunk_index": i},
             )
     return corpus
@@ -379,6 +380,81 @@ class TestTheSuggestion:
         assert advice["count"] == 6 and len(advice["evidence"]["files"]) == 6
         assert "**6 PDFs with no readable text**" in advice["text"]
         assert "scan3.pdf and 2 more" in advice["text"] and "scan4.pdf" not in advice["text"]
+
+
+def _words(prefix: str, n: int) -> list[str]:
+    return [f"{prefix}{i}" for i in range(n)]
+
+
+def _versions() -> dict[str, tuple[str, dict]]:
+    """Two versions of a CV: v5 adds a line, and v3 is cut into passages at
+    other places. A third document shares one sentence with v5 and no more."""
+    body = _words("skill", 60)
+    v5 = ["new", "line", "here", "first"] + body
+    v3 = body
+    other = body[:6] + _words("unrelated", 60)
+
+    def doc(name: str, words: list[str], size: int) -> dict[str, tuple[str, dict]]:
+        return {
+            f"{name}#{i}": (
+                " ".join(words[i * size : (i + 1) * size]),
+                {"document_id": name, "source": f"{name}.pdf", "chunk_index": i},
+            )
+            for i in range((len(words) + size - 1) // size)
+        }
+
+    return doc("cv-v5", v5, 32) | doc("cv-v3", v3, 20) | doc("other", other, 33)
+
+
+class TestAnotherVersion:
+    def _grade(self, order: dict[str, list[str]], not_indexed=None) -> dict:
+        questions = [{"passage_id": "cv-v5#0", "question": q} for q in order]
+        return selftest.grade(_versions(), questions, _search_returning(order), not_indexed)
+
+    def test_a_miss_won_by_another_version_is_named_and_suggested(self):
+        got = self._grade({"q1": ["cv-v3#1"], "q2": ["other#0"], "hit": ["cv-v5#0"]})
+        assert [g["question"] for g in got["missed"] if g.get("lost_to_version")] == ["q1"]
+        advice = got["suggestion"]
+        assert advice["kind"] == "keep_one_version" and advice["count"] == 1
+        # The first result is named as the search names it.
+        assert advice["evidence"] == {"files": ["cv-v5.pdf", "cv-v3#1"], "questions": ["q1"]}
+        assert "**1 of the 2 missed questions** found its text" in advice["text"]
+        report = got["report"]
+        assert "cv-v3#1, another version holding most of the same text" in report
+        assert "the first result was from other#0." in report
+
+    def test_one_shared_sentence_is_not_a_version(self):
+        got = self._grade({"q": ["other#0"]})
+        assert not any(g.get("lost_to_version") for g in got["missed"])
+        assert got["suggestion"] is None
+
+    def test_a_long_shared_passage_in_different_documents_is_not_a_version(self):
+        corpus = _versions()
+        # Most of the passage is the footer; little of either document is.
+        footer = " ".join(_words("footer", 20))
+        corpus["other#0"] = (footer + " " + corpus["other#0"][0], corpus["other#0"][1])
+        own = " ".join(_words("own", 10))
+        corpus["cv-v5#0"] = (footer + " " + own, corpus["cv-v5#0"][1])
+        order = {"q": ["other#0"]}
+        got = selftest.grade(
+            corpus, [{"passage_id": "cv-v5#0", "question": "q"}], _search_returning(order)
+        )
+        assert not any(g.get("lost_to_version") for g in got["missed"])
+
+    def test_it_comes_before_a_scanned_pdf_and_after_a_costly_copy(self):
+        scan = [{"file": "scan.pdf", "reason": "probably scanned", "kind": "no_text"}]
+        assert self._grade({"q": ["cv-v3#0"]}, scan)["suggestion"]["kind"] == "keep_one_version"
+        copy = {"name": "a copy.pdf", "kind": "duplicate", "why": ""}
+        lost = [{"question": "c"}]
+        versions = [{"question": "v", "name": "a", "first_result": {"name": "b"}}]
+        assert _advice([copy], lost, 2)["kind"] == "remove_copies"
+        advice = selftest.suggestion([copy], lost, 2, versions)
+        assert advice is not None and advice["kind"] == "remove_copies"
+
+    def test_an_exact_copy_stays_a_copy(self):
+        got = TestTheSuggestion()._graded()
+        assert not any(g.get("lost_to_version") for g in got["missed"])
+        assert got["suggestion"]["kind"] == "remove_copies"
 
 
 class TestOnARealLibrary:
