@@ -5,6 +5,13 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-17 — the report names another version of the same document (₹0)
+
+- The owner confirmed the self-test's report reads in one screen (milestone 29 item 3). Their run showed a gap: most misses were a résumé beaten by another version of itself, and the report could not say so.
+- A missed question is now marked *another version* when its first result's document holds at least half of the passage's text and the two documents share at least half of theirs; the report says so, and **Fix first** can say "keep one version", ranked after costly copies and before scanned PDFs. Four planted defects each caught; 1,137 tests pass.
+- On a copy of the owner's store: two of the four résumé misses are called another version, a third is close, and the fourth résumé shares only 22% of its text and is not ([the note](../learning/selftest.md)).
+- Does not prove: that keeping one version raises the score, or that the half-and-half thresholds fit other libraries. Ships in the next release; Claude Desktop runs 0.11.1 until then.
+
 ## 2026-11-17 — the self-test works in Claude Desktop (₹0)
 
 - The owner published 0.11.1 and reinstalled the bundle. On first start the broken store was moved aside, one of Claude Desktop's two processes took the library, and Downloads was indexed again: 190 files, 155 searchable (5,595 passages), 35 not indexed. Every tool answered. **Milestone 29 item 1's done-when is met** — a fresh library, in Claude Desktop.
