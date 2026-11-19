@@ -247,6 +247,25 @@ def _recognise(page: Any, number: int, path: Path, recognition: _Recognition) ->
     return _page_lines(page, textpage)
 
 
+def has_picture_pages(path: Path) -> bool:
+    """Whether a PDF has a page that only text recognition can read: no text
+    of its own, and an image. Reads no picture, so it costs a fraction of a
+    second; any file it cannot open answers False."""
+    if path.suffix.lower() != ".pdf":
+        return False
+    try:
+        import pymupdf
+
+        with pymupdf.open(str(path)) as document:
+            if document.needs_pass:
+                return False
+            return any(
+                not _page_lines(page).strip() and page.get_images() for page in document
+            )
+    except Exception:  # noqa: BLE001 - a probe; the real read reports the failure
+        return False
+
+
 # Spans on one baseline closer than this are the same word (a math glyph run
 # like "O(H(T+H))" arrives as several spans); further apart they are cells.
 _TOUCHING_PT = 1.0

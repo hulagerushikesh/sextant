@@ -46,6 +46,9 @@ Limits and deliberate trade-offs, stated plainly.
   `SEXTANT_OCR_LANG` (`eng+mar`), and only English, Hindi and Marathi are
   fetched by themselves -- any other needs its Tesseract data installed. A
   scan recognition cannot read is reported with the reason, not stored empty.
+  Changing the languages reads every stored scan again on the next start
+  (since 0.12.1); scans in a printed form that mixes English and Marathi
+  read badly in English alone.
 - The answer renderer handles paragraphs, lists, headings, tables, bold and
   inline code. It is not a markdown parser. Gemini reaches for LaTeX
   unprompted, so the system prompt asks for equations as inline code instead.

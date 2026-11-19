@@ -5,6 +5,14 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-19 — a scan is read again when its languages change; search timed (₹0)
+
+- From the owner's own run of 0.12.0: a question about a 2008 school-exam score was answered correctly from a scanned marksheet in about 15 seconds, but the marksheet's name and subject lines were garbled. The form mixes English and Marathi and was read in English only, and adding Marathi would have changed nothing: only scans with no words at all were tried again.
+- 0.12.1: the folder ledger records which languages each stored scan was read with, and reads it again, replacing it, when they change. Typed documents are never re-read; turning recognition off keeps what was read. A scan stored by 0.12.0, which did not record this, is found by looking at the file once (a page with no text and a picture) and read again on the next start.
+- Checked for real, on a fresh store: English pass reads the scan; `eng+mar` pass reads only the scan again and search still cites it; a third pass reads nothing. Both defects planted back and caught.
+- Search timed on a copy of the owner's store (5,558 passages, warm): **about 0.44 s per search, 98% of it the reranker** reading 25 passages; the question's embedding, the vector lookup and the keyword lookup take 2–3 ms each. The 15 seconds were Claude's own turns around the searches, not the search. Not changed: a smaller reranker depth would trade quality for at most a few tenths of a second.
+- Does not prove: that Marathi fixes the owner's marksheets — only re-running them will show that.
+
 ## 2026-11-19 — scanned PDFs are read (₹0)
 
 - Milestone 30 item 2, from the owner's own Downloads folder: 19 of 60 files were scans (ID cards, marksheets, certificates), so "what is my PAN number?" had no answer. A PDF page with no text and a picture on it is now read by text recognition: MuPDF's built-in Tesseract, so no new Python package. Pages with text are read exactly as before.
