@@ -5,6 +5,13 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-19 — a question in Marathi is matched by its words (₹0)
+
+- From the owner's library after `eng+mar` re-read 28 scans: the Marathi on the marksheets now reads as words, but a Marathi question found nothing useful. Keyword search kept only `a-z0-9`, so every Marathi word was dropped, and the English-only embedder and cross-encoder ranked an admissions notice and a hall ticket at 0.9999 for a question about exam marks.
+- 0.12.2: terms are letters of any script, with Indic vowel signs kept and Indic digits read as ASCII (२००८ = 2008); a short list of Marathi question words is dropped. A question mostly outside the Latin alphabet skips the two English models while they are the configured ones and is ranked by keyword match, reported as `bm25` with a `note` saying why.
+- On a copy of the owner's store: the Marathi exam-marks question now returns the marksheet and its certificate copy first (before: notices at 0.9999, marksheet absent); "एकूण गुण" finds the marksheet (before: nothing). English questions unchanged. Both defects planted back and caught.
+- Does not prove: Marathi search by meaning — a paraphrase sharing no word with the scan still finds nothing; that needs a multilingual model, a download the owner decides on.
+
 ## 2026-11-19 — a scan is read again when its languages change; search timed (₹0)
 
 - From the owner's own run of 0.12.0: a question about a 2008 school-exam score was answered correctly from a scanned marksheet in about 15 seconds, but the marksheet's name and subject lines were garbled. The form mixes English and Marathi and was read in English only, and adding Marathi would have changed nothing: only scans with no words at all were tried again.

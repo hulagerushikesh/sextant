@@ -89,6 +89,43 @@ class TestSearch:
         assert (await kb.search("kalman", mode="dense"))["scored_by"] == "cosine"
 
 
+class TestAQuestionInAnotherScript:
+    """The meaning models read English only and score Marathi with false
+    confidence, so a Marathi question is matched by its words alone."""
+
+    MARKSHEET = {"id": "marksheet", "title": "Marksheet",
+                 "content": "एकूण गुण FIVE HUNDRED AND SEVENTEEN. प्रथम श्रेणी, मार्च २००९."}
+    NOTICE = {"id": "notice", "title": "Notice",
+              "content": "प्रवेश अर्ज भरताना पालकांनी जन्म तारखेचा पुरावा द्यावा."}
+
+    async def test_it_is_matched_by_keyword_and_says_so(self, kb):
+        await kb.add_documents([self.MARKSHEET, self.NOTICE])
+        result = await kb.search("एकूण गुण किती मिळाले", limit=5)
+        assert result["scored_by"] == "bm25"
+        assert result["mode"] == "rerank"
+        assert "not in English" in result["note"]
+        assert [hit["document_id"] for hit in result["results"]] == ["marksheet"]
+
+    async def test_no_shared_word_is_an_empty_answer_not_a_confident_wrong_one(self, kb):
+        await kb.add_documents([self.MARKSHEET, self.NOTICE])
+        result = await kb.search("निकाल कधी लागला", limit=5)
+        assert result["results"] == []
+
+    async def test_an_english_question_keeps_the_full_search(self, kb):
+        result = await kb.search("how do you estimate hidden state", limit=3)
+        assert result["scored_by"] == "cross-encoder"
+        assert "note" not in result
+
+    async def test_a_multilingual_embedder_keeps_the_full_search(self, kb, monkeypatch):
+        monkeypatch.setattr(vector_search, "configured_model",
+                            lambda: "intfloat/multilingual-e5-small")
+        assert not kb._models_read_english()
+
+    async def test_an_explicit_ablation_mode_is_run_as_asked(self, kb):
+        result = await kb.search("एकूण गुण", limit=3, mode="dense")
+        assert result["scored_by"] == "cosine"
+
+
 class TestThreshold:
     async def test_the_floor_filters_cross_encoder_scores(self, kb):
         wide = await kb.search("kalman", limit=10, min_score=0.0)

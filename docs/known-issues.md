@@ -49,6 +49,11 @@ Limits and deliberate trade-offs, stated plainly.
   Changing the languages reads every stored scan again on the next start
   (since 0.12.1); scans in a printed form that mixes English and Marathi
   read badly in English alone.
+- A question written in Marathi or Hindi is matched by its words only (since
+  0.12.2): the meaning-based models read English, and on another script they
+  ranked unrelated passages as near-certain matches. So a Marathi question
+  finds passages sharing its words, spelled the same way, and not paraphrases;
+  the answer says so in a `note`. Asking in English also searches by meaning.
 - The answer renderer handles paragraphs, lists, headings, tables, bold and
   inline code. It is not a markdown parser. Gemini reaches for LaTeX
   unprompted, so the system prompt asks for equations as inline code instead.
