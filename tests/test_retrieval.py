@@ -70,7 +70,7 @@ class TestOtherScripts:
 
 class TestMostlyLatin:
     def test_english_is_latin(self):
-        assert mostly_latin("how much did Pallavi score in 2008")
+        assert mostly_latin("how many marks did the student score in 2008")
 
     def test_marathi_is_not(self):
         assert not mostly_latin("पल्लवीला २००८ च्या परीक्षेत किती गुण मिळाले")
@@ -82,7 +82,7 @@ class TestMostlyLatin:
         assert mostly_latin("résumé of the café")
 
     def test_no_letters_counts_as_readable(self):
-        assert mostly_latin("2008 / 517")
+        assert mostly_latin("2008 / 600")
 
 
 class TestBM25:
