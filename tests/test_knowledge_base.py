@@ -484,3 +484,44 @@ class TestResultsSayHowOldTheirDocumentIs:
     async def test_an_undated_document_says_so(self, kb):
         result = await kb.search("how do you estimate hidden state", limit=1)
         assert result["results"][0]["newest_date_in_document"] is None
+
+
+class TestABookLargerThanOneWrite:
+    """Chroma refuses one write over its batch limit, and a whole book makes
+    more chunks than that; the book is stored in slices instead of rejected."""
+
+    @pytest.fixture
+    async def own_kb(self, store_dir, request):
+        name = f"book-{request.node.name[:40]}"
+        knowledge_base = KnowledgeBase(collection_name=name)
+        yield knowledge_base
+        knowledge_base.client.delete_collection(name)
+
+    async def test_every_chunk_is_stored_across_several_writes(self, own_kb, monkeypatch):
+        monkeypatch.setattr(vector_search, "WRITE_BATCH", 2)
+        sizes: list[int] = []
+        upsert = own_kb.collection.upsert
+
+        def counted(**kwargs):
+            sizes.append(len(kwargs["ids"]))
+            return upsert(**kwargs)
+
+        monkeypatch.setattr(own_kb.collection, "upsert", counted)
+        pages = " ".join(
+            f"Chapter {n} explains multiplication by {n} with worked examples and drills."
+            * 20
+            for n in range(1, 8)
+        )
+        result = await own_kb.add_documents([{"id": "book", "title": "Book", "content": pages}])
+        assert result["success"] is True
+        assert result["chunks_added"] > 2
+        stored = own_kb.collection.get(where={"document_id": "book"})["ids"]
+        assert len(stored) == result["chunks_added"]
+        assert max(sizes) <= 2
+
+        # Re-ingesting a shorter version drops the stale chunks, also in slices.
+        result = await own_kb.add_documents(
+            [{"id": "book", "title": "Book", "content": "One short page."}]
+        )
+        stored = own_kb.collection.get(where={"document_id": "book"})["ids"]
+        assert len(stored) == result["chunks_added"]

@@ -32,6 +32,7 @@ import logging
 import os
 import re
 import shutil
+import ssl
 import sys
 import tempfile
 import threading
@@ -131,6 +132,22 @@ def _candidates() -> list[Path]:
     return dirs
 
 
+def _tls() -> ssl.SSLContext:
+    """Certificates to check the download with.
+
+    The python.org installer for macOS ships without any until its
+    "Install Certificates" step is run, which nobody does, and every https
+    download then fails with CERTIFICATE_VERIFY_FAILED. certifi's bundle comes
+    with the search dependencies; the system's is the fallback.
+    """
+    try:
+        import certifi
+
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        return ssl.create_default_context()
+
+
 def _fetch(lang: str, target: Path) -> None:
     """Download one pinned language file into `target`, or raise OcrUnavailable."""
     expected = _PINNED[lang]
@@ -138,7 +155,7 @@ def _fetch(lang: str, target: Path) -> None:
     target.mkdir(parents=True, exist_ok=True)
     logger.info("fetching text-recognition data for %r from %s", lang, url)
     try:
-        with urllib.request.urlopen(url, timeout=_FETCH_TIMEOUT_S) as response:  # noqa: S310
+        with urllib.request.urlopen(url, timeout=_FETCH_TIMEOUT_S, context=_tls()) as response:  # noqa: S310
             data = response.read()
     except OSError as e:
         raise OcrUnavailable(

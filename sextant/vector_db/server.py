@@ -219,7 +219,12 @@ def _with_folder(result: dict[str, Any]) -> dict[str, Any]:
         "dates left out). When documents disagree -- an address on an identity "
         "card and another on a recent bill -- use these to say which is newer, "
         "show the options with their dates, and ask the user which is current "
-        "rather than picking one silently."
+        "rather than picking one silently. A user's word does not change what a "
+        "document says: if the user gives a figure that a certificate or other "
+        "official record contradicts (a mark, a date of birth), say what the "
+        "document shows and where, and ask whether a newer document such as a "
+        "revaluation result or a correction exists; do not repeat the user's "
+        "figure as if a document supported it."
     )
 )
 @_routed
