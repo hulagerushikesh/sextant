@@ -5,6 +5,13 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-19 — a document is named by its path; exact copies stored once (₹0)
+
+- Milestone 30 item 1, from tester 1's run: a document was named by its file name alone, so `runs/a/notes.md` and `runs/b/notes.md` were one name and every one after the first was skipped. The folder pass now names each document by its path inside the folder, suffix included, and cites it the same way.
+- Files with exactly the same bytes under different names are stored once (the first in path order) and listed in `kb_stats` as copies, not as "not indexed". A copy stored by an earlier version is removed; when the kept file goes, its twin is stored on the next start. Files that differ by one byte are two documents.
+- A library indexed before 0.11.3 is moved once on the next start: each file is stored again under its path and its old document removed. Checked on the real store, offline: two same-name files both stored, a copy left out, search citing `runs/b/notes.md`, second start re-embedded nothing. Both defects planted back and caught by the new tests.
+- Does not prove: how long the one-time re-index takes on a large library, or that "first in path order" is the copy a person would keep. The `sextant-ingest` command still names by file name.
+
 ## 2026-11-19 — first two outside installs; Python 3.15 ceiling (₹0)
 
 - Tester 1 (Claude Code, macOS): installed, indexed 66 of 118 files, answered with a cited passage. Found: skip reasons stop at 20 with no count per reason, and files sharing a name in different folders are dropped.

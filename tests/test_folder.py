@@ -15,6 +15,7 @@ exercised by `test_knowledge_base.py`.
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -24,7 +25,7 @@ import pytest
 from sextant import settings
 from sextant.vector_db import folder
 from sextant.vector_db.folder import LEDGER_NAME, MAX_REPORTED, FolderSync, configured, find_files
-from sextant.vector_db.loaders import UnsupportedDocument
+from sextant.vector_db.loaders import LoadedDocument, UnsupportedDocument
 
 
 class FakeReranker:
@@ -37,7 +38,9 @@ class FakeReranker:
 
 
 class FakeKB:
-    """Stores by file stem, like the real loaders, and can refuse a file."""
+    """Loads and stores like the real store, keyed by the id it is handed, and
+    can refuse a file. `added` holds each stored document's id, which for a
+    file at the top of the folder is its file name."""
 
     def __init__(
         self,
@@ -48,6 +51,8 @@ class FakeKB:
     ):
         self.added: list[str] = []
         self.docs: set[str] = set()
+        self.removed: list[str] = []
+        self.sources: dict[str, str] = {}
         self.refuse = refuse or {}
         self.broken = broken or set()
         self.crash = crash or set()
@@ -55,7 +60,7 @@ class FakeKB:
         self.tried: list[str] = []
         self.reranker = FakeReranker()
 
-    async def add_file(self, path: str, category: str = "general") -> dict[str, Any]:
+    async def load_file(self, path: str, category: str = "general") -> LoadedDocument:
         name = Path(path).name
         self.tried.append(name)
         if name in self.broken:
@@ -63,23 +68,36 @@ class FakeKB:
         if name in self.crash:
             # What PyMuPDF raised on a locked PDF in a real Downloads folder.
             raise ValueError("document closed or encrypted")
-        self.added.append(name)
+        # What the real loaders name it: the stem. The folder pass renames it.
+        return LoadedDocument(doc_id=Path(path).stem, title=name, text="words", source=name)
+
+    async def add_document(self, document: LoadedDocument) -> dict[str, Any]:
+        name = Path(document.source).name
+        self.added.append(document.doc_id)
         if name in self.empty:
             # What the real store answers when a file loads to no words.
             return {"success": False, "message": "Nothing to store", "empty": True}
         if name in self.refuse:
             return {"success": False, "message": self.refuse[name]}
-        self.docs.add(Path(path).stem)
+        self.docs.add(document.doc_id)
+        self.sources[document.doc_id] = document.source
         return {"success": True, "chunks_added": 1, "unreadable_pages": {}}
+
+    async def remove_document(self, document_id: str) -> dict[str, Any]:
+        self.removed.append(document_id)
+        self.docs.discard(document_id)
+        return {"success": True, "found": True}
 
     async def list_documents(self) -> dict[str, Any]:
         return {"documents": [{"document_id": d} for d in sorted(self.docs)]}
 
 
-def _write(root: Path, name: str, text: str = "some words") -> Path:
+def _write(root: Path, name: str, text: str | None = None) -> Path:
+    """Each file's text is its own unless a test says otherwise: two files
+    with equal bytes are one document's copies."""
     path = root / name
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text)
+    path.write_text(f"the words of {name}" if text is None else text)
     return path
 
 
@@ -132,7 +150,7 @@ class TestIndexedOnce:
     async def test_every_file_is_stored_and_the_models_are_warmed(self, library, store):
         kb = FakeKB()
         sync = await _run(library, store, kb)
-        assert sorted(kb.added) == ["notes.md", "plan.txt", "report.md"]
+        assert sorted(kb.added) == ["deep/inside/report.md", "notes.md", "plan.txt"]
         assert sync.status()["state"] == "ready"
         assert sync.status()["stored_this_run"] == 3
         assert kb.reranker.warmed == 1
@@ -164,7 +182,7 @@ class TestIndexedOnce:
         file out for good."""
         kb = FakeKB()
         await _run(library, store, kb)
-        kb.docs.discard("plan")
+        kb.docs.discard("plan.txt")
         kb.added.clear()
         await _run(library, store, kb)
         assert kb.added == ["plan.txt"]
@@ -175,7 +193,7 @@ class TestIndexedOnce:
         (store / LEDGER_NAME).write_text("{not json")
         kb.added.clear()
         await _run(library, store, kb)
-        assert sorted(kb.added) == ["notes.md", "plan.txt", "report.md"]
+        assert sorted(kb.added) == ["deep/inside/report.md", "notes.md", "plan.txt"]
 
 
 class TestWhatIsNotIndexedIsSaid:
@@ -200,7 +218,7 @@ class TestWhatIsNotIndexedIsSaid:
         sync = await _run(library, store, kb)
         status = sync.status()
         assert status["state"] == "ready"
-        assert sorted(kb.added) == ["plan.txt", "report.md"]
+        assert sorted(kb.added) == ["deep/inside/report.md", "plan.txt"]
         assert status["not_indexed_files"] == [
             {
                 "file": "notes.md",
@@ -224,16 +242,6 @@ class TestWhatIsNotIndexedIsSaid:
         again = await _run(library, store, kb)
         assert "plan.txt" not in kb.added
         assert again.status()["not_indexed"] == 1
-
-    async def test_two_files_with_one_name_keep_the_first_and_say_so(self, library, store):
-        """A document's id is its file name without the suffix, so the second
-        `notes` would silently replace the first."""
-        _write(library, "zz/notes.txt")
-        kb = FakeKB()
-        sync = await _run(library, store, kb)
-        assert kb.added.count("notes.md") == 1 and "notes.txt" not in kb.added
-        reason = sync.status()["not_indexed_files"][0]["reason"]
-        assert "same name" in reason and "notes.md" in reason
 
     async def test_a_pdf_with_no_text_is_called_scanned_and_a_text_file_empty(self, library, store):
         _write(library, "scan.pdf")
@@ -280,15 +288,98 @@ class TestWhatIsNotIndexedIsSaid:
         assert "embedding model unavailable" in sync.status()["error"]
 
 
+class TestOneDocumentPerFileAndPerContents:
+    """A document is named by its path in the folder, and a file whose bytes
+    are exactly another's is stored once. Before 0.11.3 the name was the file
+    name alone: a folder of copied runs lost every `notes.md` but the first."""
+
+    async def test_two_files_with_one_name_in_two_folders_are_both_stored(self, library, store):
+        _write(library, "runs/a/notes.md", "the first run")
+        _write(library, "runs/b/notes.md", "the second run")
+        kb = FakeKB()
+        sync = await _run(library, store, kb)
+        assert {"notes.md", "runs/a/notes.md", "runs/b/notes.md"} <= kb.docs
+        assert sync.status()["not_indexed"] == 0
+
+    async def test_one_name_with_two_suffixes_is_two_documents(self, library, store):
+        _write(library, "notes.txt", "a different note")
+        kb = FakeKB()
+        await _run(library, store, kb)
+        assert {"notes.md", "notes.txt"} <= kb.docs
+
+    async def test_a_citation_names_the_folder_it_came_from(self, library, store):
+        kb = FakeKB()
+        await _run(library, store, kb)
+        assert kb.sources["deep/inside/report.md"] == "deep/inside/report.md"
+
+    async def test_an_exact_copy_under_another_name_is_stored_once_and_said(self, library, store):
+        _write(library, "zz-backup/notes-copy.md", "the words of notes.md")
+        kb = FakeKB()
+        sync = await _run(library, store, kb)
+        assert "zz-backup/notes-copy.md" not in kb.added and "notes.md" in kb.docs
+        report = sync.status()
+        assert report["copies_not_stored"] == 1
+        assert report["copies"] == [{"file": "zz-backup/notes-copy.md", "same_as": "notes.md"}]
+        # A copy is searchable through its twin, so it is not "not indexed".
+        assert report["not_indexed"] == 0
+
+    async def test_one_changed_byte_is_two_documents(self, library, store):
+        _write(library, "notes-edited.md", "the words of notes.md!")
+        kb = FakeKB()
+        sync = await _run(library, store, kb)
+        assert {"notes.md", "notes-edited.md"} <= kb.docs
+        assert "copies" not in sync.status()
+
+    async def test_a_copy_stored_before_its_twin_appeared_is_removed(self, library, store):
+        kb = FakeKB()
+        await _run(library, store, kb)
+        _write(library, "a-first/notes.md", "the words of notes.md")
+        await _run(library, store, kb)
+        # `a-first/notes.md` sorts first, so it is the one kept and the old
+        # `notes.md` is the copy: one document of that text either way.
+        assert kb.removed == ["notes.md"] and "a-first/notes.md" in kb.docs
+
+    async def test_when_the_kept_copy_goes_the_other_is_stored(self, library, store):
+        twin = _write(library, "zz/notes.md", "the words of notes.md")
+        kb = FakeKB()
+        await _run(library, store, kb)
+        assert "zz/notes.md" not in kb.docs
+        (library / "notes.md").unlink()
+        await _run(library, store, kb)
+        assert "zz/notes.md" in kb.docs and twin.exists()
+
+    async def test_a_library_from_before_names_by_path_is_moved_once(self, library, store):
+        """A ledger written before 0.11.3 records no document name; the store
+        holds `notes`, `plan` and `report`."""
+        kb = FakeKB()
+        await _run(library, store, kb)
+        ledger_file = store / LEDGER_NAME
+        old = json.loads(ledger_file.read_text())
+        for entry in old.values():
+            del entry["doc_id"], entry["sha256"]
+        ledger_file.write_text(json.dumps(old))
+        kb.docs = {"notes", "plan", "report"}
+        kb.added.clear()
+
+        sync = await _run(library, store, kb)
+        assert sorted(kb.removed) == ["notes", "plan", "report"]
+        assert kb.docs == {"deep/inside/report.md", "notes.md", "plan.txt"}
+        assert sync.stored == 3
+
+        kb.added.clear()
+        again = await _run(library, store, kb)
+        assert kb.added == [] and again.unchanged == 3
+
+
 class TestAPartialLibraryIsSaid:
     async def test_a_search_during_indexing_carries_a_note(self, library, store):
         """Asked mid-pass, the honest answer is about part of the library."""
         notes: list[str | None] = []
 
         class Watching(FakeKB):
-            async def add_file(self, path: str, category: str = "general") -> dict[str, Any]:
+            async def add_document(self, document: LoadedDocument) -> dict[str, Any]:
                 notes.append(sync.note())
-                return await super().add_file(path, category)
+                return await super().add_document(document)
 
         sync = FolderSync(library, store)
         await sync.run(lambda: Watching())

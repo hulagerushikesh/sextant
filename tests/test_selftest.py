@@ -222,11 +222,11 @@ class TestWhatCannotBeSearched:
 
     def test_scanned_and_empty_files_come_first_then_copies(self):
         skipped = [
-            {"file": "same/notes.md", "reason": "has the same name", "kind": "same_name"},
+            {"file": "locked.pdf", "reason": "could not be read", "kind": "unreadable"},
             {"file": "scan.pdf", "reason": "probably a scanned PDF", "kind": "no_text"},
         ]
         got = selftest.cannot_search(self._with_copy(), skipped)
-        assert [d["kind"] for d in got] == ["no_text", "same_name", "duplicate"]
+        assert [d["kind"] for d in got] == ["no_text", "unreadable", "duplicate"]
         assert got[2]["name"] == "Notes copy" and "same text as Notes" in got[2]["why"]
 
 
@@ -365,7 +365,6 @@ class TestTheSuggestion:
             unusable = [{"name": f"{k}.md", "kind": k, "why": ""} for k in present]
             return _advice(unusable, [], 0)["kind"]
 
-        assert kinds("duplicate", "unreadable", "same_name") == "rename"
         assert kinds("duplicate", "unreadable") == "check_unreadable"
 
     def test_an_empty_note_or_nothing_found_suggests_nothing(self):
