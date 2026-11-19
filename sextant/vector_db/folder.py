@@ -17,6 +17,11 @@ What it does, each time the server starts:
 - walks the folder for the suffixes the loaders read;
 - stores every file that is new or has changed since it was last stored, and
   leaves the rest alone -- a 400-file folder is not re-embedded on every launch;
+- names each document by its path inside the folder, so `runs/a/notes.md` and
+  `runs/b/notes.md` are two documents, not one replacing the other;
+- stores a file whose bytes are exactly another file's once, and says which
+  copy was left out: two copies of one text only crowd each other out of the
+  results;
 - records what it could not store, and why, and says so through `kb_stats`
   and the self-test's report, because a file that silently is not in the
   corpus reads as "the answer is not there".
@@ -31,9 +36,11 @@ Nothing here prints. stdout is the JSON-RPC channel.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -92,6 +99,16 @@ def _signature(path: Path) -> list[int]:
     return [stat.st_mtime_ns, stat.st_size]
 
 
+def _digest(path: Path) -> str:
+    """The file's bytes, hashed: equal digests are the same contents, whatever
+    the two files are called."""
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
 def find_files(folder: Path) -> list[Path]:
     """Every loadable file under `folder`, hidden directories excluded.
 
@@ -126,6 +143,9 @@ class FolderSync:
         self.stored = 0
         self.unchanged = 0
         self.skipped: list[dict[str, str]] = []
+        # Files left out because another file has exactly the same bytes.
+        # Not "not indexed": their text is searchable, through the other one.
+        self.copies: list[dict[str, str]] = []
         self.warnings: list[str] = []
         self.error: str | None = None
 
@@ -145,6 +165,9 @@ class FolderSync:
             report["not_indexed_files"] = self.skipped[:MAX_REPORTED]
             if len(self.skipped) > MAX_REPORTED:
                 report["not_indexed_more"] = len(self.skipped) - MAX_REPORTED
+        if self.copies:
+            report["copies_not_stored"] = len(self.copies)
+            report["copies"] = self.copies[:MAX_REPORTED]
         if self.warnings:
             report["warnings"] = self.warnings[:MAX_REPORTED]
         if self.error:
@@ -221,13 +244,13 @@ class FolderSync:
         kb = await asyncio.to_thread(open_store)
         in_store = await self._documents_in(kb)
 
-        # A document's id is its file name without the suffix, so `a/notes.md`
-        # and `b/notes.md` are one document and the second would replace the
-        # first. Keep the first and say so, rather than lose one silently.
-        claimed: dict[str, Path] = {}
+        # One file per contents: the first, in path order, is stored, and a
+        # later file with the same bytes is reported as a copy of it.
+        by_contents: dict[str, Path] = {}
 
         for path in files:
             key = str(path)
+            doc_id = self._doc_id(path)
             try:
                 signature = await asyncio.to_thread(_signature, path)
             except OSError as e:
@@ -235,20 +258,40 @@ class FolderSync:
                 self.done += 1
                 continue
 
-            first = claimed.setdefault(path.stem, path)
-            if first != path:
-                self._skip(
-                    path,
-                    f"has the same name as {first.relative_to(self.folder)}, "
-                    "which is the one indexed; rename one to index both",
-                    "same_name",
+            raw = ledger.get(key)
+            known: dict[str, Any] = raw if isinstance(raw, dict) else {}
+            same = known.get("signature") == signature
+            try:
+                digest = (
+                    str(known["sha256"])
+                    if same and known.get("sha256")
+                    else await asyncio.to_thread(_digest, path)
                 )
+            except OSError as e:
+                self._skip(path, f"could not be read: {e}")
                 self.done += 1
                 continue
 
-            known = ledger.get(key)
-            if isinstance(known, dict) and known.get("signature") == signature:
-                if known.get("stored") and path.stem in in_store:
+            first = by_contents.setdefault(digest, path)
+            if first != path:
+                self.copies.append({"file": doc_id, "same_as": self._doc_id(first)})
+                if known.get("stored"):
+                    # Stored by an earlier pass, before its twin was there or
+                    # before copies were caught: now it only competes with it.
+                    await self._forget(kb, str(known.get("doc_id") or path.stem), in_store)
+                ledger.pop(key, None)
+                await asyncio.to_thread(self._write_ledger, ledger)
+                self.done += 1
+                continue
+
+            # Before 0.11.3 a document was named by its file name alone, and
+            # the ledger did not record the name. Such a file is stored again
+            # under its path, once, and the old document removed after.
+            stored_as = known.get("doc_id") if known.get("stored") else None
+            legacy = path.stem if known.get("stored") and stored_as is None else None
+
+            if same:
+                if known.get("stored") and stored_as == doc_id and doc_id in in_store:
                     self.unchanged += 1
                     self.done += 1
                     continue
@@ -275,11 +318,19 @@ class FolderSync:
                 self.done += 1
                 continue
             if reason is None:
-                ledger[key] = {"signature": signature, "stored": True}
+                ledger[key] = {
+                    "signature": signature,
+                    "sha256": digest,
+                    "stored": True,
+                    "doc_id": doc_id,
+                }
                 self.stored += 1
+                if legacy and legacy != doc_id:
+                    await self._forget(kb, legacy, in_store)
             else:
                 ledger[key] = {
                     "signature": signature,
+                    "sha256": digest,
                     "stored": False,
                     "reason": reason,
                     "kind": kind,
@@ -294,9 +345,21 @@ class FolderSync:
             await self._warm(kb)
         self.state = "ready"
         logger.info(
-            "folder %s: %d stored, %d unchanged, %d not indexed",
-            self.folder, self.stored, self.unchanged, len(self.skipped),
+            "folder %s: %d stored, %d unchanged, %d copies, %d not indexed",
+            self.folder, self.stored, self.unchanged, len(self.copies), len(self.skipped),
         )
+
+    def _doc_id(self, path: Path) -> str:
+        """The document's name: its path inside the folder, suffix included,
+        so neither `a/notes.md` and `b/notes.md` nor `notes.md` and `notes.pdf`
+        are one document."""
+        return path.relative_to(self.folder).as_posix()
+
+    @staticmethod
+    async def _forget(kb: Any, doc_id: str, in_store: set[str]) -> None:
+        if doc_id in in_store:
+            await kb.remove_document(doc_id)
+            in_store.discard(doc_id)
 
     @staticmethod
     async def _documents_in(kb: Any) -> set[str]:
@@ -312,9 +375,13 @@ class FolderSync:
         """Store one file. Returns why not and what kind of failure it was,
         or `(None, "")` when it is in the corpus."""
         try:
-            result = await kb.add_file(str(path))
+            document = await kb.load_file(str(path))
         except UnsupportedDocument as e:
             return str(e), "unreadable"
+        # Named and cited by its place in the folder: two `notes.md` in two
+        # folders are two documents, and a citation says which one.
+        name = self._doc_id(path)
+        result = await kb.add_document(replace(document, doc_id=name, source=name))
         if not result.get("success"):
             if result.get("empty"):
                 return no_text_reason(path), "no_text"

@@ -336,8 +336,8 @@ def suggestion(
 
     In order: copies that cost questions (a measured effect on this score),
     then other versions of a document that cost questions, then files
-    search cannot read at all -- PDFs with no text, files hidden behind
-    another of the same name, files that would not open -- then
+    search cannot read at all -- PDFs with no text, files that would
+    not open -- then
     copies that cost nothing measured. An empty non-PDF has no fix worth
     suggesting, and a miss within the right document has none a person can
     make, so neither is ever the suggestion.
@@ -348,7 +348,6 @@ def suggestion(
 
     copies = names(lambda d: d["kind"] == "duplicate")
     scanned = names(lambda d: d["kind"] == "no_text" and d["name"].lower().endswith(".pdf"))
-    same_name = names(lambda d: d["kind"] == "same_name")
     unreadable = names(lambda d: d["kind"] == "unreadable")
     questions: list[str] = []
 
@@ -379,13 +378,6 @@ def suggestion(
             f"Run **{_plural(count, 'PDF', 'PDFs')} with no readable text** "
             f"({_listing(scanned)}) through text recognition (OCR) and add "
             "them again: until then search can find nothing in them."
-        )
-    elif same_name:
-        kind, files, count = "rename", same_name, len(same_name)
-        text = (
-            f"Rename **{_plural(count, 'file', 'files')} that share a name** "
-            f"with another ({_listing(same_name)}): only one file of each name "
-            "is indexed."
         )
     elif unreadable:
         kind, files, count = "check_unreadable", unreadable, len(unreadable)
