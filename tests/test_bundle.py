@@ -66,7 +66,17 @@ class TestTheManifest:
         assert manifest["user_config"]["folder"]["type"] == "directory"
         assert manifest["user_config"]["folder"]["required"] is True
         env = manifest["server"]["mcp_config"]["env"]
-        assert env == {settings.env_name("FOLDER"): "${user_config.folder}"}
+        assert env == {
+            settings.env_name("FOLDER"): "${user_config.folder}",
+            settings.env_name("OCR_LANG"): "${user_config.ocr_languages}",
+        }
+
+    def test_the_scan_languages_are_optional_and_default_to_english(self, bundle):
+        """Left empty, or passed through unfilled, it must still mean English
+        (`ocr.languages`), never no recognition at all."""
+        field = _manifest(bundle)["user_config"]["ocr_languages"]
+        assert field["type"] == "string" and field["required"] is False
+        assert field["default"] == "eng"
 
     def test_the_tools_it_lists_are_the_tools_the_server_registers(self, bundle):
         """The install dialog shows this list; a tool listed and not served,

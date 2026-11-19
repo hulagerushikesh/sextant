@@ -186,7 +186,7 @@ class TestTheStoreOverrideReachesTheServer:
             monkeypatch.setenv(name, value)
             expected[name] = value
 
-        assert len(expected) == 8, "eight knobs; update this count deliberately"
+        assert len(expected) == 10, "ten knobs; update this count deliberately"
         # Neither name the launcher sets is a knob. The seal is how the child is
         # told that this dictionary is the whole of its environment, and the
         # removal flag is how it is told that the thing launching it knows who

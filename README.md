@@ -37,7 +37,10 @@ python3 -m venv ~/sextant
 ~/sextant/bin/pip install sextant-kb
 ```
 
-**2. Add your documents** — any folder of PDF, Markdown or text files:
+**2. Add your documents** — any folder of PDF, Markdown or text files.
+Scanned PDFs are read with text recognition, which downloads about 4 MB
+the first time it meets one; for another language set
+`SEXTANT_OCR_LANG=eng+mar` (English and Marathi) or `eng+hin`.
 
 ```bash
 ~/sextant/bin/sextant-ingest ~/Documents/notes -r
@@ -192,9 +195,10 @@ Last checked 2026-11-12.
 | Used by anyone outside the project | Not yet — see [`planning/PLAN.md`](https://github.com/hulagerushikesh/sextant/blob/main/planning/PLAN.md) |
 
 Known limits, stated plainly, are in [`docs/known-issues.md`](https://github.com/hulagerushikesh/sextant/blob/main/docs/known-issues.md).
-The two that matter most to a new user: a scanned PDF with no text layer is
-refused rather than read, and the test questions were written alongside the
-test documents, so the numbers grade the search pipeline, not your library.
+The two that matter most to a new user: a scanned PDF is read by text
+recognition, in English unless you name other languages, so a poor scan gives
+wrong words; and the test questions were written alongside the test
+documents, so the numbers grade the search pipeline, not your library.
 
 ## Read more
 

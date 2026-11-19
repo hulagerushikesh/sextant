@@ -40,8 +40,12 @@ Limits and deliberate trade-offs, stated plainly.
 - A follow-up cannot re-read a passage from two turns ago without searching for
   it again. Deliberate — see `conversation.py` — but it means an unusually
   specific follow-up may retrieve rather than remember.
-- A scanned PDF with no text layer is rejected rather than OCR'd. It is
-  reported as such instead of being stored as a document that matches nothing.
+- A scanned PDF is read with text recognition (since 0.12), which is a reading
+  of a picture: a blurred or tilted scan gives wrong characters, and search
+  matches those. English is the default; other languages are named in
+  `SEXTANT_OCR_LANG` (`eng+mar`), and only English, Hindi and Marathi are
+  fetched by themselves -- any other needs its Tesseract data installed. A
+  scan recognition cannot read is reported with the reason, not stored empty.
 - The answer renderer handles paragraphs, lists, headings, tables, bold and
   inline code. It is not a markdown parser. Gemini reaches for LaTeX
   unprompted, so the system prompt asks for equations as inline code instead.

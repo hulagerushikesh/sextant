@@ -87,7 +87,9 @@ def manifest() -> dict:
             "file and page each passage came from. No account and no key; your "
             "documents are not uploaded anywhere by this extension. The first "
             "start downloads the search models (about 180 MB) and indexes the "
-            "folder, which takes a few minutes for a large one."
+            "folder, which takes a few minutes for a large one. Scanned PDFs are "
+            "read with text recognition, which downloads a few MB more the first "
+            "time it meets one."
         ),
         "author": {"name": meta["authors"][0]["name"]},
         "repository": {"type": "git", "url": meta["urls"]["Repository"]},
@@ -100,7 +102,10 @@ def manifest() -> dict:
             "mcp_config": {
                 "command": "uv",
                 "args": ["run", "--directory", "${__dirname}", "src/server.py"],
-                "env": {"SEXTANT_FOLDER": "${user_config.folder}"},
+                "env": {
+                    "SEXTANT_FOLDER": "${user_config.folder}",
+                    "SEXTANT_OCR_LANG": "${user_config.ocr_languages}",
+                },
             },
         },
         "user_config": {
@@ -112,7 +117,19 @@ def manifest() -> dict:
                     "hidden folders are skipped."
                 ),
                 "required": True,
-            }
+            },
+            "ocr_languages": {
+                "type": "string",
+                "title": "Languages in scanned files",
+                "description": (
+                    "Scanned PDFs are read with text recognition. Name the languages "
+                    "they are written in, joined by +: eng+mar for English and "
+                    "Marathi, eng+hin for English and Hindi. The data for each is "
+                    "downloaded once, a few MB."
+                ),
+                "default": "eng",
+                "required": False,
+            },
         },
         "tools": [{"name": n, "description": d} for n, d in TOOLS],
         "compatibility": {

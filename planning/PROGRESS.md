@@ -5,6 +5,13 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-19 — scanned PDFs are read (₹0)
+
+- Milestone 30 item 2, from the owner's own Downloads folder: 19 of 60 files were scans (ID cards, marksheets, certificates), so "what is my PAN number?" had no answer. A PDF page with no text and a picture on it is now read by text recognition: MuPDF's built-in Tesseract, so no new Python package. Pages with text are read exactly as before.
+- The language data comes from a Tesseract install if there is one, else English, Hindi or Marathi is fetched once from the Tesseract project at a fixed tag and checked against a pinned hash (English about 4 MB). `SEXTANT_OCR_LANG=eng+mar` picks languages, and the desktop bundle asks for them; `SEXTANT_OCR=off` turns it off. A scan recognition could not read says why in `kb_stats`, and is tried again when recognition is turned on or given a language, including every scan an older version skipped.
+- Checked for real: a picture of a PAN-style card was read to the number and cited to page 1; a Marathi certificate line read correctly with `eng+mar` and as garbage with English alone; a clean cache fetched both files and passed the hash check; Tesseract's warnings go to stderr, not the protocol channel. Both defects planted back and caught.
+- Does not prove: accuracy on real phone photos or tilted scans, or how long a long scanned book takes (about a second a page here). The owner's 19 files have not been re-run yet.
+
 ## 2026-11-19 — a document is named by its path; exact copies stored once (₹0)
 
 - Milestone 30 item 1, from tester 1's run: a document was named by its file name alone, so `runs/a/notes.md` and `runs/b/notes.md` were one name and every one after the first was skipped. The folder pass now names each document by its path inside the folder, suffix included, and cites it the same way.

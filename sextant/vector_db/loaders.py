@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from sextant.vector_db import ocr
 from sextant.vector_db.tables import TableSpan, find_markdown_tables, find_pdf_tables
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,14 @@ class LoadedDocument:
     # looks exactly the same from here, which is why the loader records the
     # numbers rather than letting a caller infer loss from a gap.
     unreadable_pages: list[int] = field(default_factory=list)
+    # 1-based pages whose text came from text recognition (`ocr.py`), not from
+    # the file: a reading of a picture, which can hold wrong characters.
+    recognised_pages: list[int] = field(default_factory=list)
+    # The languages recognition used, when it ran on any page ("eng+mar").
+    recognition: str = ""
+    # Why pages that are only pictures were *not* recognised, when that
+    # happened: recognition off, or its data could not be had.
+    recognition_missing: str = ""
 
     def locate(self, offset: int) -> dict[str, Any]:
         """Which page and section the given character offset falls in."""
@@ -128,8 +137,16 @@ def load_path(path: str | Path, category: str = "general") -> LoadedDocument:
     )
 
 
+@dataclass
+class _Recognition:
+    pages: list[int] = field(default_factory=list)
+    languages: str = ""
+    missing: str = ""
+
+
 def _load_pdf(path: Path, category: str) -> LoadedDocument:
-    pages, title, unreadable = _pdf_pages(path)
+    recognition = _Recognition()
+    pages, title, unreadable = _pdf_pages(path, recognition)
     parts: list[str] = []
     locators: list[Locator] = []
     offset = 0
@@ -156,6 +173,9 @@ def _load_pdf(path: Path, category: str) -> LoadedDocument:
         category=category,
         locators=locators,
         unreadable_pages=unreadable,
+        recognised_pages=recognition.pages,
+        recognition=recognition.languages,
+        recognition_missing=recognition.missing,
     )
 
 
@@ -165,7 +185,9 @@ _ENCRYPTED = (
 )
 
 
-def _pdf_pages(path: Path) -> tuple[list[str], str | None, list[int]]:
+def _pdf_pages(
+    path: Path, recognition: _Recognition | None = None
+) -> tuple[list[str], str | None, list[int]]:
     """Each page's text, and the document title if the file records one.
 
     PyMuPDF first. pypdf infers the spaces between words from glyph spacing
@@ -191,7 +213,10 @@ def _pdf_pages(path: Path) -> tuple[list[str], str | None, list[int]]:
             raise UnsupportedDocument(_ENCRYPTED)
         for number, page in enumerate(document, start=1):
             try:
-                pages.append(_page_lines(page))
+                text = _page_lines(page)
+                if recognition is not None and not text.strip() and page.get_images():
+                    text = _recognise(page, number, path, recognition)
+                pages.append(text)
             except Exception as e:
                 # One malformed page should not lose the other ninety-nine --
                 # but it is also not allowed to disappear. The warning used to
@@ -203,6 +228,23 @@ def _pdf_pages(path: Path) -> tuple[list[str], str | None, list[int]]:
                 pages.append("")
         title = (document.metadata or {}).get("title")
     return pages, title, unreadable
+
+
+def _recognise(page: Any, number: int, path: Path, recognition: _Recognition) -> str:
+    """Text recognition for a page that is only a picture, or "" when it
+    cannot run -- which is recorded, once, rather than raised: the other
+    pages of the file still count."""
+    if recognition.missing:
+        return ""
+    try:
+        textpage = ocr.textpage(page)
+    except ocr.OcrUnavailable as e:
+        recognition.missing = str(e)
+        logger.info("%s: page %d is a picture and was not recognised: %s", path.name, number, e)
+        return ""
+    recognition.languages = ocr.reader().languages
+    recognition.pages.append(number)
+    return _page_lines(page, textpage)
 
 
 # Spans on one baseline closer than this are the same word (a math glyph run
@@ -219,7 +261,7 @@ _SCRIPT_REACH_PT = 6.0
 _BLOCK_BODY_MIN_SPANS = 3
 
 
-def _page_lines(page: Any) -> str:
+def _page_lines(page: Any, textpage: Any = None) -> str:
     """The page as lines, one per baseline within each text block.
 
     MuPDF's plain text mode emits a table row as one line per cell. Grouping
@@ -233,7 +275,8 @@ def _page_lines(page: Any) -> str:
     line before ("hyper-parameters−8" instead of "10−8"), and a page-wide
     search by y alone would hand it to the other column.
     """
-    blocks = [b for b in page.get_text("dict")["blocks"] if b.get("type") == 0]
+    raw = page.get_text("dict") if textpage is None else page.get_text("dict", textpage=textpage)
+    blocks = [b for b in raw["blocks"] if b.get("type") == 0]
     all_spans = [
         span
         for block in blocks
