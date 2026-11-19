@@ -5,6 +5,12 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-19 — launch write-up drafted early (₹0)
+
+- With the owner's yes, milestone 31 item 1 is drafted ahead of its turn: nine ideas measured and rejected, and the public numbers with the losses first ([the draft](launch-writeup.md)). Not published; the owner edits it and publishes after milestone 30.
+- Its 40 figures are typed by hand, so a test fails when any stops appearing on the generated results page; a planted stale figure was caught.
+- Does not prove: that anyone outside wants to read it, or that the draft's tone suits the places it will be posted.
+
 ## 2026-11-17 — the report names another version of the same document (₹0)
 
 - The owner confirmed the self-test's report reads in one screen (milestone 29 item 3). Their run showed a gap: most misses were a résumé beaten by another version of itself, and the report could not say so.
