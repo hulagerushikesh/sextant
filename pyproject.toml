@@ -1,8 +1,11 @@
 [project]
 name = "sextant-kb"
-version = "0.11.1"
+version = "0.11.2"
 description = "A knowledge base that is a real MCP server: measured retrieval over your own documents, in any MCP client"
-requires-python = ">=3.11"
+# The ceiling is onnxruntime's: it publishes no wheel for a Python newer than
+# 3.14, so on 3.15 the install fails. With the ceiling, `uv run` (the Claude
+# Desktop bundle) picks or downloads a Python that works instead.
+requires-python = ">=3.11,<3.15"
 license = "MIT"
 license-files = ["LICENSE"]
 readme = "README.md"

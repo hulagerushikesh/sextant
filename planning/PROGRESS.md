@@ -5,6 +5,13 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-19 — first two outside installs; Python 3.15 ceiling (₹0)
+
+- Tester 1 (Claude Code, macOS): installed, indexed 66 of 118 files, answered with a cited passage. Found: skip reasons stop at 20 with no count per reason, and files sharing a name in different folders are dropped.
+- Tester 2 (Claude Desktop, macOS): failed. First the Claude Code line was used without Claude Code; then the bundle and the line both failed because uv chose Python 3.15, for which onnxruntime publishes no wheel.
+- Fix (0.11.2, bundle built locally, not published): `requires-python = ">=3.11,<3.15"`, and the README's uvx lines pass the same range as `--python`, pinned by a test. Checked on a toy package: `uv run` (and Claude Desktop's own uv 0.9.7) honours the ceiling, but `uvx` from an index does not, hence the flag.
+- Does not prove: that the bundle now installs on a 3.15 machine; tester 2's retry is that test.
+
 ## 2026-11-19 — launch write-up drafted early (₹0)
 
 - With the owner's yes, milestone 31 item 1 is drafted ahead of its turn: nine ideas measured and rejected, and the public numbers with the losses first ([the draft](launch-writeup.md)). Not published; the owner edits it and publishes after milestone 30.

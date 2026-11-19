@@ -20,8 +20,8 @@ numbered marker opens the passage it came from.*
 
 Four steps. Most of the time is two downloads — about 170 MB of libraries,
 then about 180 MB of search models. No account and no key. It needs
-Python 3.11 or newer — check first, because an older one fails with a
-confusing "no matching distribution" message:
+Python 3.11 to 3.14 — check first, because an older or newer one fails with
+a confusing "no matching distribution" message:
 
 ```bash
 python3 --version
@@ -89,26 +89,28 @@ at a folder. Change `~/Documents` to the folder you want searched. Each line
 runs `--version` first, so the first install (a few hundred MB) finishes in
 the terminal rather than timing out inside the assistant. When the assistant
 starts it, the folder is indexed in the background and `kb_stats` shows the
-progress and any file it could not read.
+progress and any file it could not read. `--python` keeps uv off a Python
+newer than sextant's libraries support.
 
-**Claude Code:**
+**Claude Code** (the terminal program; for the Claude desktop app, use the
+`.mcpb` bundle instead):
 
 ```bash
-uvx --from 'sextant-kb>=0.11.1' sextant-kb --version && claude mcp add sextant --scope user --env SEXTANT_FOLDER=~/Documents -- uvx --from 'sextant-kb>=0.11.1' sextant-kb
+uvx --python '>=3.11,<3.15' --from 'sextant-kb>=0.11.1' sextant-kb --version && claude mcp add sextant --scope user --env SEXTANT_FOLDER=~/Documents -- uvx --python '>=3.11,<3.15' --from 'sextant-kb>=0.11.1' sextant-kb
 ```
 
 **VS Code** (needs the `code` command: in VS Code run *Shell Command: Install
 'code' command in PATH* once):
 
 ```bash
-uvx --from 'sextant-kb>=0.11.1' sextant-kb --version && code --add-mcp '{"name":"sextant","command":"uvx","args":["--from","sextant-kb>=0.11.1","sextant-kb"],"env":{"SEXTANT_FOLDER":"~/Documents"}}'
+uvx --python '>=3.11,<3.15' --from 'sextant-kb>=0.11.1' sextant-kb --version && code --add-mcp '{"name":"sextant","command":"uvx","args":["--python",">=3.11,<3.15","--from","sextant-kb>=0.11.1","sextant-kb"],"env":{"SEXTANT_FOLDER":"~/Documents"}}'
 ```
 
 **Cursor:** add this to `~/.cursor/mcp.json`. It has not been tried in
 Cursor yet.
 
 ```json
-{"mcpServers": {"sextant": {"command": "uvx", "args": ["--from", "sextant-kb>=0.11.1", "sextant-kb"], "env": {"SEXTANT_FOLDER": "~/Documents"}}}}
+{"mcpServers": {"sextant": {"command": "uvx", "args": ["--python", ">=3.11,<3.15", "--from", "sextant-kb>=0.11.1", "sextant-kb"], "env": {"SEXTANT_FOLDER": "~/Documents"}}}}
 ```
 
 ## What your assistant gets

@@ -478,10 +478,23 @@ class TestTheQuickstartNamesWhatThePackageInstalls:
         assert not missing, f"the README tells a reader to run {missing}, which nothing installs"
 
     def test_the_python_it_asks_for_is_the_one_the_package_requires(self):
-        floor = PYPROJECT["project"]["requires-python"]
-        assert floor.startswith(">="), f"the floor is no longer a simple minimum: {floor}"
-        stated = f"Python {floor.removeprefix('>=')} or newer"
+        floor, ceiling = _python_range()
+        major, minor = ceiling.split(".")
+        newest = f"{major}.{int(minor) - 1}"
+        stated = f"Python {floor} to {newest}"
         assert stated in self.README.read_text(), f"the quickstart does not say {stated!r}"
+
+
+def _python_range() -> tuple[str, str]:
+    """The package's Python range as (floor, exclusive ceiling).
+
+    The ceiling is onnxruntime's newest wheel: without it, uv on a newer
+    Python (3.15 on a tester's laptop, 2026-11-19) fails to install.
+    """
+    spec = PYPROJECT["project"]["requires-python"]
+    found = re.fullmatch(r">=(3\.\d+),<(3\.\d+)", spec)
+    assert found, f"requires-python is no longer a floor and a ceiling: {spec}"
+    return found.group(1), found.group(2)
 
 
 class TestTheOneLineSetupsAgree:
@@ -526,7 +539,18 @@ class TestTheOneLineSetupsAgree:
         assert len(asked) == 1, f"the setups ask for different releases: {asked}"
         (requirement,) = asked
         for config in self._configs():
-            assert config["args"][:2] == ["--from", requirement]
+            assert config["args"][2:4] == ["--from", requirement]
+
+    def test_every_setup_keeps_uv_on_the_python_the_package_supports(self):
+        """uvx picks its Python before it reads the package's range, so say it."""
+        floor, ceiling = _python_range()
+        wanted = f">={floor},<{ceiling}"
+        for config in self._configs():
+            assert config["args"][:2] == ["--python", wanted]
+        shell = re.findall(r"\buvx (.{0,40})", self._section())
+        assert len(shell) == 3, f"expected three shell uvx calls, found {shell}"
+        for call in shell:
+            assert call.startswith(f"--python '{wanted}' --from"), call
 
     def test_each_shell_line_installs_before_it_registers(self):
         """A first install inside a client's start-up timeout reads as broken."""
