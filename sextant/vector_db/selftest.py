@@ -375,9 +375,11 @@ def suggestion(
     elif scanned:
         kind, files, count = "recognise_text", scanned, len(scanned)
         text = (
-            f"Run **{_plural(count, 'PDF', 'PDFs')} with no readable text** "
-            f"({_listing(scanned)}) through text recognition (OCR) and add "
-            "them again: until then search can find nothing in them."
+            f"Make **{_plural(count, 'PDF', 'PDFs')} with no readable text** "
+            f"({_listing(scanned)}) readable: text recognition could not read "
+            f"{'it' if count == 1 else 'them'}, for the reason listed above, and "
+            "until then search can find nothing in "
+            f"{'it' if count == 1 else 'them'}."
         )
     elif unreadable:
         kind, files, count = "check_unreadable", unreadable, len(unreadable)

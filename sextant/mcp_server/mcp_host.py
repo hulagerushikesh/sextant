@@ -76,6 +76,9 @@ _FORWARDED_SETTINGS = (
     "MAX_PER_DOCUMENT",
     "SUBFLOOR_ORDER",
     "FLOOR_FALLBACK",
+    # Whether, and in which languages, a scanned page is read (`ocr.py`).
+    "OCR",
+    "OCR_LANG",
 )
 
 # And these are other people's, read by the libraries only the subprocess
@@ -126,6 +129,15 @@ _NOT_FORWARDED = {
         "corpus is fed by uploads and sextant-ingest, and a folder variable "
         "left in the operator's shell must not make the box's subprocess read "
         "a directory nobody chose for it."
+    ),
+    "TESSDATA_PREFIX": (
+        "ocr.py looks there first for text-recognition data, and falls back to "
+        "its own cache under XDG_CACHE_HOME, which does cross. A data folder in "
+        "the operator's shell is not a decision about the box's subprocess."
+    ),
+    "LOCALAPPDATA": (
+        "ocr.py's cache folder on Windows only. The app's subprocess runs on "
+        "Linux in a container, where XDG_CACHE_HOME (forwarded) decides it."
     ),
 }
 

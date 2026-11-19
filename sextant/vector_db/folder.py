@@ -22,6 +22,8 @@ What it does, each time the server starts:
 - stores a file whose bytes are exactly another file's once, and says which
   copy was left out: two copies of one text only crowd each other out of the
   results;
+- reads a scanned PDF with text recognition (`ocr.py`), and tries a scan it
+  could not read again when recognition is turned on or given a language;
 - records what it could not store, and why, and says so through `kb_stats`
   and the self-test's report, because a file that silently is not in the
   corpus reads as "the answer is not there".
@@ -45,10 +47,12 @@ from pathlib import Path
 from typing import Any
 
 from sextant import settings
+from sextant.vector_db import ocr
 from sextant.vector_db.loaders import (
     MARKDOWN_SUFFIXES,
     PDF_SUFFIXES,
     TEXT_SUFFIXES,
+    LoadedDocument,
     UnsupportedDocument,
     unreadable_line,
 )
@@ -80,13 +84,21 @@ def configured() -> Path | None:
     return Path(raw).expanduser()
 
 
-def no_text_reason(path: Path) -> str:
+def no_text_reason(path: Path, document: LoadedDocument | None = None) -> str:
     """Why a file that loaded but held no words is not searchable, in plain words.
 
     A PDF with no text at all is nearly always a scan: pictures of pages, with
-    no text layer for search to read.
+    no text layer for search to read. Text recognition (`ocr.py`) reads most
+    of those now, so the reason says which of its two failures this was.
     """
     if path.suffix.lower() in PDF_SUFFIXES:
+        if document is not None and document.recognition_missing:
+            return (
+                "is a scanned PDF, and text recognition could not read it: "
+                f"{document.recognition_missing}"
+            )
+        if document is not None and document.recognition:
+            return "is a scanned PDF, and text recognition found no words in it"
         return (
             "has no text that can be read, so it is probably a scanned PDF; it "
             "needs text recognition (OCR) before it can be searched"
@@ -146,6 +158,9 @@ class FolderSync:
         # Files left out because another file has exactly the same bytes.
         # Not "not indexed": their text is searchable, through the other one.
         self.copies: list[dict[str, str]] = []
+        # Documents stored with at least one page read by text recognition.
+        self.recognised = 0
+        self._recognition_tried = ""
         self.warnings: list[str] = []
         self.error: str | None = None
 
@@ -160,7 +175,10 @@ class FolderSync:
             "stored_this_run": self.stored,
             "unchanged": self.unchanged,
             "not_indexed": len(self.skipped),
+            "text_recognition": ocr.status(),
         }
+        if self.recognised:
+            report["read_by_text_recognition"] = self.recognised
         if self.skipped:
             report["not_indexed_files"] = self.skipped[:MAX_REPORTED]
             if len(self.skipped) > MAX_REPORTED:
@@ -295,7 +313,7 @@ class FolderSync:
                     self.unchanged += 1
                     self.done += 1
                     continue
-                if not known.get("stored"):
+                if not known.get("stored") and not self._worth_recognising(known):
                     # Failed last time and has not changed since: same result,
                     # so report it again without paying to find out again.
                     self._skip(
@@ -334,6 +352,9 @@ class FolderSync:
                     "stored": False,
                     "reason": reason,
                     "kind": kind,
+                    # What recognition could do for it this time: a scan is
+                    # tried again when that changes (`_worth_recognising`).
+                    "ocr": self._recognition_tried,
                 }
                 self._skip(path, reason, kind)
             self.done += 1
@@ -348,6 +369,13 @@ class FolderSync:
             "folder %s: %d stored, %d unchanged, %d copies, %d not indexed",
             self.folder, self.stored, self.unchanged, len(self.copies), len(self.skipped),
         )
+
+    @staticmethod
+    def _worth_recognising(known: dict[str, Any]) -> bool:
+        """A scan that failed with recognition off, without its data, or in
+        other languages is worth one more try now; anything else fails the
+        same way twice."""
+        return known.get("kind") == "no_text" and known.get("ocr", "") != ocr.signature()
 
     def _doc_id(self, path: Path) -> str:
         """The document's name: its path inside the folder, suffix included,
@@ -374,18 +402,23 @@ class FolderSync:
     async def _store_one(self, kb: Any, path: Path) -> tuple[str | None, str]:
         """Store one file. Returns why not and what kind of failure it was,
         or `(None, "")` when it is in the corpus."""
+        self._recognition_tried = ""
         try:
             document = await kb.load_file(str(path))
         except UnsupportedDocument as e:
             return str(e), "unreadable"
+        if not document.recognition_missing:
+            self._recognition_tried = ocr.signature()
         # Named and cited by its place in the folder: two `notes.md` in two
         # folders are two documents, and a citation says which one.
         name = self._doc_id(path)
         result = await kb.add_document(replace(document, doc_id=name, source=name))
         if not result.get("success"):
             if result.get("empty"):
-                return no_text_reason(path), "no_text"
+                return no_text_reason(path, document), "no_text"
             return str(result.get("message") or "could not be indexed"), "unreadable"
+        if document.recognised_pages:
+            self.recognised += 1
         lost = result.get("unreadable_pages") or {}
         if lost:
             self.warnings.append(unreadable_line(lost))
