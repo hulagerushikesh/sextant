@@ -460,3 +460,27 @@ class TestTheStoreReportsWhatIsNotInIt:
         )
         hits = await own_kb.search("Hungarian algorithm", limit=3, min_score=0.0)
         assert any("Hungarian" in hit["content"] for hit in hits["results"])
+
+
+class TestResultsSayHowOldTheirDocumentIs:
+    """Papers disagree over time; a result says how recent its document is so
+    the reader can tell the current address from an old one."""
+
+    CARD = {"id": "card", "title": "Identity card",
+            "content": "Address: 12 Old Lane, Riverside. Issued 03/05/2019. "
+                       "Date of birth 01/01/1990. Valid till 02/05/2039."}
+    BILL = {"id": "bill", "title": "Light bill",
+            "content": "Supply address: 4 New Road, Hilltop. Bill date 12/10/2026. "
+                       "Units consumed 140."}
+
+    async def test_each_hit_carries_its_documents_newest_date(self, kb):
+        await kb.add_documents([self.CARD, self.BILL])
+        result = await kb.search("what is my address", limit=10, mode="lexical")
+        by_document = {hit["document_id"]: hit for hit in result["results"]}
+        assert by_document["card"]["newest_date_in_document"] == "2019-05-03"
+        assert by_document["bill"]["newest_date_in_document"] == "2026-10-12"
+        assert by_document["card"]["dates_in_passage"] == ["1990-01-01", "2019-05-03"]
+
+    async def test_an_undated_document_says_so(self, kb):
+        result = await kb.search("how do you estimate hidden state", limit=1)
+        assert result["results"][0]["newest_date_in_document"] is None

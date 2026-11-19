@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 from sextant import settings
-from sextant.vector_db import selftest
+from sextant.vector_db import dates, selftest
 from sextant.vector_db.chunking import (
     CHUNK_TOKENS_ENV,
     chunk_text,
@@ -339,6 +339,10 @@ class KnowledgeBase:
         self.reranker = CrossEncoderReranker()
         self._bm25: BM25Index | None = None
         self._corpus: dict[str, tuple[str, dict[str, Any]]] = {}
+        # Newest date written in each document, read when one is first
+        # returned: reading all of them at index build costs a second at
+        # 5,000 chunks, and most documents are never a result.
+        self._newest: dict[str, str | None] = {}
 
         # Which index answers the dense half of retrieval. Validated here so a
         # bad value fails at startup, not on the first query.
@@ -466,6 +470,7 @@ class KnowledgeBase:
     def _invalidate_index(self) -> None:
         self._bm25 = None
         self._corpus = {}
+        self._newest = {}
         # The dense ANN cache is built from the corpus too, so a write makes it
         # stale in the same breath as the lexical index. Rebuilt on next query.
         self._ann_index = None
@@ -737,9 +742,10 @@ class KnowledgeBase:
         self, fused: Fused, score: float, scored_by: str, dense_score: float | None
     ) -> dict[str, Any]:
         text, meta = self._corpus.get(fused.id, ("", {}))
+        document_id = meta.get("document_id", fused.id)
         return {
             "id": fused.id,
-            "document_id": meta.get("document_id", fused.id),
+            "document_id": document_id,
             "title": meta.get("title", "Untitled document"),
             "content": text,
             "source": meta.get("source", "unknown"),
@@ -751,7 +757,21 @@ class KnowledgeBase:
             "dense_score": round(dense_score, 4) if dense_score is not None else None,
             "matched": fused.matched,
             "chunk_index": meta.get("chunk_index", 0),
+            # Read from the text, so a copied or downloaded file keeps its age.
+            "newest_date_in_document": self._newest_date(str(document_id)),
+            "dates_in_passage": [d.isoformat() for d in dates.dates_in(text)][
+                -dates.PASSAGE_DATES :
+            ],
         }
+
+    def _newest_date(self, document_id: str) -> str | None:
+        if document_id not in self._newest:
+            found = dates.newest(
+                text for text, meta in list(self._corpus.values())
+                if meta.get("document_id") == document_id
+            )
+            self._newest[document_id] = found.isoformat() if found else None
+        return self._newest[document_id]
 
     # -- ingestion ---------------------------------------------------------
 

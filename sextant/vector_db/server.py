@@ -213,7 +213,13 @@ def _with_folder(result: dict[str, Any]) -> dict[str, Any]:
         "collection holds nothing relevant, which means the answer is not in the "
         "knowledge base -- say so rather than guessing. A result flagged "
         "below_floor is the same verdict with the nearest passages attached for "
-        "reading: they are ordered by embedding similarity, not judged relevant."
+        "reading: they are ordered by embedding similarity, not judged relevant. "
+        "Each result also carries the newest date written in its document and "
+        "the dates written in the passage (future dates such as due or expiry "
+        "dates left out). When documents disagree -- an address on an identity "
+        "card and another on a recent bill -- use these to say which is newer, "
+        "show the options with their dates, and ask the user which is current "
+        "rather than picking one silently."
     )
 )
 @_routed

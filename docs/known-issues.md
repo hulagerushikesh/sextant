@@ -54,6 +54,12 @@ Limits and deliberate trade-offs, stated plainly.
   ranked unrelated passages as near-certain matches. So a Marathi question
   finds passages sharing its words, spelled the same way, and not paraphrases;
   the answer says so in a `note`. Asking in English also searches by meaning.
+- A result's dates (since 0.12.3) are the dates written in the text, not
+  when the paper was issued: a resume reading "July 2023 - Present" is dated
+  July 2023, and a date of birth counts like any other. Dates after today are
+  left out, so a passport's expiry and a bill's due date never make a paper
+  look newer. Two-digit years (12/03/24) are not read. Which address is
+  current is still the reader's call; the dates only say which paper is newer.
 - The answer renderer handles paragraphs, lists, headings, tables, bold and
   inline code. It is not a markdown parser. Gemini reaches for LaTeX
   unprompted, so the system prompt asks for equations as inline code instead.
