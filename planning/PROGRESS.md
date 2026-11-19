@@ -5,6 +5,13 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-19 — each result says how recent its document is (₹0)
+
+- From the owner's Aadhaar test: papers disagree over time (one address on identity cards, another on a recent bill), and search could not say which passage is newer. The owner's first guess, that a similarly named locked file hid the unlocked Aadhaar PDF, was checked and was wrong: that PDF was stored and returned 4th, with the number; Claude overlooked it.
+- 0.12.3: every result carries `newest_date_in_document` and `dates_in_passage`, read from the text (day first; month names; Devanagari digits), with dates after today left out as due or expiry dates. Read once per document when it is first returned, so the index build costs nothing more. The search tool's description tells Claude to show conflicting answers with their dates and ask which is current.
+- On a copy of the owner's store: 110 of 162 documents carry a date; reading all of them takes about a second, which is why it is lazy. a question naming the owner and asking for the address returns tax forms, resumes and statements, each with its date. Both defects planted back and caught.
+- Does not prove: that Claude now picks the current address. "What is my current address", with no name, still returns nothing, because the reranker rejects every passage; and the library holds no light bill to test against.
+
 ## 2026-11-19 — a question in Marathi is matched by its words (₹0)
 
 - From the owner's library after `eng+mar` re-read 28 scans: the Marathi on the marksheets now reads as words, but a Marathi question found nothing useful. Keyword search kept only `a-z0-9`, so every Marathi word was dropped, and the English-only embedder and cross-encoder ranked an admissions notice and a hall ticket at 0.9999 for a question about exam marks.

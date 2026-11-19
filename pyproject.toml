@@ -1,6 +1,6 @@
 [project]
 name = "sextant-kb"
-version = "0.12.2"
+version = "0.12.3"
 description = "A knowledge base that is a real MCP server: measured retrieval over your own documents, in any MCP client"
 # The ceiling is onnxruntime's: it publishes no wheel for a Python newer than
 # 3.14, so on 3.15 the install fails. With the ceiling, `uv run` (the Claude
