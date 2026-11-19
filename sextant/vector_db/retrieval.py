@@ -24,6 +24,7 @@ from __future__ import annotations
 import logging
 import math
 import re
+import unicodedata
 from collections import Counter
 from dataclasses import dataclass
 from typing import Any
@@ -41,19 +42,53 @@ BM25_B = 0.75
 # more valuable than the ones just below them.
 RRF_K = 60
 
-_TOKEN = re.compile(r"[a-z0-9]+")
+# Letters and digits of any script, split on underscores like any punctuation.
+# Indic scripts write vowels as combining signs that `\w` does not count, so
+# without the explicit block "एकूण" falls apart into single letters. The two
+# dandas (U+0964-5) are full stops and stay out.
+_TOKEN = re.compile(r"(?:[^\W_]|[\u0300-\u036f\u0900-\u0963\u0966-\u0dff])+")
+
+# The models that read meaning (MiniLM, the bge `-en` models, the ms-marco
+# cross-encoder) learned English. Shown another script, they still answer, and
+# confidently: a Marathi question scored unrelated Marathi notices 0.9999.
+_LATIN_SHARE = 0.5
 
 # Deliberately short. A long stoplist starts eating query terms that carry
 # meaning in a technical corpus ("no", "all", "state").
 _STOPWORDS = frozenset(
     "a an and are as at be but by for from has have how i if in into is it its of on or "
     "that the their then there these this to was were what when where which who will with".split()
+    # Marathi question and joining words. A Marathi question is matched by its
+    # words alone (`mostly_latin`), and without these "किती" and "च्या" ranked
+    # a long admissions notice above the marksheet the question was about.
+    + "च्या चा ची चे ला ने ना मध्ये आहे आहेत होते होता होती आणि या ही हे की ते तो ती "
+    "काय किती कसे कसा कोण कोणी कधी कुठे साठी पण".split()
 )
 
 
+def _ascii_digits(term: str) -> str:
+    """२००८ -> 2008, so a year matches whichever numerals either side used."""
+    return "".join(str(unicodedata.decimal(c)) if c.isdecimal() else c for c in term)
+
+
 def tokenize(text: str) -> list[str]:
-    """Lowercase alphanumeric terms, minus the most common function words."""
-    return [t for t in _TOKEN.findall(text.lower()) if t not in _STOPWORDS and len(t) > 1]
+    """Lowercase terms in any script, minus the most common function words."""
+    terms = _TOKEN.findall(unicodedata.normalize("NFC", text).lower())
+    return [
+        _ascii_digits(t) for t in terms if t not in _STOPWORDS and len(t) > 1
+    ]
+
+
+def mostly_latin(text: str) -> bool:
+    """Whether most of the letters in `text` are Latin, which the models read.
+
+    Text with no letters at all (a number, a code) counts as readable.
+    """
+    letters = [c for c in text if c.isalpha()]
+    if not letters:
+        return True
+    latin = sum(1 for c in letters if c.isascii() or "LATIN" in unicodedata.name(c, ""))
+    return latin / len(letters) >= _LATIN_SHARE
 
 
 class BM25Index:

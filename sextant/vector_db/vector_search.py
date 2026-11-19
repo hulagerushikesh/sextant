@@ -45,14 +45,17 @@ from sextant.vector_db.embeddings import (
     EMBEDDER_ENV,
     LOCAL_MODEL,
     EmbeddingsUnavailable,
+    configured_model,
     get_embedder,
 )
 from sextant.vector_db.loaders import LoadedDocument, Locator, load_path, unreadable_line
 from sextant.vector_db.retrieval import (
+    RERANK_MODEL,
     BM25Index,
     CrossEncoderReranker,
     Fused,
     RerankerUnavailable,
+    mostly_latin,
     reciprocal_rank_fusion,
 )
 from sextant.vector_db.summaries import SUMMARY_KIND, summary_chunk_id, summary_text
@@ -158,6 +161,17 @@ MIN_DISPLACE_RATIO = 0.5
 RetrievalMode = Literal["dense", "lexical", "rrf", "rerank"]
 RETRIEVAL_MODES: tuple[RetrievalMode, ...] = ("dense", "lexical", "rrf", "rerank")
 DEFAULT_MODE: RetrievalMode = "rerank"
+
+# A question written mostly outside the Latin alphabet (Marathi, Hindi) is
+# matched by its words alone. The embedder and the cross-encoder learned
+# English: given a Marathi question they ranked unrelated Marathi notices at
+# 0.9999 and missed the marksheet that held the words asked about. Keyword
+# matching reads any script, and its scores claim no more than they are.
+WORDS_ONLY_NOTE = (
+    "The question is not in English, which the meaning-based models cannot read; "
+    "these passages share its words and are ranked by keyword match (bm25), not by "
+    "relevance. Asking in English also searches by meaning."
+)
 
 
 def _locators(doc: dict[str, Any], length: int) -> list[Locator]:
@@ -479,9 +493,12 @@ class KnowledgeBase:
     ) -> dict[str, Any]:
         """The synchronous body of `search`, for callers already on a thread."""
         start = time.time()
-        results, scored_by, below_floor = self._search(query, limit, min_score, mode)
+        words_only = mode == "rerank" and not mostly_latin(query) and self._models_read_english()
+        results, scored_by, below_floor = self._search(
+            query, limit, min_score, "lexical" if words_only else mode
+        )
 
-        return {
+        answer: dict[str, Any] = {
             "success": True,
             "query": query,
             "results": results,
@@ -495,6 +512,19 @@ class KnowledgeBase:
             "collection_size": self.collection.count(),
             "timestamp": datetime.now().isoformat(),
         }
+        if words_only:
+            answer["note"] = WORDS_ONLY_NOTE
+        return answer
+
+    def _models_read_english(self) -> bool:
+        """Whether both meaning models are the English-only ones.
+
+        Only these are known to score another script with false confidence; a
+        multilingual model set through `SEXTANT_EMBEDDER` keeps the full search.
+        """
+        embedder = configured_model()
+        english = embedder == LOCAL_MODEL or "-en-" in embedder or embedder.endswith("-en")
+        return english and self.reranker.model_name == RERANK_MODEL
 
     def _search(
         self, query: str, limit: int, min_score: float, mode: str

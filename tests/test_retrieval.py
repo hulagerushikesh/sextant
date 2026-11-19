@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from sextant.vector_db.retrieval import BM25Index, reciprocal_rank_fusion, tokenize
+from sextant.vector_db.retrieval import (
+    BM25Index,
+    mostly_latin,
+    reciprocal_rank_fusion,
+    tokenize,
+)
 
 DOCS = {
     "c1": "A Kalman filter estimates hidden state from noisy measurements.",
@@ -31,6 +36,53 @@ class TestTokenize:
 
     def test_empty(self):
         assert tokenize("") == []
+
+
+class TestOtherScripts:
+    """Marathi marksheets read by OCR hold the words people search for; the
+    old ASCII-only tokenizer dropped every one of them."""
+
+    def test_a_marathi_word_keeps_its_vowel_signs(self):
+        assert tokenize("एकूण गुण") == ["एकूण", "गुण"]
+
+    def test_devanagari_digits_match_ascii_ones(self):
+        assert tokenize("सन २००८") == ["सन", "2008"]
+
+    def test_the_danda_is_a_full_stop_not_a_letter(self):
+        assert tokenize("उत्तीर्ण। प्रथम") == ["उत्तीर्ण", "प्रथम"]
+
+    def test_marathi_question_words_are_dropped(self):
+        assert tokenize("परीक्षेच्या किती गुण") == ["परीक्षेच्या", "गुण"]
+
+    def test_underscores_still_split_terms(self):
+        assert tokenize("error_code") == ["error", "code"]
+
+    def test_accented_latin_stays_whole(self):
+        assert tokenize("café") == ["café"]
+
+    def test_a_marathi_question_finds_the_marksheet_by_its_words(self):
+        index = BM25Index(
+            ["sheet", "notice"],
+            ["एकूण गुण FIVE HUNDRED AND SEVENTEEN मार्च २००९", "प्रवेश अर्ज भरताना पालकांनी"],
+        )
+        assert index.search("पल्लवीला एकूण गुण किती", 5)[0][0] == "sheet"
+
+
+class TestMostlyLatin:
+    def test_english_is_latin(self):
+        assert mostly_latin("how much did Pallavi score in 2008")
+
+    def test_marathi_is_not(self):
+        assert not mostly_latin("पल्लवीला २००८ च्या परीक्षेत किती गुण मिळाले")
+
+    def test_a_marathi_question_naming_an_english_exam_is_still_marathi(self):
+        assert not mostly_latin("SSC परीक्षेत किती गुण मिळाले")
+
+    def test_accents_are_latin(self):
+        assert mostly_latin("résumé of the café")
+
+    def test_no_letters_counts_as_readable(self):
+        assert mostly_latin("2008 / 517")
 
 
 class TestBM25:
