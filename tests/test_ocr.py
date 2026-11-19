@@ -167,7 +167,7 @@ class TestFindingTheData:
             def read(self) -> bytes:
                 return body
 
-        def urlopen(url: str, timeout: float) -> Response:
+        def urlopen(url: str, timeout: float, context: object = None) -> Response:
             asked.append(url)
             return Response()
 
@@ -402,3 +402,14 @@ class TestFindingPicturePages:
         (tmp_path / "notes.md").write_text("words")
         assert not has_picture_pages(tmp_path / "broken.pdf")
         assert not has_picture_pages(tmp_path / "notes.md")
+
+
+def test_downloads_check_certificates_from_certifi():
+    """python.org's macOS Python has no certificates until a manual step; the
+    language download must not depend on it."""
+    import certifi
+
+    context = ocr._tls()
+    assert context.verify_mode.name == "CERT_REQUIRED"
+    assert context.cert_store_stats()["x509_ca"] > 0
+    assert certifi.where()

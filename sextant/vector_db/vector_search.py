@@ -100,6 +100,11 @@ ANN_BACKENDS = ("chroma", "flat", "hnsw", "ivfpq", "ivfpq_rerank")
 # pair, so this is the cost knob.
 RERANK_DEPTH = 25
 
+# Chroma refuses a single write larger than its batch limit (5,461 on the
+# SQLite store), and a whole book makes more chunks than that: a 6,155-chunk
+# aptitude book was rejected outright. Writes go in slices well under it.
+WRITE_BATCH = 1000
+
 # Measured against the Phase 5 golden set, not guessed. On 60 questions, a floor
 # of 0.01 blocks 8 of 10 unanswerable queries and costs 2 of 50 answerable ones;
 # 0.1 blocks the same 8 and costs 3; 0.3 costs 8 for no further benefit. So the
@@ -961,15 +966,18 @@ class KnowledgeBase:
                 stale = [chunk_id for chunk_id in existing if chunk_id not in set(ids)]
                 if stale:
                     logger.info("Replacing %s: dropping %d stale chunk(s)", doc_id, len(stale))
-                    self.collection.delete(ids=stale)
+                    for start in range(0, len(stale), WRITE_BATCH):
+                        self.collection.delete(ids=stale[start:start + WRITE_BATCH])
             # upsert, not add: re-ingesting the same id replaces it rather than
             # raising, which is what you want when re-running an ingest script.
-            self.collection.upsert(
-                embeddings=cast(Any, embeddings),
-                documents=texts,
-                metadatas=cast(Any, metadatas),
-                ids=ids,
-            )
+            for start in range(0, len(ids), WRITE_BATCH):
+                end = start + WRITE_BATCH
+                self.collection.upsert(
+                    embeddings=cast(Any, embeddings[start:end]),
+                    documents=texts[start:end],
+                    metadatas=cast(Any, metadatas[start:end]),
+                    ids=ids[start:end],
+                )
         except Exception as e:
             logger.exception("Ingestion failed")
             return self._ingest_failure(f"Error adding documents: {e}")

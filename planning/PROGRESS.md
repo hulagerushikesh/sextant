@@ -5,6 +5,13 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-19 — a whole book is stored, and scans are read on a fresh Mac (₹0)
+
+- From tester 3's laptop (a friend of the owner; 92 files in Downloads, searches answered from an airline fee sheet and a maths book): two defects. A 6,155-chunk aptitude book was rejected whole, because Chroma refuses one write over 5,461 items. And text recognition was off, because the Python from python.org's macOS installer has no https certificates until a manual step, so the language download failed with CERTIFICATE_VERIFY_FAILED.
+- 0.12.4: chunks are written and cleared in slices of 1,000. The language download checks certificates against certifi's bundle (now a stated dependency) instead of the interpreter's. The search tool's description adds that a user's word does not change what an official record says: Claude shows the document's figure and asks whether a newer one (a revaluation, a correction) exists.
+- The slicing test counts every write; with the slicing removed it fails. The certificate test checks a verifying context with loaded authorities.
+- Does not prove: that the book now goes in on tester 3's laptop, or that OCR works there; that needs the 0.12.4 bundle on it. The first install also needs GitHub reachable to fetch Python, which a college network blocked.
+
 ## 2026-11-19 — each result says how recent its document is (₹0)
 
 - From the owner's Aadhaar test: papers disagree over time (one address on identity cards, another on a recent bill), and search could not say which passage is newer. The owner's first guess, that a similarly named locked file hid the unlocked Aadhaar PDF, was checked and was wrong: that PDF was stored and returned 4th, with the number; Claude overlooked it.
