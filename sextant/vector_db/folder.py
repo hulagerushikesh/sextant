@@ -23,7 +23,9 @@ What it does, each time the server starts:
   copy was left out: two copies of one text only crowd each other out of the
   results;
 - reads a scanned PDF with text recognition (`ocr.py`), and tries a scan it
-  could not read again when recognition is turned on or given a language;
+  could not read again when recognition is turned on or given a language --
+  and reads a stored scan again when its languages change, since English
+  alone turns the Marathi on a marksheet into noise;
 - records what it could not store, and why, and says so through `kb_stats`
   and the self-test's report, because a file that silently is not in the
   corpus reads as "the answer is not there".
@@ -54,6 +56,7 @@ from sextant.vector_db.loaders import (
     TEXT_SUFFIXES,
     LoadedDocument,
     UnsupportedDocument,
+    has_picture_pages,
     unreadable_line,
 )
 from sextant.vector_db.retrieval import RerankerUnavailable
@@ -82,6 +85,12 @@ def configured() -> Path | None:
     if not raw or raw.startswith("${"):
         return None
     return Path(raw).expanduser()
+
+
+# Recorded for a stored PDF whose picture pages were not read (no data) or
+# were read by a version that did not say how: never equal to a language
+# list, so the next pass with recognition on reads them.
+_UNKNOWN_READING = "?"
 
 
 def no_text_reason(path: Path, document: LoadedDocument | None = None) -> str:
@@ -161,6 +170,8 @@ class FolderSync:
         # Documents stored with at least one page read by text recognition.
         self.recognised = 0
         self._recognition_tried = ""
+        # What a stored document's picture pages were read with (`_read_with`).
+        self._read_with = ""
         self.warnings: list[str] = []
         self.error: str | None = None
 
@@ -310,9 +321,17 @@ class FolderSync:
 
             if same:
                 if known.get("stored") and stored_as == doc_id and doc_id in in_store:
-                    self.unchanged += 1
-                    self.done += 1
-                    continue
+                    if "ocr" not in known:
+                        # Stored before 0.12.1 recorded how its picture pages
+                        # were read. Look once; the answer goes in the ledger.
+                        legacy_scan = await asyncio.to_thread(has_picture_pages, path)
+                        known["ocr"] = _UNKNOWN_READING if legacy_scan else ""
+                        ledger[key] = known
+                        await asyncio.to_thread(self._write_ledger, ledger)
+                    if not self._worth_rereading(known):
+                        self.unchanged += 1
+                        self.done += 1
+                        continue
                 if not known.get("stored") and not self._worth_recognising(known):
                     # Failed last time and has not changed since: same result,
                     # so report it again without paying to find out again.
@@ -341,6 +360,9 @@ class FolderSync:
                     "sha256": digest,
                     "stored": True,
                     "doc_id": doc_id,
+                    # How its picture pages were read: "" when it has none. A
+                    # change of languages reads them again (`_worth_rereading`).
+                    "ocr": self._read_with,
                 }
                 self.stored += 1
                 if legacy and legacy != doc_id:
@@ -377,6 +399,15 @@ class FolderSync:
         same way twice."""
         return known.get("kind") == "no_text" and known.get("ocr", "") != ocr.signature()
 
+    @staticmethod
+    def _worth_rereading(known: dict[str, Any]) -> bool:
+        """A stored document whose picture pages were read in other languages
+        than are asked for now -- English only, before Marathi was added -- is
+        read again, and replaces itself. Turning recognition off keeps what
+        was read."""
+        now, then = ocr.signature(), str(known.get("ocr") or "")
+        return bool(now and then and then != now)
+
     def _doc_id(self, path: Path) -> str:
         """The document's name: its path inside the folder, suffix included,
         so neither `a/notes.md` and `b/notes.md` nor `notes.md` and `notes.pdf`
@@ -403,12 +434,17 @@ class FolderSync:
         """Store one file. Returns why not and what kind of failure it was,
         or `(None, "")` when it is in the corpus."""
         self._recognition_tried = ""
+        self._read_with = ""
         try:
             document = await kb.load_file(str(path))
         except UnsupportedDocument as e:
             return str(e), "unreadable"
         if not document.recognition_missing:
             self._recognition_tried = ocr.signature()
+        if document.recognised_pages:
+            self._read_with = document.recognition
+        elif document.recognition_missing:
+            self._read_with = _UNKNOWN_READING
         # Named and cited by its place in the folder: two `notes.md` in two
         # folders are two documents, and a citation says which one.
         name = self._doc_id(path)

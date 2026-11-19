@@ -24,7 +24,7 @@ import pytest
 from sextant import settings
 from sextant.vector_db import ocr
 from sextant.vector_db.folder import LEDGER_NAME, FolderSync, no_text_reason
-from sextant.vector_db.loaders import LoadedDocument, load_path
+from sextant.vector_db.loaders import LoadedDocument, has_picture_pages, load_path
 from tests.test_folder import FakeKB, _write
 
 NUMBER = "ABCDE1234F"
@@ -233,20 +233,24 @@ class RecognisingKB(FakeKB):
     """Loads a scan as the real loader would: words when recognition is on,
     none and the reason when it is off."""
 
-    def __init__(self) -> None:
+    def __init__(self, typed: set[str] | None = None) -> None:
         super().__init__()
         self.loaded: list[str] = []
+        self.typed = typed or set()  # files with text of their own: nothing to recognise
 
     async def load_file(self, path: str, category: str = "general") -> LoadedDocument:
         name = Path(path).name
         self.loaded.append(name)
+        if name in self.typed:
+            return LoadedDocument(Path(path).stem, name, "typed words", name)
         if not ocr.enabled():
             self.empty.add(name)
             missing = "text recognition is turned off"
             return LoadedDocument(Path(path).stem, name, "", name, recognition_missing=missing)
         self.empty.discard(name)
         return LoadedDocument(
-            Path(path).stem, name, NUMBER, name, recognised_pages=[1], recognition="eng"
+            Path(path).stem, name, NUMBER, name,
+            recognised_pages=[1], recognition=ocr.signature(),
         )
 
 
@@ -307,3 +311,94 @@ class TestTheFolderTriesAScanAgain:
         await sync.run(lambda: kb)
         assert kb.loaded == ["PAN_Card.pdf"]
         assert sync.status()["stored_this_run"] == 1
+
+
+class TestAStoredScanIsReadAgainInNewLanguages:
+    """Found on the owner's Downloads, 2026-11-19: a Maharashtra marksheet
+    read in English only came back with the name and subjects garbled, and
+    adding Marathi did nothing -- only scans with no words at all were tried
+    again. A scan that was read is now read again when the languages change."""
+
+    @staticmethod
+    async def _pass(root: Path, store: Path, kb: RecognisingKB) -> FolderSync:
+        sync = FolderSync(root, store)
+        await sync.run(lambda: kb)
+        return sync
+
+    async def test_adding_a_language_reads_the_scan_again_once(self, tmp_path, monkeypatch):
+        root, store = tmp_path / "library", tmp_path / "store"
+        _write(root, "marksheet.pdf")
+        _write(root, "notes.md")
+        kb = RecognisingKB(typed={"notes.md"})
+
+        await self._pass(root, store, kb)
+        ledger = json.loads((store / LEDGER_NAME).read_text())
+        assert ledger[str(root / "marksheet.pdf")]["ocr"] == "eng"
+        assert ledger[str(root / "notes.md")]["ocr"] == ""
+
+        monkeypatch.setenv(settings.env_name("OCR_LANG"), "eng+mar")
+        kb.loaded.clear()
+        again = await self._pass(root, store, kb)
+        assert kb.loaded == ["marksheet.pdf"], "only the scan is read again"
+        assert again.status()["stored_this_run"] == 1
+        assert kb.docs == {"marksheet.pdf", "notes.md"}, "replaced, not added beside"
+        ledger = json.loads((store / LEDGER_NAME).read_text())
+        assert ledger[str(root / "marksheet.pdf")]["ocr"] == "eng+mar"
+
+        kb.loaded.clear()
+        await self._pass(root, store, kb)
+        assert kb.loaded == [], "same languages: nothing is read a third time"
+
+    async def test_turning_recognition_off_keeps_what_was_read(self, tmp_path, monkeypatch):
+        root, store = tmp_path / "library", tmp_path / "store"
+        _write(root, "marksheet.pdf")
+        kb = RecognisingKB()
+        await self._pass(root, store, kb)
+
+        monkeypatch.setenv(settings.env_name("OCR"), "off")
+        kb.loaded.clear()
+        await self._pass(root, store, kb)
+        assert kb.loaded == [] and kb.docs == {"marksheet.pdf"}
+
+    async def test_a_scan_stored_before_the_ledger_said_how_is_read_once(self, tmp_path):
+        """0.12.0 stored scans without recording the languages. The file
+        itself is looked at, once: a scan is read again, a typed PDF is not."""
+        root, store = tmp_path / "library", tmp_path / "store"
+        root.mkdir()
+        scan = _scan(root / "PAN_Card.pdf", [NUMBER])
+        typed = _text_pdf(root / "letter.pdf", "plain words")
+        ledger = {}
+        for path in (scan, typed):
+            stat = path.stat()
+            ledger[str(path)] = {
+                "signature": [stat.st_mtime_ns, stat.st_size],
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                "stored": True,
+                "doc_id": path.name,
+            }
+        store.mkdir()
+        (store / LEDGER_NAME).write_text(json.dumps(ledger))
+        kb = RecognisingKB(typed={"letter.pdf"})
+        kb.docs = {"PAN_Card.pdf", "letter.pdf"}
+
+        await self._pass(root, store, kb)
+        assert kb.loaded == ["PAN_Card.pdf"]
+        written = json.loads((store / LEDGER_NAME).read_text())
+        assert written[str(scan)]["ocr"] == "eng"
+        assert written[str(typed)]["ocr"] == ""
+
+        kb.loaded.clear()
+        await self._pass(root, store, kb)
+        assert kb.loaded == []
+
+
+class TestFindingPicturePages:
+    def test_a_scan_has_them_and_a_typed_pdf_does_not(self, tmp_path):
+        assert has_picture_pages(_scan(tmp_path / "scan.pdf", [NUMBER]))
+        assert not has_picture_pages(_text_pdf(tmp_path / "typed.pdf", "words"))
+
+    def test_anything_it_cannot_open_is_not_a_scan(self, tmp_path):
+        (tmp_path / "broken.pdf").write_bytes(b"not a pdf")
+        (tmp_path / "notes.md").write_text("words")
+        assert not has_picture_pages(tmp_path / "broken.pdf")
+        assert not has_picture_pages(tmp_path / "notes.md")
