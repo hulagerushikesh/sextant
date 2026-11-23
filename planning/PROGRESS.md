@@ -5,6 +5,10 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-23 — release 0.12.7: folder sync (₹0)
+
+- Owner's yes ("release 0.12.7"). Built the wheel, the ordinary bundle (216 KB) and the Mac bundle (330 MB), all offline from caches. The same add / change / delete / folder-gone check over MCP passed against the wheel in a fresh environment and against the Mac bundle unpacked with every file at 600 and an empty home folder (4–5 seconds each; nothing written to a model cache). Published as GitHub release v0.12.7 with both bundles. PyPI is still at 0.11.1; uploading is the owner's.
+
 ## 2026-11-23 — the folder stays in sync while the assistant is open (₹0)
 
 - Milestone 30 item 4, the owner's request. While the server runs, the folder pass looks at the folder every 15 seconds (`SEXTANT_FOLDER_POLL`, `off` stops it) and, when any file's size or date changed, runs again: added and changed files are stored, deleted files removed from search, also at start. Polling, so no new package. Plan 29 of 38 (76%).
