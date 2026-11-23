@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -121,6 +122,39 @@ def _add_tree(bundle: zipfile.ZipFile, source: Path, prefix: str, skipped: set[s
         bundle.write(path, f"{prefix}/{rel.as_posix()}")
 
 
+# Where python-build-standalone itself says it lives. uv rewrites this to the
+# folder it unpacked into, which on the builder's Mac names the builder.
+_STANDALONE_PREFIX = "/install"
+
+
+def detach_from_builder(python_dir: Path, staged: Path) -> None:
+    """Copy the interpreter to `staged`, minus every trace of where it was.
+
+    uv stamps its install folder into two places: the build settings module
+    and the shared library's own name. The first is text and is put back to
+    the standalone build's placeholder; the second is reset to a path
+    relative to the interpreter, which changes the library, so it is signed
+    again ad hoc as Apple silicon requires.
+    """
+    shutil.copytree(python_dir, staged, symlinks=True)
+    for config in staged.glob(f"lib/python{PYTHON_MINOR}/_sysconfigdata_*.py"):
+        config.write_text(config.read_text().replace(str(python_dir), _STANDALONE_PREFIX))
+    library = staged / "lib" / f"libpython{PYTHON_MINOR}.dylib"
+    if library.exists():
+        subprocess.run(["install_name_tool", "-id",
+                        f"@executable_path/../lib/{library.name}", str(library)],
+                       check=True, capture_output=True)
+        subprocess.run(["codesign", "--force", "--sign", "-", str(library)],
+                       check=True, capture_output=True)
+
+
+def traces_of(marker: str, bundle_path: Path) -> list[str]:
+    """Files in the bundle whose bytes contain `marker`, such as a home folder."""
+    needle = marker.encode()
+    with zipfile.ZipFile(bundle_path) as bundle:
+        return [name for name in bundle.namelist() if needle in bundle.read(name)]
+
+
 def build_bundle(python_dir: Path, out_dir: Path = ROOT / "dist", offline: bool = False) -> Path:
     interpreter = python_dir / "bin" / f"python{PYTHON_MINOR}"
     if not interpreter.is_file() or interpreter.is_symlink():
@@ -130,6 +164,9 @@ def build_bundle(python_dir: Path, out_dir: Path = ROOT / "dist", offline: bool 
     with tempfile.TemporaryDirectory() as tmp:
         libraries = Path(tmp) / "lib"
         install_libraries(interpreter, libraries, offline)
+        staged = Path(tmp) / "python"
+        detach_from_builder(python_dir.resolve(), staged)
+        python_dir = staged
         with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as bundle:
             bundle.writestr("manifest.json", json.dumps(manifest(), indent=2) + "\n")
             bundle.writestr("launch.sh", LAUNCH)
@@ -139,7 +176,14 @@ def build_bundle(python_dir: Path, out_dir: Path = ROOT / "dist", offline: bool 
             for path in build.package_files():
                 bundle.write(path, "src/" + str(path.relative_to(ROOT)))
             _add_tree(bundle, python_dir, "python", PYTHON_SKIPPED)
-            _add_tree(bundle, libraries, "lib", {"__pycache__"})
+            # `bin` holds the libraries' command-line scripts, unused here,
+            # each starting with the builder's own interpreter path.
+            _add_tree(bundle, libraries, "lib", {"__pycache__", "bin"})
+    # The bundle is published: it must not carry the builder's home folder.
+    leaked = traces_of(str(Path.home()), target)
+    if leaked:
+        target.unlink()
+        raise SystemExit(f"the builder's home folder is inside {len(leaked)} files: {leaked[:5]}")
     return target
 
 

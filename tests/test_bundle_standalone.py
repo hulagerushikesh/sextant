@@ -99,3 +99,29 @@ class TestTheCopy:
     def test_it_refuses_a_folder_without_the_interpreter(self, tmp_path):
         with pytest.raises(SystemExit):
             standalone.build_bundle(tmp_path, tmp_path / "out")
+
+
+class TestNothingOfTheBuilderShips:
+    """The bundle is a public download; the first build carried the builder's
+    home folder in 6 files (uv's install path, script headers)."""
+
+    def test_the_build_settings_lose_the_install_folder(self, tmp_path):
+        minor = standalone.PYTHON_MINOR
+        source = tmp_path / "home" / "someone" / "uv-python"
+        config = source / "lib" / f"python{minor}" / "_sysconfigdata__darwin_darwin.py"
+        config.parent.mkdir(parents=True)
+        config.write_text(f"build_time_vars = {{'prefix': '{source}', 'LIBDIR': '{source}/lib'}}\n")
+
+        staged = tmp_path / "staged"
+        standalone.detach_from_builder(source, staged)
+
+        text = (staged / config.relative_to(source)).read_text()
+        assert str(source) not in text
+        assert "'prefix': '/install'" in text and "'/install/lib'" in text
+
+    def test_a_trace_is_found_wherever_it_is(self, tmp_path):
+        out = tmp_path / "b.zip"
+        with zipfile.ZipFile(out, "w") as bundle:
+            bundle.writestr("clean.py", "x = 1")
+            bundle.writestr("lib/bin/tool", "#!/Users/someone/venv/bin/python")
+        assert standalone.traces_of("/Users/someone", out) == ["lib/bin/tool"]

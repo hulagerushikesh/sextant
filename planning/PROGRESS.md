@@ -12,6 +12,7 @@ story is the root README.
 - Checked: unpacked with every file at 600, started with only HOME and `PATH=/usr/bin:/bin`, it answered `initialize`, indexed a one-file folder and returned the passage (0.9972). The interpreter loads its own `libpython` by `@executable_path`. Tests pin the launch from a 600 file (fails with the chmod removed: "Permission denied"), the manifest, and that links are not stored twice.
 - Does not prove: that Claude Desktop accepts a 170 MB `binary` bundle started by `/bin/sh`; that needs one install through the app. Nor that it runs on a Mac that never had Python: this one had uv's and Homebrew's, though the probe's environment hid both.
 - 2026-11-23, later: the owner installed it through Claude Desktop on a friend's laptop and reports it working. So Claude Desktop accepts the 170 MB `binary` bundle started by `/bin/sh`. That is the owner's word, with no transcript seen; whether that laptop already had a Python is not recorded.
+- Before publishing it, a scan found the builder's home folder in 6 files: uv's install path in the build settings and the shared library's name, and script headers in the libraries' unused `bin`. The builder now resets the first to the standalone build's `/install`, renames the library relative to the interpreter and re-signs it ad hoc, leaves `bin` out, and refuses to finish if the home folder appears anywhere. Rebuilt and probed again as above: same answer, signature valid.
 
 ## 2026-11-23 — the install says what it needs (₹0)
 
