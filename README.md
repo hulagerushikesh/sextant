@@ -86,8 +86,9 @@ tested on Windows.
 
 ## Claude Desktop: one file
 
-A `sextant-<version>.mcpb` file installs it in the Claude desktop app with
-no terminal: double-click it, choose the folder to search, and wait while it
+A `sextant-<version>.mcpb` file, from the
+[releases page](https://github.com/hulagerushikesh/sextant/releases), installs
+it in the Claude desktop app with no terminal: double-click it, choose the folder to search, and wait while it
 indexes. It needs **Python 3.11 to 3.14** on the computer. Without one, the
 app downloads Python (about 20 MB) from github.com during the install, which
 is where two of the first three people to try it got stuck:
