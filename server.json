@@ -7,13 +7,13 @@
     "url": "https://github.com/hulagerushikesh/sextant",
     "source": "github"
   },
-  "version": "0.12.7",
+  "version": "0.12.8",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "sextant-kb",
-      "version": "0.12.7",
+      "version": "0.12.8",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"

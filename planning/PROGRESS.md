@@ -5,6 +5,11 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-24 — 0.12.8 built and the launch write-up made ready (₹0)
+
+- Owner's request ("fix next item then we publish"). Milestone 31 item 1: the write-up now names the install from release 0.12.8 and says in one paragraph what the first outside installs stopped at; every figure still matches the results page. Publishing it stays the owner's.
+- Built 0.12.8 offline from caches: the wheel, the ordinary bundle (217 KB) and the Mac bundle (331 MB). Over MCP, a file recorded as failed by an older version was stored and found in search, against the wheel in a fresh environment and against the Mac bundle unpacked with every file at 600 and an empty home folder; the same check against the 0.12.7 wheel left it "not indexed". Not yet on GitHub, PyPI or the registry; publishing is the owner's. It does not show the friend's book being read on their laptop.
+
 ## 2026-11-23 — release 0.12.7: folder sync (₹0)
 
 - Owner's yes ("release 0.12.7"). Built the wheel, the ordinary bundle (216 KB) and the Mac bundle (330 MB), all offline from caches. The same add / change / delete / folder-gone check over MCP passed against the wheel in a fresh environment and against the Mac bundle unpacked with every file at 600 and an empty home folder (4–5 seconds each; nothing written to a model cache). Published as GitHub release v0.12.7 with both bundles. PyPI is still at 0.11.1; uploading is the owner's.

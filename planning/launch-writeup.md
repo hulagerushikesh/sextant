@@ -1,10 +1,10 @@
 # DRAFT: launch write-up (milestone 31, item 1)
 
-> Not published. The owner edits it and publishes it after milestone 30.
-> Every figure is copied from [`docs/RESULTS.md`](../docs/RESULTS.md);
+> Not published. Milestone 30 is done, so it is ready for the owner to edit and
+> publish. Every figure is copied from [`docs/RESULTS.md`](../docs/RESULTS.md);
 > `tests/test_launch_writeup.py` fails if any of them stops appearing there.
-> Before publishing, re-read RESULTS.md and fill in the install line from the
-> release that is current then.
+> The install lines below name release 0.12.8 (checked 2026-11-24); if a newer
+> release is current on the day, change them.
 
 ---
 
@@ -101,6 +101,16 @@ scored 0.65 and passed; the other scored 0.58 and failed. So it ships labelled
 **a rough guide**: good for comparing your library with itself, not with
 someone else's.
 
+### What the first people to install it stopped at
+
+Three people outside the project installed it before this post. What stopped
+them was rarely the search: it was installing Python, a network that timed
+out fetching it, two files with the same name, scanned PDFs with no text, and
+one book too long for a single batch. Each became a fix. On a Mac with Apple
+silicon, the Claude Desktop file now carries its own Python and the search
+models, so installing it and its first start download nothing, and it keeps
+the chosen folder in sync while the assistant is open.
+
 ### What this does not show
 
 The home test sets were written alongside the code, and the public sets are
@@ -109,7 +119,16 @@ library, which is why the self-test exists, and why it is labelled rough.
 
 ### Try it, or check it
 
-Install line: *(fill in from the current release)*
+In Claude Desktop on a Mac with Apple silicon: download
+`sextant-0.12.8-macos-arm64.mcpb` from the
+[releases page](https://github.com/hulagerushikesh/sextant/releases),
+double-click it, and pick the folder to search. Other computers take
+`sextant-0.12.8.mcpb` from the same page, which installs Python and the
+libraries on the first run.
+
+Claude Code, VS Code and Cursor take one pasted line each, given in the
+[README](https://github.com/hulagerushikesh/sextant#readme); it installs
+`sextant-kb` from PyPI.
 
 Reproduce one public set yourself, no key, nothing spent:
 
