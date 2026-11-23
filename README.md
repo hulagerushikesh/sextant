@@ -84,6 +84,23 @@ to `sextant-kb`. On Windows the config file is
 its commands in `Scripts\` rather than `bin/`; this project has not been
 tested on Windows.
 
+## Claude Desktop: one file
+
+A `sextant-<version>.mcpb` file installs it in the Claude desktop app with
+no terminal: double-click it, choose the folder to search, and wait while it
+indexes. It needs **Python 3.11 to 3.14** on the computer. Without one, the
+app downloads Python (about 20 MB) from github.com during the install, which
+is where two of the first three people to try it got stuck:
+
+- **"operation timed out"** while downloading `cpython-…` from github.com:
+  the network blocked or slowed that site. Switch networks (a phone hotspot
+  works), or install Python 3.12 from
+  [python.org](https://www.python.org/downloads/), quit Claude fully, and
+  install the file again.
+- **`onnxruntime` has no wheel** (or no matching distribution) for the
+  computer: an older bundle picked a Python newer than 3.14. Use a bundle
+  from 0.11.2 or later, which asks for a supported one.
+
 ## One line instead: Claude Code, VS Code, Cursor
 
 With [uv](https://docs.astral.sh/uv/) installed, one pasted line replaces the

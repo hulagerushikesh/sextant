@@ -5,6 +5,12 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-23 — the install says what it needs (₹0)
+
+- Two of three testers stopped at the install, before any sextant code runs: tester 2 on a Python too new for onnxruntime, tester 3 on a network that timed out fetching Python from github.com. Claude Desktop shows uv's error, which names neither cause nor fix.
+- 0.12.5: the bundle's install text says it needs Python 3.11 to 3.14 (read from `requires-python`, not typed), that without one the install fetches about 20 MB from github.com, and what to do after "operation timed out". The README gains a Claude Desktop section with both errors and their fixes. A test pins the text; with the Python sentence removed it fails.
+- Does not prove: that Claude Desktop shows the long description before installing, or that a stranger reads it. The download itself stays; avoiding it (a Python mirror, or a bundle carrying Python) was not tried.
+
 ## 2026-11-19 — a whole book is stored, and scans are read on a fresh Mac (₹0)
 
 - From tester 3's laptop (a friend of the owner; 92 files in Downloads, searches answered from an airline fee sheet and a maths book): two defects. A 6,155-chunk aptitude book was rejected whole, because Chroma refuses one write over 5,461 items. And text recognition was off, because the Python from python.org's macOS installer has no https certificates until a manual step, so the language download failed with CERTIFICATE_VERIFY_FAILED.

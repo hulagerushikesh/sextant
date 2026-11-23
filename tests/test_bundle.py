@@ -97,6 +97,24 @@ class TestTheManifest:
         asked = _manifest(bundle)["compatibility"]["runtimes"]["python"]
         assert asked == project["requires-python"]
 
+    def test_the_install_dialog_says_which_python_and_what_to_do_without_it(self, bundle):
+        """Two of three testers stopped at the install: one on a Python too new,
+        one on a network that would not let the host fetch Python from GitHub.
+        Nothing of sextant runs before that point, so the dialog's own text is
+        the only place to say it."""
+        project = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
+        text = _manifest(bundle)["long_description"]
+        low, high = build.python_range(project["requires-python"]).split(" to ")
+        assert f"Python {low} to {high}" in text
+        assert "github.com" in text and "python.org" in text
+        assert "operation timed out" in text
+
+    def test_the_python_range_is_read_not_guessed(self):
+        assert build.python_range(">=3.11,<3.15") == "3.11 to 3.14"
+        assert build.python_range(">=3.10, <3.13") == "3.10 to 3.12"
+        with pytest.raises(ValueError):
+            build.python_range(">=3.11")
+
 
 class TestTheDependencies:
     def test_they_are_the_package_dependencies_exactly(self, bundle):

@@ -27,6 +27,7 @@ worth running by hand after a change to the manifest.
 from __future__ import annotations
 
 import json
+import re
 import sys
 import tomllib
 import zipfile
@@ -73,8 +74,18 @@ def project() -> dict:
     return tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
 
 
+def python_range(requires: str) -> str:
+    """">=3.11,<3.15" -> "3.11 to 3.14", the way a person reads it."""
+    low = re.search(r">=\s*3\.(\d+)", requires)
+    high = re.search(r"<\s*3\.(\d+)", requires)
+    if not (low and high):
+        raise ValueError(f"cannot say {requires!r} in words")
+    return f"3.{low.group(1)} to 3.{int(high.group(1)) - 1}"
+
+
 def manifest() -> dict:
     meta = project()
+    python = python_range(meta["requires-python"])
     return {
         "manifest_version": "0.4",
         "name": "sextant",
@@ -89,7 +100,11 @@ def manifest() -> dict:
             "start downloads the search models (about 180 MB) and indexes the "
             "folder, which takes a few minutes for a large one. Scanned PDFs are "
             "read with text recognition, which downloads a few MB more the first "
-            "time it meets one."
+            "time it meets one. Installing needs Python "
+            f"{python} on this computer; without it, the install downloads one "
+            "(about 20 MB) from github.com, and fails with \"operation timed "
+            "out\" on a network that blocks or slows that site. Then install "
+            "Python 3.12 from python.org, or switch networks, and install again."
         ),
         "author": {"name": meta["authors"][0]["name"]},
         "repository": {"type": "git", "url": meta["urls"]["Repository"]},
