@@ -243,6 +243,33 @@ class TestWhatIsNotIndexedIsSaid:
         assert "plan.txt" not in kb.added
         assert again.status()["not_indexed"] == 1
 
+    async def test_a_new_version_tries_an_old_failure_once(self, library, store, monkeypatch):
+        """A book an old version refused is tried by the next one, then
+        remembered again -- the 6,155-chunk book on a tester's laptop."""
+        kb = FakeKB(refuse={"plan.txt": "too many chunks"})
+        await _run(library, store, kb)
+        monkeypatch.setattr(folder, "PROGRAM_VERSION", "9.9.9")
+        kb.tried.clear()
+        await _run(library, store, kb)
+        assert kb.tried == ["plan.txt"]
+        kb.tried.clear()
+        await _run(library, store, kb)
+        assert kb.tried == []
+
+    async def test_a_failure_recorded_before_versions_were_is_tried_again(self, library, store):
+        """Ledgers written before 0.12.8 carry no version: the file is tried."""
+        kb = FakeKB(refuse={"plan.txt": "too many chunks"})
+        sync = await _run(library, store, kb)
+        ledger = json.loads(sync.ledger_path.read_text())
+        for entry in ledger.values():
+            entry.pop("version", None)
+        sync.ledger_path.write_text(json.dumps(ledger))
+        kb.refuse.clear()
+        kb.tried.clear()
+        again = await _run(library, store, kb)
+        assert kb.tried == ["plan.txt"]
+        assert again.status()["not_indexed"] == 0
+
     async def test_a_pdf_with_no_text_is_called_scanned_and_a_text_file_empty(self, library, store):
         _write(library, "scan.pdf")
         kb = FakeKB(empty={"scan.pdf", "plan.txt"})

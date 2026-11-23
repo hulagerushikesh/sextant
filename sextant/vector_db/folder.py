@@ -64,7 +64,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from sextant import settings
+from sextant import __version__, settings
 from sextant.vector_db import ocr
 from sextant.vector_db.loaders import (
     MARKDOWN_SUFFIXES,
@@ -84,6 +84,12 @@ SUPPORTED = PDF_SUFFIXES | MARKDOWN_SUFFIXES | TEXT_SUFFIXES
 # Beside the collection, so it is thrown away with it: an emptied store must
 # not be remembered as "already indexed".
 LEDGER_NAME = "folder_index.json"
+
+# Which program recorded a failure. A file that failed is skipped while it and
+# the program are both unchanged; a new version may read what an old one could
+# not. Until 2026-11-23 only the file counted, so a 6,155-chunk book refused by
+# 0.12.3 stayed "not indexed" under 0.12.7, which stores it in slices.
+PROGRAM_VERSION = __version__
 
 # How often the folder is looked at for changes while the server runs.
 DEFAULT_POLL_SECONDS = 15.0
@@ -457,9 +463,14 @@ class FolderSync:
                         self.unchanged += 1
                         self.done += 1
                         continue
-                if not known.get("stored") and not self._worth_recognising(known):
-                    # Failed last time and has not changed since: same result,
-                    # so report it again without paying to find out again.
+                if (
+                    not known.get("stored")
+                    and known.get("version") == PROGRAM_VERSION
+                    and not self._worth_recognising(known)
+                ):
+                    # Failed last time, and neither the file nor the program
+                    # has changed since: same result, so report it again
+                    # without paying to find out again.
                     self._skip(
                         path,
                         str(known.get("reason") or "could not be indexed"),
@@ -506,6 +517,8 @@ class FolderSync:
                     # What recognition could do for it this time: a scan is
                     # tried again when that changes (`_worth_recognising`).
                     "ocr": self._recognition_tried,
+                    # A later version is tried once (`PROGRAM_VERSION`).
+                    "version": PROGRAM_VERSION,
                 }
                 self._skip(path, reason, kind)
             self.done += 1
