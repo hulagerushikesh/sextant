@@ -101,6 +101,11 @@ is where two of the first three people to try it got stuck:
   computer: an older bundle picked a Python newer than 3.14. Use a bundle
   from 0.11.2 or later, which asks for a supported one.
 
+On a Mac with Apple silicon there is a second file,
+`sextant-<version>-macos-arm64.mcpb` (about 170 MB), which carries its own
+Python and libraries: installing it downloads nothing, so neither error
+above can happen. The search models still download on first start.
+
 ## One line instead: Claude Code, VS Code, Cursor
 
 With [uv](https://docs.astral.sh/uv/) installed, one pasted line replaces the

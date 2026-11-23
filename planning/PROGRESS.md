@@ -5,6 +5,13 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-23 — a Mac bundle that downloads nothing at install (₹0)
+
+- Asked for by the owner after 0.12.5, to remove tester 3's stop instead of explaining it. `bundle/build_standalone.py` builds `sextant-<version>-macos-arm64.mcpb`: the `binary` server type with python-build-standalone 3.12 and every library inside. 170 MB zipped, about 530 MB unpacked; built from uv's cache with nothing downloaded.
+- From the 0.12.4 install on this Mac: Claude Desktop unpacks every file at mode 600 and adds no quarantine flag. So the host starts `/bin/sh launch.sh`, which marks the interpreter executable and runs it with `-E -s`.
+- Checked: unpacked with every file at 600, started with only HOME and `PATH=/usr/bin:/bin`, it answered `initialize`, indexed a one-file folder and returned the passage (0.9972). The interpreter loads its own `libpython` by `@executable_path`. Tests pin the launch from a 600 file (fails with the chmod removed: "Permission denied"), the manifest, and that links are not stored twice.
+- Does not prove: that Claude Desktop accepts a 170 MB `binary` bundle started by `/bin/sh`; that needs one install through the app. Nor that it runs on a Mac that never had Python: this one had uv's and Homebrew's, though the probe's environment hid both.
+
 ## 2026-11-23 — the install says what it needs (₹0)
 
 - Two of three testers stopped at the install, before any sextant code runs: tester 2 on a Python too new for onnxruntime, tester 3 on a network that timed out fetching Python from github.com. Claude Desktop shows uv's error, which names neither cause nor fix.
