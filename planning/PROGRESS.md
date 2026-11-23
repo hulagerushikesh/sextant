@@ -11,6 +11,7 @@ story is the root README.
 - 0.12.4: chunks are written and cleared in slices of 1,000. The language download checks certificates against certifi's bundle (now a stated dependency) instead of the interpreter's. The search tool's description adds that a user's word does not change what an official record says: Claude shows the document's figure and asks whether a newer one (a revaluation, a correction) exists.
 - The slicing test counts every write; with the slicing removed it fails. The certificate test checks a verifying context with loaded authorities.
 - Does not prove: that the book now goes in on tester 3's laptop, or that OCR works there; that needs the 0.12.4 bundle on it. The first install also needs GitHub reachable to fetch Python, which a college network blocked.
+- 2026-11-23: the owner installed the 0.12.4 bundle on tester 3's laptop over 0.12.3 and reports it working. That is the owner's word; no transcript of the book or a scan being answered was seen.
 
 ## 2026-11-19 — each result says how recent its document is (₹0)
 
