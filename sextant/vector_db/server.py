@@ -94,14 +94,15 @@ async def _run_local(tool: str, args: dict[str, Any]) -> dict[str, Any]:
 
 
 def _start_folder() -> None:
-    """Index the chosen folder -- in the process that has the store open only.
+    """Index the chosen folder, then keep it in step -- in the process that has
+    the store open only.
 
     Two passes over one folder were how the owner's library broke: both
     processes stored all 141 files into one store at the same time.
     """
     global _folder_task
     if _folder is not None and _folder_task is None:
-        _folder_task = asyncio.create_task(_folder.run(_store))
+        _folder_task = asyncio.create_task(_folder.watch(_store))
 
 
 def _routed(

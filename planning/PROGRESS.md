@@ -5,6 +5,13 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-23 — the folder stays in sync while the assistant is open (₹0)
+
+- Milestone 30 item 4, the owner's request. While the server runs, the folder pass looks at the folder every 15 seconds (`SEXTANT_FOLDER_POLL`, `off` stops it) and, when any file's size or date changed, runs again: added and changed files are stored, deleted files removed from search, also at start. Polling, so no new package. Plan 29 of 38 (76%).
+- Removal is narrow: only documents in the folder pass's own ledger, only when the file is gone and the folder is there (checked again just before removing), never an entry recorded for another folder. A file changed into one that cannot be stored leaves search.
+- Checked over MCP on a real server with real models: added, changed and deleted files each showed up in search in 4–5 seconds; the folder renamed away gave state "unreachable", removed nothing, and stayed searchable. 15 new tests; planting three of the guards back (drive pulled mid-pass, another folder's entries, the no-change check) fails one each.
+- Does not prove: behaviour on a real unplugged USB drive or a cloud-synced folder (iCloud, Google Drive), only a folder renamed away. Not in a release yet. Five torch-comparison tests fail on this laptop only (tokenizers 0.23.3 installed 2026-11-19 is newer than transformers accepts); they fail the same on main and CI does not install torch.
+
 ## 2026-11-23 — folder sync added to the plan (₹0)
 
 - The owner added milestone 30 item 4: while the assistant is open, files added, changed or deleted in the chosen folder are reflected in search without a restart. Plan goes from 28 of 37 to 28 of 38 (74%). Nothing built yet.

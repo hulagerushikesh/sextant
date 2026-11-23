@@ -420,3 +420,212 @@ class TestTheServerWiresItIn:
         """stdout is the JSON-RPC channel."""
         source = Path(folder.__file__).read_text()
         assert "print(" not in source
+
+
+def _touch(path: Path, text: str) -> None:
+    """Rewrite a file and move its date on, as an editor saving it would."""
+    path.write_text(text)
+    stat = path.stat()
+    os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 10**9))
+
+
+class TestKeptInSync:
+    """While the server runs, the folder is looked at again (`watch`), and a
+    change runs the same pass: added and changed files are stored, deleted
+    ones removed. Removal is the destructive half, so most tests here are
+    about what it must never remove."""
+
+    async def _first(self, library: Path, store: Path, kb: FakeKB) -> FolderSync:
+        sync = FolderSync(library, store)
+        await sync.run(lambda: kb)
+        kb.added.clear()
+        return sync
+
+    async def test_nothing_changed_means_no_pass(self, library, store):
+        kb = FakeKB()
+        sync = await self._first(library, store, kb)
+
+        def must_not_open() -> FakeKB:
+            raise AssertionError("opened the store with nothing changed")
+
+        assert await sync.check(must_not_open) is False
+        assert kb.added == [] and kb.removed == []
+
+    async def test_an_added_file_is_stored(self, library, store):
+        kb = FakeKB()
+        sync = await self._first(library, store, kb)
+        _write(library, "new/idea.md")
+        assert await sync.check(lambda: kb) is True
+        assert kb.added == ["new/idea.md"] and "new/idea.md" in kb.docs
+        assert sync.state == "ready" and sync.note() is None
+
+    async def test_a_changed_file_is_stored_again(self, library, store):
+        kb = FakeKB()
+        sync = await self._first(library, store, kb)
+        _touch(library / "plan.txt", "a plan with new words")
+        assert await sync.check(lambda: kb) is True
+        assert kb.added == ["plan.txt"] and kb.removed == []
+
+    async def test_a_deleted_file_is_removed_from_search(self, library, store):
+        kb = FakeKB()
+        sync = await self._first(library, store, kb)
+        (library / "deep" / "inside" / "report.md").unlink()
+        assert await sync.check(lambda: kb) is True
+        assert kb.removed == ["deep/inside/report.md"]
+        assert kb.docs == {"notes.md", "plan.txt"}
+        assert sync.status()["removed_this_run"] == 1
+        ledger = json.loads((store / LEDGER_NAME).read_text())
+        assert str(library / "deep" / "inside" / "report.md") not in ledger
+
+    async def test_a_file_deleted_while_the_assistant_was_closed_goes_at_start(
+        self, library, store
+    ):
+        kb = FakeKB()
+        await self._first(library, store, kb)
+        (library / "notes.md").unlink()
+        await _run(library, store, kb)
+        assert kb.removed == ["notes.md"]
+
+    async def test_every_file_deleted_removes_every_document(self, library, store):
+        kb = FakeKB()
+        sync = await self._first(library, store, kb)
+        for path in find_files(library):
+            path.unlink()
+        await sync.check(lambda: kb)
+        assert kb.docs == set() and sync.state == "ready"
+
+    async def test_a_document_added_another_way_is_never_removed(self, library, store):
+        """`kb_ingest` and `sextant-ingest` write the same store; only what
+        the folder pass stored, by its own ledger, is the pass's to remove."""
+        kb = FakeKB()
+        sync = await self._first(library, store, kb)
+        kb.docs |= {"meeting-notes", "upload:someone:plan"}
+        (library / "notes.md").unlink()
+        await sync.check(lambda: kb)
+        assert kb.removed == ["notes.md"]
+        assert {"meeting-notes", "upload:someone:plan"} <= kb.docs
+
+    async def test_an_unplugged_drive_removes_nothing(self, library, store, tmp_path):
+        kb = FakeKB()
+        sync = await self._first(library, store, kb)
+        library.rename(tmp_path / "elsewhere")
+        assert await sync.check(lambda: kb) is True
+        assert kb.removed == [] and len(kb.docs) == 3
+        assert sync.state == "unreachable"
+        note = sync.note()
+        assert note and "still searchable" in note
+
+        # Plugged back in, unchanged: nothing is stored or removed again.
+        (tmp_path / "elsewhere").rename(library)
+        await sync.check(lambda: kb)
+        assert kb.added == [] and kb.removed == [] and sync.state == "ready"
+        assert await sync.check(lambda: kb) is False
+
+    async def test_a_drive_pulled_out_mid_pass_removes_nothing(self, library, store, tmp_path):
+        """One file was really deleted, then the drive went during the pass:
+        every file looks gone at that moment, and nothing may be removed."""
+        kb = FakeKB()
+        sync = await self._first(library, store, kb)
+        (library / "notes.md").unlink()
+
+        class Pulled(FakeKB):
+            async def list_documents(self) -> dict[str, Any]:
+                library.rename(tmp_path / "pulled")
+                return await kb.list_documents()
+
+            async def remove_document(self, document_id: str) -> dict[str, Any]:
+                return await kb.remove_document(document_id)
+
+        await sync.check(lambda: Pulled())
+        assert kb.removed == []
+
+    async def test_an_entry_from_another_folder_is_left_alone(self, library, store, tmp_path):
+        """The setting was changed: the old folder's entries are not this
+        folder's files, and are not judged deleted."""
+        kb = FakeKB()
+        other = tmp_path / "other"
+        _write(other, "old.md")
+        await _run(other, store, kb)
+        kb.added.clear()
+        (other / "old.md").unlink()
+        await _run(library, store, kb)
+        assert kb.removed == [] and "old.md" in kb.docs
+
+    async def test_a_file_changed_into_one_that_cannot_be_stored_leaves_search(
+        self, library, store
+    ):
+        """Its old text no longer says what the file says."""
+        kb = FakeKB()
+        sync = await self._first(library, store, kb)
+        kb.empty.add("plan.txt")
+        _touch(library / "plan.txt", "")
+        await sync.check(lambda: kb)
+        assert kb.removed == ["plan.txt"] and "plan.txt" not in kb.docs
+        assert [s["file"] for s in sync.status()["not_indexed_files"]] == ["plan.txt"]
+
+    async def test_the_counts_are_the_last_pass(self, library, store):
+        kb = FakeKB()
+        sync = await self._first(library, store, kb)
+        _write(library, "more.md")
+        await sync.check(lambda: kb)
+        status = sync.status()
+        assert status["files_found"] == 4 and status["files_checked"] == 4
+        assert status["stored_this_run"] == 1 and status["unchanged"] == 3
+
+    async def test_watching_picks_up_a_new_file_while_running(self, library, store):
+        import asyncio
+
+        kb = FakeKB()
+        sync = FolderSync(library, store)
+        task = asyncio.create_task(sync.watch(lambda: kb, every=0.05))
+        try:
+            for _ in range(100):
+                if sync.passes:
+                    break
+                await asyncio.sleep(0.02)
+            assert sync.status()["kept_in_sync"] == "checked for changes every 0.05 seconds"
+            _write(library, "arrived.md")
+            for _ in range(100):
+                if "arrived.md" in kb.docs:
+                    break
+                await asyncio.sleep(0.02)
+            assert "arrived.md" in kb.docs
+        finally:
+            task.cancel()
+
+    async def test_watching_off_runs_the_one_pass(self, library, store, monkeypatch):
+        monkeypatch.setenv(settings.env_name("FOLDER_POLL"), "off")
+        kb = FakeKB()
+        sync = FolderSync(library, store)
+        await sync.watch(lambda: kb)  # returns: nothing to wait for
+        assert len(kb.docs) == 3
+        assert sync.status()["kept_in_sync"] == "only when the assistant starts"
+
+
+class TestHowOften:
+    @pytest.mark.parametrize(
+        ("value", "seconds"),
+        [
+            (None, folder.DEFAULT_POLL_SECONDS),
+            ("", folder.DEFAULT_POLL_SECONDS),
+            ("${user_config.poll}", folder.DEFAULT_POLL_SECONDS),
+            ("soon", folder.DEFAULT_POLL_SECONDS),
+            ("nan", folder.DEFAULT_POLL_SECONDS),
+            ("-5", folder.DEFAULT_POLL_SECONDS),
+            ("off", 0.0),
+            ("0", 0.0),
+            ("30", 30.0),
+            ("0.1", folder.MIN_POLL_SECONDS),
+        ],
+    )
+    def test_the_setting(self, monkeypatch, value, seconds):
+        name = settings.env_name("FOLDER_POLL")
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, value)
+        assert folder.poll_seconds() == seconds
+
+    def test_the_server_watches_rather_than_runs_once(self):
+        source = (Path(folder.__file__).parent / "server.py").read_text()
+        assert "_folder.watch(_store)" in source and "_folder.run(_store)" not in source

@@ -118,7 +118,10 @@ at a folder. Change `~/Documents` to the folder you want searched. Each line
 runs `--version` first, so the first install (a few hundred MB) finishes in
 the terminal rather than timing out inside the assistant. When the assistant
 starts it, the folder is indexed in the background and `kb_stats` shows the
-progress and any file it could not read. `--python` keeps uv off a Python
+progress and any file it could not read. While it runs, files added, changed
+or deleted in the folder show up in search within about a minute; only files
+it indexed from the folder are ever removed, and a folder that goes missing
+(an unplugged drive) removes nothing. `--python` keeps uv off a Python
 newer than sextant's libraries support.
 
 **Claude Code** (the terminal program; for the Claude desktop app, use the

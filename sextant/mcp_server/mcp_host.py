@@ -132,6 +132,10 @@ _NOT_FORWARDED = {
         "left in the operator's shell must not make the box's subprocess read "
         "a directory nobody chose for it."
     ),
+    settings.env_name("FOLDER_POLL"): (
+        "how often that same folder is looked at for changes. With no folder "
+        "crossing there is nothing to look at, so the setting means nothing there."
+    ),
     "TESSDATA_PREFIX": (
         "ocr.py looks there first for text-recognition data, and falls back to "
         "its own cache under XDG_CACHE_HOME, which does cross. A data folder in "

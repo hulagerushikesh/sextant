@@ -1,4 +1,4 @@
-"""The folder a launcher chose: index it when the server starts.
+"""The folder a launcher chose: index it when the server starts, then keep it in step.
 
 `ingest_cli` explains why file loading is a command and not an MCP tool: a
 `kb_ingest_file` tool would hand every client that mounts this server, and the
@@ -30,9 +30,25 @@ What it does, each time the server starts:
   and the self-test's report, because a file that silently is not in the
   corpus reads as "the answer is not there".
 
-What it does not do: remove a document whose file was deleted, or watch for
-changes while running. Both are "keep a folder in sync", which is a later
-milestone's decision, not a side effect of this one.
+Then, while the server runs, it looks at the folder again every few seconds
+(`SEXTANT_FOLDER_POLL`, default 15; `off` stops it) and, when anything in it
+has changed, runs the same pass again: a file added or changed is stored, and
+a file deleted is removed from search. Looking costs one directory walk and
+a size-and-date check per file; nothing is read or embedded unless a file
+changed. Polling rather than an operating-system file watcher, because it
+needs no new package, works the same on every platform and every kind of
+drive, and "within a minute" is all a person waiting for a file to show up
+asks for.
+
+Removing is the one thing here that destroys something, so it is narrow:
+
+- only a document this pass stored, named in its own ledger, is ever
+  removed -- never one added through `kb_ingest` or the ingest command;
+- only when the file is gone and the folder itself is there: an unplugged
+  drive or a folder that was renamed away removes nothing, and its
+  documents stay searchable until it is back;
+- an entry recorded for a different folder (the setting was changed) is
+  left alone, not judged gone.
 
 Nothing here prints. stdout is the JSON-RPC channel.
 """
@@ -69,6 +85,11 @@ SUPPORTED = PDF_SUFFIXES | MARKDOWN_SUFFIXES | TEXT_SUFFIXES
 # not be remembered as "already indexed".
 LEDGER_NAME = "folder_index.json"
 
+# How often the folder is looked at for changes while the server runs.
+DEFAULT_POLL_SECONDS = 15.0
+# Faster than this, the walk itself becomes the work.
+MIN_POLL_SECONDS = 2.0
+
 # Reported, not unbounded: a folder with nine hundred unreadable files should
 # not turn `kb_stats` into nine hundred lines the model has to read.
 MAX_REPORTED = 20
@@ -85,6 +106,44 @@ def configured() -> Path | None:
     if not raw or raw.startswith("${"):
         return None
     return Path(raw).expanduser()
+
+
+def poll_seconds() -> float:
+    """Seconds between looks at the folder; `0` when watching is off.
+
+    `SEXTANT_FOLDER_POLL` takes a number of seconds, or `off`. Unset, empty,
+    an unfilled launcher placeholder or anything unreadable is the default.
+    """
+    raw = (settings.getenv("FOLDER_POLL") or "").strip().lower()
+    if raw in ("off", "no", "false", "0"):
+        return 0.0
+    if not raw or raw.startswith("${"):
+        return DEFAULT_POLL_SECONDS
+    try:
+        value = float(raw)
+    except ValueError:
+        return DEFAULT_POLL_SECONDS
+    if value != value or value <= 0:  # NaN or negative: not a number of seconds
+        return DEFAULT_POLL_SECONDS
+    return max(value, MIN_POLL_SECONDS)
+
+
+def _snapshot(folder: Path) -> dict[str, list[int] | None] | None:
+    """Each loadable file's size and date, or `None` when the folder is not there.
+
+    Compared with the last pass's to tell whether anything changed: a file
+    that could not be looked at is `None` rather than left out, so it does
+    not read as deleted.
+    """
+    if not folder.is_dir():
+        return None
+    seen: dict[str, list[int] | None] = {}
+    for path in find_files(folder):
+        try:
+            seen[str(path)] = _signature(path)
+        except OSError:
+            seen[str(path)] = None
+    return seen
 
 
 # Recorded for a stored PDF whose picture pages were not read (no data) or
@@ -174,6 +233,13 @@ class FolderSync:
         self._read_with = ""
         self.warnings: list[str] = []
         self.error: str | None = None
+        # Documents removed because their file was deleted, this pass.
+        self.removed = 0
+        # Seconds between looks while watching; 0 when not watching.
+        self.watching = 0.0
+        self.passes = 0
+        # What the folder looked like when the last pass began (`_snapshot`).
+        self._seen: dict[str, list[int] | None] | None = None
 
     # -- what it says ------------------------------------------------------
 
@@ -188,6 +254,12 @@ class FolderSync:
             "not_indexed": len(self.skipped),
             "text_recognition": ocr.status(),
         }
+        if self.removed:
+            report["removed_this_run"] = self.removed
+        report["kept_in_sync"] = (
+            f"checked for changes every {self.watching:g} seconds" if self.watching
+            else "only when the assistant starts"
+        )
         if self.recognised:
             report["read_by_text_recognition"] = self.recognised
         if self.skipped:
@@ -221,6 +293,12 @@ class FolderSync:
                 f"The chosen folder {self.folder} could not be found, "
                 "so nothing from it is indexed."
             )
+        if self.state == "unreachable":
+            return (
+                f"The chosen folder {self.folder} cannot be reached right now (an "
+                "unplugged drive, perhaps). What was indexed from it is still "
+                "searchable, but changes made since are not."
+            )
         if self.state == "failed":
             return f"Indexing the folder {self.folder} failed: {self.error}"
         return None
@@ -244,8 +322,39 @@ class FolderSync:
 
     # -- the pass ----------------------------------------------------------
 
+    async def watch(self, open_store: Callable[[], Any], every: float | None = None) -> None:
+        """Index the folder, then keep it in step until cancelled.
+
+        The server runs this as its background task. Never raises, except the
+        cancellation that ends it.
+        """
+        interval = poll_seconds() if every is None else every
+        await self.run(open_store)
+        if interval <= 0:
+            return
+        self.watching = interval
+        while True:
+            await asyncio.sleep(interval)
+            await self.check(open_store)
+
+    async def check(self, open_store: Callable[[], Any]) -> bool:
+        """Run a pass if anything in the folder changed since the last one.
+
+        Returns whether one ran. Never raises.
+        """
+        try:
+            now = await asyncio.to_thread(_snapshot, self.folder)
+        except Exception:  # noqa: BLE001 - one bad look must not end the watch
+            logger.exception("could not look at %s for changes", self.folder)
+            return False
+        if now == self._seen:
+            return False
+        await self.run(open_store)
+        return True
+
     async def run(self, open_store: Callable[[], Any]) -> None:
-        """Index what is new or changed. Never raises: the server must keep serving."""
+        """Index what is new or changed and remove what was deleted.
+        Never raises: the server must keep serving."""
         try:
             await self._run(open_store)
         except Exception as e:  # noqa: BLE001 - a background task has nobody to raise to
@@ -253,21 +362,37 @@ class FolderSync:
             self.error = f"{type(e).__name__}: {e}"
             logger.exception("indexing %s failed", self.folder)
 
+    def _start_pass(self) -> None:
+        """Clear what one pass counts. Warnings and the recognised count are
+        kept: they describe documents still in the store, which a later pass
+        leaves alone and would not count again."""
+        self.found = self.done = self.stored = self.unchanged = self.removed = 0
+        self.skipped = []
+        self.copies = []
+        self.error = None
+
     async def _run(self, open_store: Callable[[], Any]) -> None:
-        if not self.folder.is_dir():
-            self.state = "missing"
+        self._start_pass()
+        # Taken first, so a change made while this pass works is seen by the
+        # next look; a pass that fails is tried again on the next change.
+        self._seen = await asyncio.to_thread(_snapshot, self.folder)
+        if self._seen is None:
+            # Indexed before and gone now is an unplugged drive until shown
+            # otherwise: what it held stays, and nothing is removed.
+            self.state = "unreachable" if self.passes else "missing"
             self.error = f"Not a folder: {self.folder}"
             logger.warning(self.error)
             return
 
-        self.state = "indexing"
-        files = await asyncio.to_thread(find_files, self.folder)
+        self.state = "updating" if self.passes else "indexing"
+        files = [Path(key) for key in self._seen]
         self.found = len(files)
-        if not files:
-            self.state = "ready"
+        ledger = await asyncio.to_thread(self._read_ledger)
+        gone = await asyncio.to_thread(self._gone, ledger, files)
+        if not files and not gone:
+            self._finish()
             return
 
-        ledger = await asyncio.to_thread(self._read_ledger)
         # Opening the store loads the embedding model -- a download on a first
         # run -- so it happens on a thread, and only once there is work.
         kb = await asyncio.to_thread(open_store)
@@ -368,6 +493,10 @@ class FolderSync:
                 if legacy and legacy != doc_id:
                     await self._forget(kb, legacy, in_store)
             else:
+                if known.get("stored") and not same:
+                    # Its file changed into one that cannot be stored: the
+                    # old text no longer says what the file says.
+                    await self._forget(kb, str(stored_as or legacy or doc_id), in_store)
                 ledger[key] = {
                     "signature": signature,
                     "sha256": digest,
@@ -384,13 +513,63 @@ class FolderSync:
             # interrupted should resume, not start again.
             await asyncio.to_thread(self._write_ledger, ledger)
 
+        if gone:
+            await self._remove_gone(kb, ledger, gone, in_store)
+
         if self.stored:
             await self._warm(kb)
-        self.state = "ready"
+        self._finish()
         logger.info(
-            "folder %s: %d stored, %d unchanged, %d copies, %d not indexed",
-            self.folder, self.stored, self.unchanged, len(self.copies), len(self.skipped),
+            "folder %s: %d stored, %d unchanged, %d removed, %d copies, %d not indexed",
+            self.folder, self.stored, self.unchanged, self.removed, len(self.copies),
+            len(self.skipped),
         )
+
+    def _finish(self) -> None:
+        self.state = "ready"
+        self.passes += 1
+
+    def _gone(self, ledger: dict[str, Any], files: list[Path]) -> list[str]:
+        """Ledger entries for files inside this folder that are no longer there.
+
+        An entry for a path outside the folder was written when another
+        folder was chosen; whether that file exists is not this pass's
+        question, so it is never listed.
+        """
+        present = {str(path) for path in files}
+        gone: list[str] = []
+        for key in ledger:
+            if key in present:
+                continue
+            path = Path(key)
+            try:
+                path.relative_to(self.folder)
+            except ValueError:
+                continue
+            if not path.exists():
+                gone.append(key)
+        return gone
+
+    async def _remove_gone(
+        self, kb: Any, ledger: dict[str, Any], gone: list[str], in_store: set[str]
+    ) -> None:
+        """Remove from search the documents whose files were deleted.
+
+        The folder is looked at once more first: a drive pulled out during the
+        pass makes every file look deleted, and that must remove nothing.
+        """
+        if not await asyncio.to_thread(self.folder.is_dir):
+            logger.warning("%s went away during the pass; nothing removed", self.folder)
+            return
+        for key in gone:
+            entry = ledger.pop(key, None)
+            if isinstance(entry, dict) and entry.get("stored"):
+                # Named by its path since 0.11.3; by its file name before that.
+                doc_id = str(entry.get("doc_id") or Path(key).stem)
+                if doc_id in in_store:
+                    await self._forget(kb, doc_id, in_store)
+                    self.removed += 1
+        await asyncio.to_thread(self._write_ledger, ledger)
 
     @staticmethod
     def _worth_recognising(known: dict[str, Any]) -> bool:
@@ -456,8 +635,8 @@ class FolderSync:
         if document.recognised_pages:
             self.recognised += 1
         lost = result.get("unreadable_pages") or {}
-        if lost:
-            self.warnings.append(unreadable_line(lost))
+        if lost and (line := unreadable_line(lost)) not in self.warnings:
+            self.warnings.append(line)
         return None, ""
 
     @staticmethod
