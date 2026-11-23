@@ -299,7 +299,7 @@ finishes an item. It is the only place progress is counted.
 
 ## 9 · Waiting on the owner
 
-1. Milestone 26: send the bundle (both 0.12.5 bundles are on the GitHub release v0.12.5 since 2026-11-23; not yet on PyPI) or the Claude Code line to three people, and pass on what each one hit. 2026-11-19: tester 1 worked; tester 2 failed on Python 3.15 (fixed in 0.11.2, retry pending); tester 3 worked after a network change (book and OCR defects fixed in 0.12.4, confirmed working there 2026-11-23). Publishing 0.12.4 to PyPI is the owner's.
+1. Milestone 26: send the bundle (both 0.12.6 bundles are on the GitHub release v0.12.6 since 2026-11-23, the Mac one with the search models inside; 0.12.6 not yet on PyPI) or the Claude Code line to three people, and pass on what each one hit. 2026-11-19: tester 1 worked; tester 2 failed on Python 3.15 (fixed in 0.11.2, retry pending); tester 3 worked after a network change (book and OCR defects fixed in 0.12.4, confirmed working there 2026-11-23). Publishing 0.12.4 to PyPI is the owner's.
 2. Confirm the rules for milestones 23 and 25 are met.
 3. Milestone 27's rule: from an empty machine, a cited answer in Claude Desktop in 3 minutes with no terminal — the owner's try decides it.
 4. Milestone 29's rule: whether a stranger gets the self-test's score within 5 minutes — milestone 26's first person shows it.

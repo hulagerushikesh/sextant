@@ -11,6 +11,7 @@ story is the root README.
 - Checked: unpacked with every file at 600, started with an empty home folder and outbound network blocked by `sandbox-exec` (curl to huggingface.co refused under the same rule), it indexed a text file and an image-only scanned PDF and answered from both, page named. Nothing was written to a model cache. A test stages `models/` the way the build does and loads both models and the scan data with every download cut off; dropping one file from the list fails it.
 - Does not prove: that Claude Desktop installs a 330 MB file as it did the 170 MB one; that needs one install through the app. Scans in Hindi or Marathi still download a few MB once.
 - 2026-11-23, later: the owner installed the 0.12.6 Mac bundle through Claude Desktop on this Mac and reports it working, so the app accepts the 330 MB file. That is the owner's word; this Mac already had the models cached, so it does not show an offline first start inside the app.
+- Published as GitHub release v0.12.6 with both bundles (owner's yes); the Mac file is the same bytes the owner installed. Installed it takes about 710 MB: libraries 483, models 178, Python 48. The owner's library of 357 files (5,621 passages) is 69 MB.
 
 ## 2026-11-23 — a Mac bundle that downloads nothing at install (₹0)
 
