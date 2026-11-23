@@ -11,8 +11,10 @@ Why it exists: the ordinary bundle (`build.py`) is the `uv` server type, so
 Claude Desktop installs Python and the libraries at install time. On a Mac with
 no Python 3.11-3.14 that means fetching Python from github.com, and a tester's
 network timed out there. This one is the `binary` type: Python and every
-library are inside, so installing downloads nothing. The search models are
-still fetched from Hugging Face on first start, as with the ordinary bundle.
+library are inside, so installing downloads nothing. Since 0.12.6 the two
+search models and English text-recognition data are inside too (`models/`),
+so the first start downloads nothing either; the ordinary bundle still
+fetches them from Hugging Face and GitHub then.
 
 Two things a real install showed (0.12.4, 2026-11-19), which shape the launch:
 
@@ -24,7 +26,7 @@ Two things a real install showed (0.12.4, 2026-11-19), which shape the launch:
   interpreter; python-build-standalone signs it ad hoc, which Apple silicon
   requires and which `chmod` leaves intact.
 
-It costs size: about 530 MB unpacked against the ordinary bundle's 214 KB, and
+It costs size: about 700 MB unpacked against the ordinary bundle's 214 KB, and
 it serves one platform. The ordinary bundle stays the default.
 """
 
@@ -55,6 +57,26 @@ _spec.loader.exec_module(build)
 PYTHON_SKIPPED = {"test", "idlelib", "tkinter", "turtledemo", "__pycache__", "ensurepip"}
 PYTHON_SKIPPED_FILES = {"libtcl9.0.dylib", "libtk9.0.dylib"}
 
+# The two default search models, each at a fixed revision so every build
+# ships the same bytes, and only the files the ONNX loaders read
+# (`onnx_models.py`); the torch weights beside them are left out. Both are
+# Apache-2.0, which allows shipping them with its text and a notice.
+MODELS = {
+    "sentence-transformers/all-MiniLM-L6-v2": (
+        "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+        ("modules.json", "1_Pooling/config.json", "sentence_bert_config.json",
+         "tokenizer.json", "onnx/model.onnx"),
+    ),
+    "cross-encoder/ms-marco-MiniLM-L6-v2": (
+        "233902d25c440f23af6f7d6e94d2946bac0bee0a",
+        ("config.json", "tokenizer.json", "onnx/model.onnx"),
+    ),
+}
+# English only, the default. Another language is a choice made in the
+# install dialog and downloads a few MB once, as before.
+OCR_LANGUAGES = ("eng",)
+MODEL_DIR_ENV = "SEXTANT_MODEL_DIR"
+
 LAUNCH = f'''#!/bin/sh
 # Started by Claude Desktop as `/bin/sh launch.sh`. The bundle is unpacked
 # without execute bits, so the interpreter is made runnable first.
@@ -63,6 +85,7 @@ py="$here/python/bin/python{PYTHON_MINOR}"
 [ -x "$py" ] || chmod u+x "$py"
 # -E: no PYTHON* variable from the user's shell; -s: no user site-packages.
 # Together they keep a Homebrew or conda setup from leaking in.
+export {MODEL_DIR_ENV}="$here/models"
 exec "$py" -E -s "$here/src/server.py" "$@"
 '''
 
@@ -96,7 +119,9 @@ def manifest() -> dict:
     cut = long.index(" Installing needs Python")
     data["long_description"] = long[:cut] + (
         " This edition is for Macs with Apple silicon and carries its own "
-        "Python and libraries, so installing downloads nothing."
+        "Python, libraries and search models, so it downloads nothing, at "
+        "install or on its first start. Reading scans in a language other "
+        "than English downloads a few MB once."
     )
     return data
 
@@ -108,6 +133,51 @@ def install_libraries(python: Path, target: Path, offline: bool) -> None:
     if offline:
         command.insert(3, "--offline")
     subprocess.run(command, check=True)
+
+
+def _apache_text(libraries: Path) -> str:
+    """The Apache-2.0 licence text, from a library already in the bundle."""
+    for path in sorted(libraries.glob("*.dist-info/licenses/LICENSE")):
+        text = path.read_text(errors="replace")
+        if text.lstrip().startswith("Apache License") and "Version 2.0" in text[:200]:
+            return text
+    raise SystemExit("no Apache-2.0 licence text among the libraries to ship beside the models")
+
+
+def stage_models(target: Path, libraries: Path, offline: bool) -> None:
+    """The search models and text-recognition data, laid out for `model_dir`."""
+    import hashlib
+
+    from huggingface_hub import hf_hub_download
+
+    from sextant.vector_db import ocr
+
+    notice = ["The search models in this folder are not part of sextant.", ""]
+    for repo, (revision, files) in MODELS.items():
+        for name in files:
+            source = hf_hub_download(repo, name, revision=revision, local_files_only=offline)
+            dest = target / repo.replace("/", "--") / name
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, dest)
+        notice.append(f"{repo} at revision {revision}, https://huggingface.co/{repo}, "
+                      "licensed under the Apache License 2.0 (LICENSE-Apache-2.0.txt).")
+    tessdata = target / "tessdata"
+    tessdata.mkdir(parents=True, exist_ok=True)
+    for lang in OCR_LANGUAGES:
+        name = f"{lang}.traineddata"
+        found = next((d / name for d in ocr._candidates() if (d / name).is_file()), None)
+        if found is None:
+            if offline:
+                raise SystemExit(f"{name} is not on this machine and --offline forbids fetching it")
+            ocr._fetch(lang, tessdata)
+        else:
+            shutil.copyfile(found, tessdata / name)
+        if hashlib.sha256((tessdata / name).read_bytes()).hexdigest() != ocr._PINNED[lang]:
+            raise SystemExit(f"{name} does not match its published hash")
+    notice.append(f"tessdata/: Tesseract's tessdata_fast {ocr._TAG}, "
+                  "https://github.com/tesseract-ocr/tessdata_fast, Apache License 2.0.")
+    (target / "NOTICE.txt").write_text("\n".join(notice) + "\n")
+    (target / "LICENSE-Apache-2.0.txt").write_text(_apache_text(libraries))
 
 
 def _add_tree(bundle: zipfile.ZipFile, source: Path, prefix: str, skipped: set[str]) -> None:
@@ -164,6 +234,8 @@ def build_bundle(python_dir: Path, out_dir: Path = ROOT / "dist", offline: bool 
     with tempfile.TemporaryDirectory() as tmp:
         libraries = Path(tmp) / "lib"
         install_libraries(interpreter, libraries, offline)
+        models = Path(tmp) / "models"
+        stage_models(models, libraries, offline)
         staged = Path(tmp) / "python"
         detach_from_builder(python_dir.resolve(), staged)
         python_dir = staged
@@ -179,6 +251,7 @@ def build_bundle(python_dir: Path, out_dir: Path = ROOT / "dist", offline: bool 
             # `bin` holds the libraries' command-line scripts, unused here,
             # each starting with the builder's own interpreter path.
             _add_tree(bundle, libraries, "lib", {"__pycache__", "bin"})
+            _add_tree(bundle, models, "models", set())
     # The bundle is published: it must not carry the builder's home folder.
     leaked = traces_of(str(Path.home()), target)
     if leaked:

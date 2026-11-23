@@ -146,6 +146,19 @@ def getenv(key: str, default: str | None = None) -> str | None:
     return os.environ.get(env_name(key), default)
 
 
+def model_dir() -> Path | None:
+    """A folder of model files shipped beside the program, or None.
+
+    Set by the Mac bundle's launcher (`SEXTANT_MODEL_DIR`), so a person who
+    installs that one file downloads nothing on the first start either. It
+    holds each search model under `<org>--<name>/`, laid out as on the hub,
+    and text-recognition data under `tessdata/`. A file it lacks is fetched
+    as usual, so a model it does not carry still works.
+    """
+    value = (getenv("MODEL_DIR") or "").strip()
+    return Path(value) if value else None
+
+
 def setenv(key: str, value: str) -> None:
     """Set a setting. Used by the eval harnesses to isolate a store."""
     os.environ[env_name(key)] = value

@@ -5,6 +5,12 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-23 — the Mac bundle carries its search models (₹0)
+
+- Asked for by the owner after the question "what does this install on someone's computer". 0.12.6: the Mac bundle ships both search models (ONNX files only, at fixed revisions) and English scan data in `models/`, with their Apache-2.0 notice and text. Its launcher sets `SEXTANT_MODEL_DIR`; the program reads a shipped file before its cache or a download, and fetches anything not shipped as before. 330 MB zipped, up from 170. The ordinary bundle and the PyPI package behave as before.
+- Checked: unpacked with every file at 600, started with an empty home folder and outbound network blocked by `sandbox-exec` (curl to huggingface.co refused under the same rule), it indexed a text file and an image-only scanned PDF and answered from both, page named. Nothing was written to a model cache. A test stages `models/` the way the build does and loads both models and the scan data with every download cut off; dropping one file from the list fails it.
+- Does not prove: that Claude Desktop installs a 330 MB file as it did the 170 MB one; that needs one install through the app. Scans in Hindi or Marathi still download a few MB once.
+
 ## 2026-11-23 — a Mac bundle that downloads nothing at install (₹0)
 
 - Asked for by the owner after 0.12.5, to remove tester 3's stop instead of explaining it. `bundle/build_standalone.py` builds `sextant-<version>-macos-arm64.mcpb`: the `binary` server type with python-build-standalone 3.12 and every library inside. 170 MB zipped, about 530 MB unpacked; built from uv's cache with nothing downloaded.

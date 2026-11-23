@@ -103,9 +103,12 @@ is where two of the first three people to try it got stuck:
   from 0.11.2 or later, which asks for a supported one.
 
 On a Mac with Apple silicon there is a second file,
-`sextant-<version>-macos-arm64.mcpb` (about 170 MB), which carries its own
-Python and libraries: installing it downloads nothing, so neither error
-above can happen. The search models still download on first start.
+`sextant-<version>-macos-arm64.mcpb` (about 330 MB), which carries its own
+Python, libraries and search models: from 0.12.6 it downloads nothing, at
+install or on its first start, so neither error above can happen and it
+works with no internet connection. Reading scans in a language other than
+English downloads a few MB once. The other file downloads the search models
+(about 180 MB) on its first start.
 
 ## One line instead: Claude Code, VS Code, Cursor
 

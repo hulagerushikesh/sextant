@@ -63,13 +63,26 @@ _HUB_LOGGER = "huggingface_hub.utils._http"
 logging.getLogger(_HUB_LOGGER).addFilter(_NoTokenNag())
 
 
+def bundled(repo: str, filename: str) -> Path | None:
+    """The copy shipped beside the program (`settings.model_dir`), if any."""
+    root = settings.model_dir()
+    if root is None:
+        return None
+    path = root / repo.replace("/", "--") / filename
+    return path if path.is_file() else None
+
+
 def _fetch(repo: str, filename: str) -> Path:
-    """The cached copy if there is one, else a download.
+    """The shipped copy, else the cached copy, else a download.
 
     Cache first: a start with the models present makes no network request,
     so it works offline and never meets a newer upload than the one that
     built the store.
     """
+    shipped = bundled(repo, filename)
+    if shipped is not None:
+        return shipped
+
     from huggingface_hub import hf_hub_download
     from huggingface_hub.utils import LocalEntryNotFoundError
 

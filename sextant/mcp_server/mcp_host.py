@@ -79,6 +79,8 @@ _FORWARDED_SETTINGS = (
     # Whether, and in which languages, a scanned page is read (`ocr.py`).
     "OCR",
     "OCR_LANG",
+    # Model files shipped beside the program, set by the Mac bundle's launcher.
+    "MODEL_DIR",
 )
 
 # And these are other people's, read by the libraries only the subprocess

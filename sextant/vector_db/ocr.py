@@ -10,7 +10,8 @@ does not ship is the per-language data file Tesseract reads (`eng.traineddata`
 and so on), so no new Python package is needed, only that file:
 
 - one already on the machine is used as it is: `TESSDATA_PREFIX`, then the
-  places a Tesseract install puts them;
+  copy the Mac bundle ships (`settings.model_dir`), then the places a
+  Tesseract install puts them;
 - otherwise English, Hindi and Marathi are fetched once, from the Tesseract
   project's own "fast" set at a fixed tag, checked against the hashes below,
   and kept in the user's cache. About 4 MB for English.
@@ -127,6 +128,9 @@ def _candidates() -> list[Path]:
     prefix = os.environ.get("TESSDATA_PREFIX")
     if prefix:
         dirs.append(Path(prefix))
+    shipped = settings.model_dir()
+    if shipped is not None:
+        dirs.append(shipped / "tessdata")
     dirs.append(cache_dir())
     dirs.extend(Path(d) for d in _SYSTEM_DIRS)
     return dirs
