@@ -5,6 +5,10 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-23 — folder sync added to the plan (₹0)
+
+- The owner added milestone 30 item 4: while the assistant is open, files added, changed or deleted in the chosen folder are reflected in search without a restart. Plan goes from 28 of 37 to 28 of 38 (74%). Nothing built yet.
+
 ## 2026-11-23 — the Mac bundle carries its search models (₹0)
 
 - Asked for by the owner after the question "what does this install on someone's computer". 0.12.6: the Mac bundle ships both search models (ONNX files only, at fixed revisions) and English scan data in `models/`, with their Apache-2.0 notice and text. Its launcher sets `SEXTANT_MODEL_DIR`; the program reads a shipped file before its cache or a download, and fetches anything not shipped as before. 330 MB zipped, up from 170. The ordinary bundle and the PyPI package behave as before.
