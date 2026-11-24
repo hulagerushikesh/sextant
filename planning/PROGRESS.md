@@ -9,6 +9,7 @@ story is the root README.
 
 - Owner's request ("fix next item then we publish"). Milestone 31 item 1: the write-up now names the install from release 0.12.8 and says in one paragraph what the first outside installs stopped at; every figure still matches the results page. Publishing it stays the owner's.
 - Built 0.12.8 offline from caches: the wheel, the ordinary bundle (217 KB) and the Mac bundle (331 MB). Over MCP, a file recorded as failed by an older version was stored and found in search, against the wheel in a fresh environment and against the Mac bundle unpacked with every file at 600 and an empty home folder; the same check against the 0.12.7 wheel left it "not indexed". Not yet on GitHub, PyPI or the registry; publishing is the owner's. It does not show the friend's book being read on their laptop.
+- 2026-11-24, later: owner's yes ("publish 0.12.8"). Published as GitHub release v0.12.8, marked latest, with both bundles; the hashes GitHub reports match the files tested here. PyPI and the registry are still at 0.12.7; uploading is the owner's.
 
 ## 2026-11-23 — release 0.12.7: folder sync (₹0)
 

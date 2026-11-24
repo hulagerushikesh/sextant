@@ -283,7 +283,7 @@ If a record needs more than its limit, the extra goes in the commit message.
 
 **Build goal:** complete (phases 0–15, milestones 16–22).
 **Plan:** **29 of 38 items (76%).**
-**Current item:** none of the agent's open: milestone 30's four items are done and released in v0.12.7; 0.12.8 (an old failure is tried again after an update) is built and waits for the owner to publish, and milestone 31 item 1's write-up is ready for the owner (2026-11-24). Milestone 26 (three outside people) is the owner's. Milestone 29 works in Claude Desktop (2026-11-17); its rule is the owner's call.
+**Current item:** none of the agent's open: milestone 30's four items are done and released in v0.12.7; 0.12.8 (an old failure is tried again after an update) is GitHub release v0.12.8, not yet on PyPI, and milestone 31 item 1's write-up is ready for the owner (2026-11-24). Milestone 26 (three outside people) is the owner's. Milestone 29 works in Claude Desktop (2026-11-17); its rule is the owner's call.
 
 | Milestone | Items | Done | State |
 | --- | --- | --- | --- |
@@ -308,4 +308,4 @@ finishes an item. It is the only place progress is counted.
 3. Milestone 27's rule: from an empty machine, a cited answer in Claude Desktop in 3 minutes with no terminal — the owner's try decides it.
 4. Milestone 29's rule: whether a stranger gets the self-test's score within 5 minutes — milestone 26's first person shows it.
 5. Milestone 31 item 1: read, edit and publish the write-up ([`launch-writeup.md`](launch-writeup.md)); milestone 30 is done and its install lines name 0.12.8, so publish 0.12.8 first.
-6. Publish 0.12.8: the GitHub release with both bundles, then PyPI and the registry (built and checked 2026-11-24).
+6. Publish 0.12.8 to PyPI and the registry; the GitHub release v0.12.8 with both bundles is out (2026-11-24).
