@@ -11,6 +11,7 @@ story is the root README.
 - Built 0.12.8 offline from caches: the wheel, the ordinary bundle (217 KB) and the Mac bundle (331 MB). Over MCP, a file recorded as failed by an older version was stored and found in search, against the wheel in a fresh environment and against the Mac bundle unpacked with every file at 600 and an empty home folder; the same check against the 0.12.7 wheel left it "not indexed". Not yet on GitHub, PyPI or the registry; publishing is the owner's. It does not show the friend's book being read on their laptop.
 - 2026-11-24, later: owner's yes ("publish 0.12.8"). Published as GitHub release v0.12.8, marked latest, with both bundles; the hashes GitHub reports match the files tested here. PyPI and the registry are still at 0.12.7; uploading is the owner's.
 - 2026-11-24, later: the owner uploaded 0.12.8 to PyPI and published the registry entry. Checked from outside: both PyPI files' hashes match the ones built and tested here, a fresh install from the index reports 0.12.8, and the registry lists 0.12.8 as active and latest with earlier versions kept.
+- 2026-11-24, later: owner's "go next". Milestone 31 item 2's shot list: [`recording-script.md`](recording-script.md) — a demo folder of public documents, the owner's own library set aside first (uninstalling keeps it, so it would show), five shots in 90 seconds, and a GIF in `docs/` for the README because PyPI plays no video. The recording is the owner's; not done until it is in the README.
 
 ## 2026-11-23 — release 0.12.7: folder sync (₹0)
 
