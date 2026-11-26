@@ -260,9 +260,7 @@ documents, so the numbers grade the search pipeline, not your library.
 | [`learning/`](https://github.com/hulagerushikesh/sextant/tree/main/learning) | A study path, plus the note behind every measurement |
 | [`planning/`](https://github.com/hulagerushikesh/sextant/tree/main/planning) | The plan, progress and cost |
 
-## Credits
+## License
 
-Started as [SudhanshuR37/AgenticRAG](https://github.com/SudhanshuR37/AgenticRAG)
-with Sudhanshu Randive; rebuilt from the ground up in September 2026 and
-renamed from *AgenticRAG* in 0.7. MIT licensed — see [`LICENSE`](https://github.com/hulagerushikesh/sextant/blob/main/LICENSE).
+MIT licensed — see [`LICENSE`](https://github.com/hulagerushikesh/sextant/blob/main/LICENSE).
 PDF reading uses PyMuPDF, which is AGPL-licensed.
