@@ -24,6 +24,7 @@ import os
 from typing import Any
 
 from sextant import settings
+from sextant.vector_db import redact
 
 # Same model as the agent unless overridden: summarising is the cheapest kind
 # of generation there is, and a document is read once.
@@ -89,7 +90,10 @@ async def summarise(text: str, title: str, client: Any = None) -> str:
     from google.genai import types
 
     client = client or _client()
-    body = text
+    # The overview is written by a model on someone else's servers, and it
+    # is stored and shown wherever the document is listed: it never sees a
+    # secret the search tools would hide.
+    body, _hidden = redact.text(text)
     if len(body) > MAX_INPUT_CHARS:
         body = body[:MAX_INPUT_CHARS] + "\n\n[document truncated here for summarising]"
 

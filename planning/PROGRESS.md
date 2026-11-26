@@ -5,6 +5,14 @@ product or a number; the commit message is the detail. Phases 0–14 are
 summarised at the bottom — they were built in one rebuild week and their
 story is the root README.
 
+## 2026-11-26 — secrets are hidden before an assistant reads them (₹0)
+
+- Owner's request: card numbers, CVVs, passwords, keys and identity numbers must never reach the assistant, even when asked for. Added as milestone 30 item 5.
+- Every tool result leaves the server through one filter (`redact.py`); a test fails if a registered tool skips it, and fails with the filter removed (checked). The overview model gets the same filtered text. Names, addresses, dates of birth, phones and e-mails stay readable.
+- Over MCP on a fresh library with a planted card note, *"What is the CVV of my HDFC debit card?"* returned the passage with the card number, CVV and password hidden, and said so.
+- The README, the install dialog and the launch write-up now say the assistant reads only the passages that answer a question, from the chosen folder, with secrets hidden. Not released; built locally.
+- Locally, five torch-comparison tests fail on an installed `tokenizers` newer than `transformers` accepts; the same tests do not touch the change, and CI installs its own.
+
 ## 2026-11-24 — 0.12.8 built and the launch write-up made ready (₹0)
 
 - Owner's request ("fix next item then we publish"). Milestone 31 item 1: the write-up now names the install from release 0.12.8 and says in one paragraph what the first outside installs stopped at; every figure still matches the results page. Publishing it stays the owner's.

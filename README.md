@@ -49,8 +49,11 @@ the first time it meets one; for another language set
 The first run downloads the search models, once; after that it works
 offline. A note that it is storing text only is expected: an optional
 model-written overview per document needs a Gemini key, and nothing else
-does. Searching happens on your machine; the passages it finds go to
-whichever assistant you plug it into. To add more documents later, quit the
+does. Searching happens on your machine, over the folder you choose. Your
+assistant reads only the passages that answer each question, as it would if it
+opened those files itself, and sextant hides card numbers, CVVs, passwords,
+PINs, keys and identity or bank account numbers in them first (*What is
+hidden*, below). To add more documents later, quit the
 assistant first: only one program may write the library at a time, and
 `sextant-ingest` refuses, saying so, while an assistant has it open.
 
@@ -155,6 +158,21 @@ Cursor yet.
 | `kb_stats` | Library size, search model, where it is stored |
 | `kb_ann_benchmark`, `kb_ann_compare` | Compare index types on your own library |
 | `kb_selftest_sample`, `kb_selftest_grade` | A self-test: your assistant writes a question for a sample of passages and sextant checks whether search finds each one. Ask *"how well does search work on my documents?"*. It answers with a short report: one score with how far chance could move it, the questions it missed, the files search cannot use (scanned, empty or copies), and at most one thing to fix first, backed by a number. A rough guide: on public test sets it followed true quality only roughly |
+
+### What is hidden
+
+Every tool result passes through one filter before your assistant sees it.
+Card numbers (checked with the card checksum), CVVs, passwords, PINs,
+one-time codes, API keys and tokens, private keys, and Aadhaar, PAN,
+passport, voter ID, driving licence and bank account numbers become
+`[hidden: CVV]` and so on, and the result says what was hidden. No tool
+argument turns it off, so asking for the value does not show it: the assistant
+points you to the file and page instead. Your files and the index are not
+changed. Names, addresses, dates of birth, phone numbers and e-mail addresses
+are left readable, since most questions about your own documents are about
+them. The filter matches patterns and labels ("Password: …"), so a secret
+written in a plain sentence with no label can still get through: keep
+documents you would never show anyone out of the folder.
 
 Your library is stored in your user-data folder (set `SEXTANT_CHROMA_DIR` to
 move it), never inside the install, so reinstalling does not lose it.

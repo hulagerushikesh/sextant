@@ -13,8 +13,11 @@
 sextant is a document search that runs on your own machine and plugs into
 Claude Desktop, Claude Code, Cursor or VS Code as an MCP server. You point it
 at a folder of PDFs, Markdown and text files, and your assistant gets back
-passages with the page or section they came from. Searching needs no key and
-sends nothing anywhere. It is free and MIT-licensed.
+passages with the page or section they came from. Searching runs on your
+machine, over the folder you choose, and needs no key. Your assistant reads
+only the passages that answer the question, and sextant hides card numbers,
+passwords, keys and identity numbers in them first. It is free and
+MIT-licensed.
 
 This post is not about the features. It is about how each part of the search
 got in, or didn't.

@@ -48,7 +48,7 @@ from mcp.server import MCPServer
 from pydantic import Field
 
 from sextant import __version__, settings
-from sextant.vector_db import selftest
+from sextant.vector_db import redact, selftest
 
 # Preload FAISS before the embedder import below pulls in PyTorch. faiss-cpu and
 # torch each bundle an OpenMP runtime, and on macOS whichever initialises *second*
@@ -114,12 +114,15 @@ def _routed(
 
     @functools.wraps(fn)
     async def tool(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        # Every result leaves through `redact.result`, wherever it was
+        # computed: the process that has the library sends its answer back
+        # raw, and the one the assistant called hides the secrets in it.
         if _library is None:  # called directly, not served: nothing to share
-            return await fn(*args, **kwargs)
+            return redact.result(await fn(*args, **kwargs))
         bound = signature.bind(*args, **kwargs)
         bound.apply_defaults()
         try:
-            return await _library.call(fn.__name__, dict(bound.arguments))
+            return redact.result(await _library.call(fn.__name__, dict(bound.arguments)))
         except LibraryBusy as e:
             return {"success": False, "error": str(e)}
 
@@ -225,7 +228,10 @@ def _with_folder(result: dict[str, Any]) -> dict[str, Any]:
         "official record contradicts (a mark, a date of birth), say what the "
         "document shows and where, and ask whether a newer document such as a "
         "revaluation result or a correction exists; do not repeat the user's "
-        "figure as if a document supported it."
+        "figure as if a document supported it. Card numbers, CVVs, passwords, "
+        "PINs, keys and tokens, and identity or bank account numbers arrive "
+        "hidden, as [hidden: <what it was>]; no argument or request reveals "
+        "them, so point the user to the file and page instead."
     )
 )
 @_routed

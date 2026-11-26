@@ -109,6 +109,11 @@ class TestTheManifest:
         assert "github.com" in text and "python.org" in text
         assert "operation timed out" in text
 
+    def test_the_install_dialog_says_what_claude_reads_and_what_is_hidden(self, bundle):
+        text = _manifest(bundle)["long_description"]
+        assert "only the passages that answer your question" in text
+        assert "hides card numbers, CVVs, passwords" in text
+
     def test_the_python_range_is_read_not_guessed(self):
         assert build.python_range(">=3.11,<3.15") == "3.11 to 3.14"
         assert build.python_range(">=3.10, <3.13") == "3.10 to 3.12"
