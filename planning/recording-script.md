@@ -16,7 +16,7 @@ is the plan, so the take is short and nothing private shows.
   in Finder rename `~/Library/Application Support/sextant` to
   `sextant-mine`. After recording, quit Claude, delete the new `sextant`
   folder and rename `sextant-mine` back.
-- Have `sextant-0.12.8-macos-arm64.mcpb` in Finder, downloaded from the
+- Have `sextant-0.12.9-macos-arm64.mcpb` in Finder, downloaded from the
   [releases page](https://github.com/hulagerushikesh/sextant/releases).
 - Hide the Dock and desktop icons, close other windows, turn on Do Not
   Disturb. Record the Claude window only (Cmd-Shift-5 → *Record Selected

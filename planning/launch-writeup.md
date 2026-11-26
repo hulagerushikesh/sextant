@@ -3,7 +3,7 @@
 > Not published. Milestone 30 is done, so it is ready for the owner to edit and
 > publish. Every figure is copied from [`docs/RESULTS.md`](../docs/RESULTS.md);
 > `tests/test_launch_writeup.py` fails if any of them stops appearing there.
-> The install lines below name release 0.12.8 (checked 2026-11-24); if a newer
+> The install lines below name release 0.12.9 (checked 2026-11-26); if a newer
 > release is current on the day, change them.
 
 ---
@@ -123,10 +123,10 @@ library, which is why the self-test exists, and why it is labelled rough.
 ### Try it, or check it
 
 In Claude Desktop on a Mac with Apple silicon: download
-`sextant-0.12.8-macos-arm64.mcpb` from the
+`sextant-0.12.9-macos-arm64.mcpb` from the
 [releases page](https://github.com/hulagerushikesh/sextant/releases),
 double-click it, and pick the folder to search. Other computers take
-`sextant-0.12.8.mcpb` from the same page, which installs Python and the
+`sextant-0.12.9.mcpb` from the same page, which installs Python and the
 libraries on the first run.
 
 Claude Code, VS Code and Cursor take one pasted line each, given in the
