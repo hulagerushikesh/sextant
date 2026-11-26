@@ -12,6 +12,7 @@ story is the root README.
 - Over MCP on a fresh library with a planted card note, *"What is the CVV of my HDFC debit card?"* returned the passage with the card number, CVV and password hidden, and said so.
 - The README, the install dialog and the launch write-up now say the assistant reads only the passages that answer a question, from the chosen folder, with secrets hidden. Not released; built locally.
 - Later, owner's yes ("release it"): built 0.12.9 offline (wheel, ordinary bundle 221 KB, Mac bundle 331 MB). Over MCP, the wheel in a fresh environment and the Mac bundle unpacked with every file at 600 and an empty home folder both returned the planted card note with the card number, CVV and password hidden. Published as GitHub release v0.12.9 with both bundles; PyPI and the registry are the owner's upload.
+- Later: the owner uploaded 0.12.9 to PyPI and published the registry entry. Checked from outside: both PyPI files' hashes match the ones built and tested here, a fresh install from the index reports 0.12.9, and the registry lists 0.12.9 as active and latest with earlier versions kept.
 - Locally, five torch-comparison tests fail on an installed `tokenizers` newer than `transformers` accepts; the same tests do not touch the change, and CI installs its own.
 
 ## 2026-11-24 — 0.12.8 built and the launch write-up made ready (₹0)
