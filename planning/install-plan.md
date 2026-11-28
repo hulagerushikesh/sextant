@@ -75,6 +75,22 @@ Code, Codex, VS Code and Cursor do not use it; they get the one pasted line.
 5. **The owner tries VS Code and Codex** (today) and the results go in a dated
    list. A failure becomes a fix before the recording.
 
+### Found in the first Codex test (2026-11-28)
+
+- **Codex started sextant correctly**: it indexed the 21 demo documents in
+  about 6 seconds. The model then answered that it could not reach the tool.
+  The question was asked one second after Codex opened, before sextant had
+  finished starting. Not yet re-tried.
+- **Every tool shares one library.** Codex was pointed at a demo folder, but
+  searched the same library as the owner's Claude setup (5,657 passages), so
+  private documents can answer a question asked from any tool. The README
+  does not say so. Decide: say it plainly, or give each folder its own
+  library.
+- **sextant contacted huggingface.co at start** with the models already
+  downloaded. The README says it works offline after the first run. A newer
+  Hugging Face library is the likely cause; not yet checked. Item 1 must
+  include a start with the network off.
+
 Not proposed: more standalone `.mcpb` bundles for Windows, Linux or Intel Mac.
 Each is a few hundred MB per release. Decide after item 4 shows whether the
 plain route works there.
