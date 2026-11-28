@@ -80,7 +80,9 @@ Code, Codex, VS Code and Cursor do not use it; they get the one pasted line.
 - **Codex started sextant correctly**: it indexed the 21 demo documents in
   about 6 seconds. The model then answered that it could not reach the tool.
   The question was asked one second after Codex opened, before sextant had
-  finished starting. Not yet re-tried.
+  finished starting. **Re-tried in a Codex task: it worked.** Asking in the
+  ChatGPT app's plain chat does not reach it at all — that chat runs no
+  program on the computer (see below).
 - **Every tool shares one library.** Codex was pointed at a demo folder, but
   searched the same library as the owner's Claude setup (5,657 passages), so
   private documents can answer a question asked from any tool. The README
@@ -90,6 +92,15 @@ Code, Codex, VS Code and Cursor do not use it; they get the one pasted line.
   downloaded. The README says it works offline after the first run. A newer
   Hugging Face library is the likely cause; not yet checked. Item 1 must
   include a start with the network off.
+
+### ChatGPT's plain chat
+
+The Claude desktop app runs sextant in both its Chat and Code tabs. The
+ChatGPT app runs it only in Codex tasks: its plain chat accepts only servers
+reachable over the internet. Making that work would mean a sextant running
+online, or a tunnel from the internet to the laptop, either of which sends
+private documents through a public address. **Not proposed**; the README
+says "Codex tasks, not ChatGPT chat".
 
 Not proposed: more standalone `.mcpb` bundles for Windows, Linux or Intel Mac.
 Each is a few hundred MB per release. Decide after item 4 shows whether the
