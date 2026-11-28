@@ -513,14 +513,17 @@ class TestTheOneLineSetupsAgree:
 
     def _configs(self) -> list[dict]:
         import json
+        import tomllib
 
         section = self._section()
         vscode = re.search(r"--add-mcp '(\{.*\})'", section)
         cursor = re.search(r"```json\n(.*)\n```", section)
-        assert vscode and cursor, "the VS Code or Cursor setup has moved"
+        codex = re.search(r"```toml\n(.*?)\n```", section, re.S)
+        assert vscode and cursor and codex, "the VS Code, Cursor or Codex setup has moved"
         return [
             json.loads(vscode.group(1)),
             json.loads(cursor.group(1))["mcpServers"]["sextant"],
+            tomllib.loads(codex.group(1))["mcp_servers"]["sextant"],
         ]
 
     def test_every_setup_runs_the_installed_command_with_the_folder_setting(self):
@@ -548,16 +551,32 @@ class TestTheOneLineSetupsAgree:
         for config in self._configs():
             assert config["args"][:2] == ["--python", wanted]
         shell = re.findall(r"\buvx (.{0,40})", self._section())
-        assert len(shell) == 3, f"expected three shell uvx calls, found {shell}"
+        assert len(shell) == 6, f"expected six shell uvx calls, found {shell}"
         for call in shell:
             assert call.startswith(f"--python '{wanted}' --from"), call
 
-    def test_each_shell_line_installs_before_it_registers(self):
-        """A first install inside a client's start-up timeout reads as broken."""
-        lines = [line for line in self._section().splitlines() if line.startswith("uvx ")]
-        assert len(lines) == 2, f"expected the Claude Code and VS Code lines, found {lines}"
+    def test_each_shell_line_gets_ready_before_it_registers(self):
+        """A first download inside a client's start-up timeout reads as broken.
+
+        `--setup` installs the package and downloads the models in the
+        terminal; `--version` (before 0.13) installed only the package.
+        """
+        lines = [
+            line
+            for line in self._section().splitlines()
+            if line.startswith("uvx ") and " && " in line
+        ]
+        assert len(lines) == 3, f"expected the Claude Code, Codex and VS Code lines, found {lines}"
         for line in lines:
-            assert line.split(" && ")[0].endswith("sextant-kb --version")
+            assert line.split(" && ")[0].endswith("sextant-kb --setup")
+
+    def test_setup_exists_in_the_release_the_lines_ask_for(self):
+        """An older release given `--setup` would start the server and hang."""
+        (requirement,) = set(re.findall(r"sextant-kb>=([0-9.]+)", self._section()))
+        floor = tuple(int(n) for n in requirement.split("."))
+        assert floor >= (0, 13, 0), f"--setup arrived in 0.13.0; the lines ask for {requirement}"
+        version = tuple(int(n) for n in PYPROJECT["project"]["version"].split("."))
+        assert version >= floor
 
     def test_version_prints_and_does_not_serve(self, monkeypatch, capsys):
         from sextant.vector_db import server

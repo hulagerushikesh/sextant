@@ -17,6 +17,8 @@ from __future__ import annotations
 import json
 import logging
 import math
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -72,24 +74,58 @@ def bundled(repo: str, filename: str) -> Path | None:
     return path if path.is_file() else None
 
 
-def _fetch(repo: str, filename: str) -> Path:
-    """The shipped copy, else the cached copy, else a download.
+class ModelMissing(RuntimeError):
+    """A model file is not on this computer and downloading was not allowed."""
 
-    Cache first: a start with the models present makes no network request,
-    so it works offline and never meets a newer upload than the one that
-    built the store.
-    """
+
+# Off only inside `no_download()`, which `sextant-kb --doctor` uses to ask
+# "would this start offline?" without changing the answer by downloading.
+_downloads_allowed = True
+
+
+@contextmanager
+def no_download() -> Iterator[None]:
+    """Load from the shipped or cached copies only; a missing file raises."""
+    global _downloads_allowed
+    before = _downloads_allowed
+    _downloads_allowed = False
+    try:
+        yield
+    finally:
+        _downloads_allowed = before
+
+
+def cached(repo: str, filename: str) -> Path | None:
+    """The shipped or cached copy of a model file, found without the network."""
     shipped = bundled(repo, filename)
     if shipped is not None:
         return shipped
 
-    from huggingface_hub import hf_hub_download
-    from huggingface_hub.utils import LocalEntryNotFoundError
+    from huggingface_hub import try_to_load_from_cache
 
-    try:
-        return Path(hf_hub_download(repo, filename, local_files_only=True))
-    except LocalEntryNotFoundError:
-        return Path(hf_hub_download(repo, filename))
+    found = try_to_load_from_cache(repo, filename)
+    return Path(found) if isinstance(found, str) else None
+
+
+def _fetch(repo: str, filename: str) -> Path:
+    """The shipped copy, else the cached copy, else a download.
+
+    Cache first, and looked up on disk only: a start with the models present
+    makes no network request, so it works offline and never meets a newer
+    upload than the one that built the store. `hf_hub_download` with
+    `local_files_only` is not enough for that: from huggingface_hub 2.x it
+    asks huggingface.co which AI tool is running it, once a day, before it
+    looks at the cache (seen in Codex's log, 2026-11-28).
+    """
+    found = cached(repo, filename)
+    if found is not None:
+        return found
+    if not _downloads_allowed:
+        raise ModelMissing(f"{repo}/{filename} has not been downloaded")
+
+    from huggingface_hub import hf_hub_download
+
+    return Path(hf_hub_download(repo, filename))
 
 
 def _session(path: Path) -> Any:

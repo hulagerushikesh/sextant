@@ -533,10 +533,21 @@ def main() -> None:
     `--version` prints and exits instead of serving. The README's one-line
     setups run it first, so a first `uvx` install of several hundred MB
     happens in the terminal, not inside a client's start-up timeout.
+
+    `--setup` goes further: it also downloads the search models and the
+    text-recognition data, so the client's first start needs no network.
+    `--doctor` checks the same things without downloading (`setup.py`).
+    Anything else on the command line is ignored, as it always was, so a
+    client config that passes extra arguments still starts the server.
     """
-    if sys.argv[1:] == ["--version"]:
+    args = sys.argv[1:]
+    if args == ["--version"]:
         sys.stdout.write(f"sextant-kb {__version__}\n")
         return
+    if args in (["--setup"], ["--doctor"]):
+        from sextant.vector_db import setup
+
+        raise SystemExit(setup.run(args[0]))
     mcp.run(transport="stdio")
 
 

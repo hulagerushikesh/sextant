@@ -163,24 +163,24 @@ class TestAFirstRunIsQuiet:
     """Nothing a new user reads should look like an error (milestone 27, item 4)."""
 
     def test_the_hub_token_notice_is_dropped(self, monkeypatch, caplog, capfd):
-        from huggingface_hub.utils import LocalEntryNotFoundError
-
         hub = logging.getLogger(onnx_models._HUB_LOGGER)
-        calls: list[bool] = []
+        calls: list[str] = []
 
-        def download(repo: str, filename: str, local_files_only: bool = False) -> str:
-            calls.append(local_files_only)
-            if local_files_only:
-                raise LocalEntryNotFoundError("not cached")
+        def lookup(repo: str, filename: str) -> None:
+            calls.append("cache")
+
+        def download(repo: str, filename: str) -> str:
+            calls.append("network")
             hub.warning("Warning: You are sending unauthenticated requests to the HF Hub. "
                         "Please set a HF_TOKEN to enable higher rate limits.")
             hub.warning("HTTP Error 500 thrown while requesting GET x")
             return "/cache/model.onnx"
 
+        monkeypatch.setattr("huggingface_hub.try_to_load_from_cache", lookup)
         monkeypatch.setattr("huggingface_hub.hf_hub_download", download)
         with caplog.at_level(logging.WARNING):
             assert onnx_models._fetch("r", "f") == Path("/cache/model.onnx")
-        assert calls == [True, False], "the cache is asked first, then the network"
+        assert calls == ["cache", "network"], "the cache is asked first, then the network"
         messages = [r.getMessage() for r in caplog.records]
         assert not any("HF_TOKEN" in m for m in messages)
         assert any("HTTP Error 500" in m for m in messages), "real hub warnings still show"

@@ -1,7 +1,7 @@
 # Proposal: one clean install for every AI tool
 
-> **Status: proposal, 2026-11-28. Not approved.** Nothing here is in
-> [`PLAN.md`](PLAN.md) until the owner says yes. It comes before the
+> **Status: approved by the owner 2026-11-28; items 1–4 built the same day
+> as 0.13.0 (unpublished until the owner uploads it).** It comes before the
 > 90-second recording, because the recording should show the install people
 > will actually use.
 

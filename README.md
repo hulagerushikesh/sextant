@@ -37,6 +37,13 @@ python3 -m venv ~/sextant
 ~/sextant/bin/pip install sextant-kb
 ```
 
+Then get it ready: this downloads the search models (about 180 MB, once) and
+checks everything, so the assistant's first start needs no internet.
+
+```bash
+~/sextant/bin/sextant-kb --setup
+```
+
 **2. Add your documents** — any folder of PDF, Markdown or text files.
 Scanned PDFs are read with text recognition, which downloads about 4 MB
 the first time it meets one; for another language set
@@ -46,8 +53,7 @@ the first time it meets one; for another language set
 ~/sextant/bin/sextant-ingest ~/Documents/notes -r
 ```
 
-The first run downloads the search models, once; after that it works
-offline. A note that it is storing text only is expected: an optional
+A note that it is storing text only is expected: an optional
 model-written overview per document needs a Gemini key, and nothing else
 does. Searching happens on your machine, over the folder you choose. Your
 assistant reads only the passages that answer each question, as it would if it
@@ -113,39 +119,70 @@ works with no internet connection. Reading scans in a language other than
 English downloads a few MB once. The other file downloads the search models
 (about 180 MB) on its first start.
 
-## One line instead: Claude Code, VS Code, Cursor
+## One line instead: Claude Code and Codex
 
 With [uv](https://docs.astral.sh/uv/) installed, one pasted line replaces the
-four steps: it installs sextant, tells the assistant about it, and points it
-at a folder. Change `~/Documents` to the folder you want searched. Each line
-runs `--version` first, so the first install (a few hundred MB) finishes in
-the terminal rather than timing out inside the assistant. When the assistant
-starts it, the folder is indexed in the background and `kb_stats` shows the
-progress and any file it could not read. While it runs, files added, changed
-or deleted in the folder show up in search within about a minute; only files
-it indexed from the folder are ever removed, and a folder that goes missing
-(an unplugged drive) removes nothing. `--python` keeps uv off a Python
-newer than sextant's libraries support.
+four steps: it installs sextant, gets it ready, tells the assistant about it,
+and points it at a folder. Change `~/Documents` to the folder you want
+searched. Each line runs `--setup` first, which installs sextant and downloads
+its search models (a few hundred MB, once) in the terminal, so the assistant's
+first start downloads nothing and works offline. When the assistant starts it,
+the folder is indexed in the background and `kb_stats` shows the progress and
+any file it could not read. While it runs, files added, changed or deleted in
+the folder show up in search within about a minute; only files it indexed from
+the folder are ever removed, and a folder that goes missing (an unplugged
+drive) removes nothing. `--python` keeps uv off a Python newer than sextant's
+libraries support.
 
 **Claude Code** (the terminal program; for the Claude desktop app, use the
 `.mcpb` bundle instead):
 
 ```bash
-uvx --python '>=3.11,<3.15' --from 'sextant-kb>=0.11.1' sextant-kb --version && claude mcp add sextant --scope user --env SEXTANT_FOLDER=~/Documents -- uvx --python '>=3.11,<3.15' --from 'sextant-kb>=0.11.1' sextant-kb
+uvx --python '>=3.11,<3.15' --from 'sextant-kb>=0.13.0' sextant-kb --setup && claude mcp add sextant --scope user --env SEXTANT_FOLDER=~/Documents -- uvx --python '>=3.11,<3.15' --from 'sextant-kb>=0.13.0' sextant-kb
 ```
 
-**VS Code** (needs the `code` command: in VS Code run *Shell Command: Install
-'code' command in PATH* once):
+**Codex** (the `codex` terminal program):
 
 ```bash
-uvx --python '>=3.11,<3.15' --from 'sextant-kb>=0.11.1' sextant-kb --version && code --add-mcp '{"name":"sextant","command":"uvx","args":["--python",">=3.11,<3.15","--from","sextant-kb>=0.11.1","sextant-kb"],"env":{"SEXTANT_FOLDER":"~/Documents"}}'
+uvx --python '>=3.11,<3.15' --from 'sextant-kb>=0.13.0' sextant-kb --setup && codex mcp add sextant --env SEXTANT_FOLDER=~/Documents -- uvx --python '>=3.11,<3.15' --from 'sextant-kb>=0.13.0' sextant-kb
 ```
 
-**Cursor:** add this to `~/.cursor/mcp.json`. It has not been tried in
-Cursor yet.
+In the ChatGPT app, sextant works in **Codex tasks**, not in ChatGPT's plain
+chat, which runs nothing on your computer. Without the `codex` command, run
+the part before `&&` above, then add this to `~/.codex/config.toml` and
+restart the app. Some apps cannot find `uvx` by name: if sextant does not
+start, replace `uvx` with the full path that `which uvx` prints.
+
+```toml
+[mcp_servers.sextant]
+command = "uvx"
+args = ["--python", ">=3.11,<3.15", "--from", "sextant-kb>=0.13.0", "sextant-kb"]
+env = { SEXTANT_FOLDER = "~/Documents" }
+```
+
+**VS Code and Cursor** take the same command; neither has been tried with
+sextant yet. VS Code (needs the `code` command: in VS Code run *Shell Command:
+Install 'code' command in PATH* once):
+
+```bash
+uvx --python '>=3.11,<3.15' --from 'sextant-kb>=0.13.0' sextant-kb --setup && code --add-mcp '{"name":"sextant","command":"uvx","args":["--python",">=3.11,<3.15","--from","sextant-kb>=0.13.0","sextant-kb"],"env":{"SEXTANT_FOLDER":"~/Documents"}}'
+```
+
+Cursor: add this to `~/.cursor/mcp.json`.
 
 ```json
-{"mcpServers": {"sextant": {"command": "uvx", "args": ["--python", ">=3.11,<3.15", "--from", "sextant-kb>=0.11.1", "sextant-kb"], "env": {"SEXTANT_FOLDER": "~/Documents"}}}}
+{"mcpServers": {"sextant": {"command": "uvx", "args": ["--python", ">=3.11,<3.15", "--from", "sextant-kb>=0.13.0", "sextant-kb"], "env": {"SEXTANT_FOLDER": "~/Documents"}}}}
+```
+
+**One library for every assistant.** Claude, Codex and the rest share one
+library on this computer, whatever folder each is given: a document indexed
+for one can answer a question asked in another.
+
+**If it does not work**, this checks everything, downloads nothing, and
+names the fix:
+
+```bash
+uvx --python '>=3.11,<3.15' --from 'sextant-kb>=0.13.0' sextant-kb --doctor
 ```
 
 ## What your assistant gets

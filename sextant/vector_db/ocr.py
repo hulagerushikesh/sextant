@@ -136,6 +136,14 @@ def _candidates() -> list[Path]:
     return dirs
 
 
+def present(lang: str) -> Path | None:
+    """The folder already holding `lang`'s data, found without the network."""
+    for folder in _candidates():
+        if (folder / f"{lang}.traineddata").is_file():
+            return folder
+    return None
+
+
 def _tls() -> ssl.SSLContext:
     """Certificates to check the download with.
 

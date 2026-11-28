@@ -1,0 +1,67 @@
+name: install
+
+# Does the published install work on computers nobody on the project owns?
+#
+# Builds the wheel, installs it into a clean environment the way a user's
+# `pip install sextant-kb` would, runs `sextant-kb --setup`, then starts the
+# installed server over MCP, indexes the test documents and checks one search
+# (`.github/install_check.py`). `--doctor` runs last and must say all good.
+#
+# A workflow of its own, not a job in `ci`: a system where the install does
+# not work is a known limit to write down in the README, not a reason to stop
+# every other check. Runner labels are pinned like the ones in ci.yml; a new
+# label is a recorded decision. Public repository runners cost nothing.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-26.04, python: "3.12" }
+          - { os: ubuntu-26.04, python: "3.14" }
+          - { os: windows-2025, python: "3.12" }
+          - { os: macos-15, python: "3.12" }
+          - { os: macos-15-intel, python: "3.12" }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Build the wheel
+        run: |
+          python -m pip install --quiet build
+          python -m build --wheel --outdir dist
+
+      - name: Install it into a clean environment
+        run: |
+          python -m venv user-env
+          if [ "$RUNNER_OS" = "Windows" ]; then BIN=user-env/Scripts; else BIN=user-env/bin; fi
+          echo "BIN=$BIN" >> "$GITHUB_ENV"
+          "$BIN/python" -m pip install --quiet dist/*.whl
+
+      - name: Get ready (sextant-kb --setup)
+        env:
+          SEXTANT_FOLDER: ${{ github.workspace }}/sextant/eval/corpus
+        run: '"$BIN/sextant-kb" --setup'
+
+      - name: Start it as an assistant would, and search
+        run: '"$BIN/python" .github/install_check.py sextant/eval/corpus'
+
+      - name: Doctor says all good
+        env:
+          SEXTANT_FOLDER: ${{ github.workspace }}/sextant/eval/corpus
+        run: '"$BIN/sextant-kb" --doctor'
