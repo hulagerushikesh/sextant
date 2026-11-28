@@ -2158,6 +2158,14 @@ class TestTheGatesEnvironmentIsChosenHere:
         "actions/upload-artifact": "v7",
     }
 
+    # The gate is eval.yml (its name is `ci`). The install check
+    # (install.yml) ran on each of its systems on 2026-11-28, run
+    # 46164815369, before this pin named them.
+    PASSED_ON = {
+        "eval.yml": {"ubuntu-26.04"},
+        "install.yml": {"ubuntu-26.04", "windows-2025", "macos-15", "macos-15-intel"},
+    }
+
     def _workflows(self):
         found = sorted((self.ROOT / ".github" / "workflows").glob("*.yml"))
         assert found, "no CI workflow at all"
@@ -2185,10 +2193,16 @@ class TestTheGatesEnvironmentIsChosenHere:
         pinned, on branch `pin-the-gates-environment`, so the 2026-10-19
         rollout is a no-op here rather than a month of nondeterminism.
         """
-        images = re.findall(r"runs-on:\s*(\S+)", self._workflow_text())
-        assert images, "nothing says what the gate runs on"
-        assert set(images) == {"ubuntu-26.04"}, (
-            f"the gate runs on {sorted(set(images))}; if that is a deliberate "
+        images: dict[str, set[str]] = {}
+        for path in self._workflows():
+            text = path.read_text()
+            named = set(re.findall(r"runs-on:\s*(\S+)", text))
+            if "${{" in named:  # a matrix: the images are its `os:` entries
+                named = (named - {"${{"}) | set(re.findall(r"\bos:\s*([\w.-]+)", text))
+            images[path.name] = named
+        assert images.get("eval.yml"), "nothing says what the gate runs on"
+        assert images == self.PASSED_ON, (
+            f"the workflows run on {images}; if that is a deliberate "
             "change, run the workflow on it first and update this pin"
         )
 
