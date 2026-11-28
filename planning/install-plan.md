@@ -5,6 +5,13 @@
 > 90-second recording, because the recording should show the install people
 > will actually use.
 
+## Scope (owner, 2026-11-28)
+
+**Built for Claude (desktop app and Claude Code) and Codex.** Both are tried
+and working. VS Code waits until the owner's Copilot works there (its chat
+failed with "model not supported" before reaching sextant, a Copilot account
+problem). ChatGPT's plain chat is out. Cursor stays "not tried".
+
 ## Who it is for
 
 People who already use an AI coding tool — Claude Code, Codex, VS Code,
